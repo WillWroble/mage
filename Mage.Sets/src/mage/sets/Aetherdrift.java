@@ -61,6 +61,7 @@ public final class Aetherdrift extends ExpansionSet {
         cards.add(new SetCardInfo("Caelorna, Coral Tyrant", 40, Rarity.UNCOMMON, mage.cards.c.CaelornaCoralTyrant.class));
         cards.add(new SetCardInfo("Camera Launcher", 232, Rarity.COMMON, mage.cards.c.CameraLauncher.class));
         cards.add(new SetCardInfo("Caradora, Heart of Alacria", 195, Rarity.RARE, mage.cards.c.CaradoraHeartOfAlacria.class));
+        cards.add(new SetCardInfo("Carrion Cruiser", 78, Rarity.UNCOMMON, mage.cards.c.CarrionCruiser.class));
         cards.add(new SetCardInfo("Chandra, Spark Hunter", 116, Rarity.MYTHIC, mage.cards.c.ChandraSparkHunter.class));
         cards.add(new SetCardInfo("Chitin Gravestalker", 79, Rarity.COMMON, mage.cards.c.ChitinGravestalker.class));
         cards.add(new SetCardInfo("Clamorous Ironclad", 117, Rarity.COMMON, mage.cards.c.ClamorousIronclad.class));
@@ -169,6 +170,7 @@ public final class Aetherdrift extends ExpansionSet {
         cards.add(new SetCardInfo("Plow Through", 174, Rarity.UNCOMMON, mage.cards.p.PlowThrough.class));
         cards.add(new SetCardInfo("Point the Way", 175, Rarity.UNCOMMON, mage.cards.p.PointTheWay.class));
         cards.add(new SetCardInfo("Possession Engine", 54, Rarity.RARE, mage.cards.p.PossessionEngine.class));
+        cards.add(new SetCardInfo("Pothole Mole", 176, Rarity.COMMON, mage.cards.p.PotholeMole.class));
         cards.add(new SetCardInfo("Pride of the Road", 24, Rarity.UNCOMMON, mage.cards.p.PrideOfTheRoad.class));
         cards.add(new SetCardInfo("Prowcatcher Specialist", 142, Rarity.COMMON, mage.cards.p.ProwcatcherSpecialist.class));
         cards.add(new SetCardInfo("Pyrewood Gearhulk", 216, Rarity.MYTHIC, mage.cards.p.PyrewoodGearhulk.class));
@@ -224,10 +226,12 @@ public final class Aetherdrift extends ExpansionSet {
         cards.add(new SetCardInfo("Swiftwing Assailant", 32, Rarity.COMMON, mage.cards.s.SwiftwingAssailant.class));
         cards.add(new SetCardInfo("Syphon Fuel", 108, Rarity.COMMON, mage.cards.s.SyphonFuel.class));
         cards.add(new SetCardInfo("Terrian, World Tyrant", 182, Rarity.UNCOMMON, mage.cards.t.TerrianWorldTyrant.class));
+        cards.add(new SetCardInfo("The Aetherspark", 231, Rarity.MYTHIC, mage.cards.t.TheAetherspark.class));
         cards.add(new SetCardInfo("The Last Ride", 94, Rarity.MYTHIC, mage.cards.t.TheLastRide.class));
         cards.add(new SetCardInfo("The Speed Demon", 105, Rarity.MYTHIC, mage.cards.t.TheSpeedDemon.class));
         cards.add(new SetCardInfo("Thopter Fabricator", 68, Rarity.RARE, mage.cards.t.ThopterFabricator.class));
         cards.add(new SetCardInfo("Thornwood Falls", 266, Rarity.COMMON, mage.cards.t.ThornwoodFalls.class));
+        cards.add(new SetCardInfo("Thunderhead Gunner", 148, Rarity.COMMON, mage.cards.t.ThunderheadGunner.class));
         cards.add(new SetCardInfo("Thundering Broodwagon", 225, Rarity.UNCOMMON, mage.cards.t.ThunderingBroodwagon.class));
         cards.add(new SetCardInfo("Ticket Tortoise", 245, Rarity.COMMON, mage.cards.t.TicketTortoise.class));
         cards.add(new SetCardInfo("Trade the Helm", 69, Rarity.UNCOMMON, mage.cards.t.TradeTheHelm.class));
