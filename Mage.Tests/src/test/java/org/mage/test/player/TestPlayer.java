@@ -42,6 +42,7 @@ import mage.game.stack.StackAbility;
 import mage.game.stack.StackObject;
 import mage.game.tournament.Tournament;
 import mage.player.ai.ComputerPlayer;
+import mage.player.ai.ComputerPlayerRL;
 import mage.players.*;
 import mage.players.net.UserData;
 import mage.target.*;
@@ -130,7 +131,11 @@ public class TestPlayer implements Player {
         AIPlayer = false;
         computerPlayer.setTestPlayerLink(this);
     }
-
+    public TestPlayer(TestComputerPlayerRL computerPlayer) {
+        this.computerPlayer = computerPlayer;
+        AIPlayer = false;
+        computerPlayer.setTestPlayerLink(this);
+    }
     public TestPlayer(TestComputerPlayerMonteCarlo computerPlayer) {
         this.computerPlayer = computerPlayer;
         AIPlayer = false;

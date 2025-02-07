@@ -5,9 +5,10 @@ import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
 import org.junit.Assert;
 import org.junit.Test;
-import org.mage.test.player.TestComputerPlayer7;
+import org.mage.test.player.TestComputerPlayerRL;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
+import mage.player.ai.ComputerPlayerRL;
 
 import java.util.Arrays;
 import java.util.List;
@@ -58,7 +59,7 @@ public class RLAIvsAITest extends CardTestPlayerBaseAI {
         addCard(Zone.LIBRARY, playerB, "Balduvian Bears", 10);
 
         // full ai simulation
-        //setStrictChooseMode(true);
+        setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
 
@@ -67,7 +68,7 @@ public class RLAIvsAITest extends CardTestPlayerBaseAI {
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
-            TestPlayer testPlayer = new TestPlayer(new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel()));
+            TestPlayer testPlayer = new TestPlayer(new TestComputerPlayerRL(name, RangeOfInfluence.ONE, getSkillLevel()));
             testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
             return testPlayer;
         }

@@ -25,6 +25,11 @@
             <artifactId>mage-player-ai</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>mage-player-ai-ma</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
