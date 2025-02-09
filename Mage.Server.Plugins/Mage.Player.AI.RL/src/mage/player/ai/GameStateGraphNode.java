@@ -3,6 +3,7 @@ package mage.player.ai;
 
 import javafx.util.Pair;
 import mage.game.Game;
+import mage.game.GameState;
 import org.jboss.util.collection.CollectionsUtil;
 import org.apache.commons.*;
 
@@ -10,16 +11,16 @@ import java.util.*;
 
 public class GameStateGraphNode {
     GameStateGraphNode opponentNode;
-    private HashSet<CardState> cardsStack = new HashSet<>();
-    private HashSet<CardState> cardsHand = new HashSet<>();
-    private HashSet<CardState> cardsBattleField = new HashSet<>();
-    private HashSet<CardState> cardsGraveyard = new HashSet<>();
-    private HashSet<CardState> cardsExile = new HashSet<>();
-    private HashSet<CardState> cardsLibrary = new HashSet<>();
-    private final List<Pair<GameStateGraphNode, Float>> parents = new ArrayList<>();;
+    private HashedZone cardsStack = new HashedZone();
+    private HashedZone cardsHand = new HashedZone();
+    private HashedZone cardsBattleField = new HashedZone();
+    private HashedZone cardsGraveyard = new HashedZone();
+    private HashedZone cardsExile = new HashedZone();
+    private HashedZone cardsLibrary = new HashedZone();
+    private final Map<GameStateGraphNode, Float> parents = new HashMap<>();;
     
 
-    private final List<Pair<GameStateGraphNode, Float>> children = new ArrayList<>();
+    private final Map<GameStateGraphNode, Float> children = new HashMap<GameStateGraphNode, Float>();
     public static GameStateGraphNode ROOT;
    
 
@@ -29,8 +30,8 @@ public class GameStateGraphNode {
     private int numChildren = 0;
 
 
-    GameStateGraphNode(HashSet<CardState> stack, HashSet<CardState> hand, HashSet<CardState> battlefield, HashSet<CardState> graveyard,
-                       HashSet<CardState> exile, HashSet<CardState> library, int life, GameStateGraphNode opponent) {
+    GameStateGraphNode(HashedZone stack, HashedZone hand, HashedZone battlefield, HashedZone graveyard,
+                       HashedZone exile, HashedZone library, int life, GameStateGraphNode opponent) {
         cardsStack = stack;
         cardsHand = hand;
         cardsBattleField = battlefield;
@@ -42,73 +43,71 @@ public class GameStateGraphNode {
 
     }
     private static GameStateGraphNode GetLargestSharedSubset(GameStateGraphNode A, GameStateGraphNode B) {
-        HashSet<CardState> sharedBattleField = new HashSet<>(A.cardsBattleField);
-        sharedBattleField.retainAll(B.cardsBattleField);
-        HashSet<CardState> sharedHand = new HashSet<>(A.cardsHand);
-        sharedHand.retainAll(B.cardsHand);
-        HashSet<CardState> sharedLibrary = new HashSet<>(A.cardsLibrary);
-        sharedLibrary.retainAll(B.cardsLibrary);
-        HashSet<CardState> sharedExile = new HashSet<>(A.cardsExile);
-        sharedExile.retainAll(B.cardsExile);
-        HashSet<CardState> sharedGraveyard = new HashSet<>(A.cardsGraveyard);
-        sharedGraveyard.retainAll(B.cardsGraveyard);
-        HashSet<CardState> sharedStack = new HashSet<>(A.cardsStack);
-        sharedStack.retainAll(B.cardsStack);
-        int lowestLife = Math.min(A.lifeTotal, B.lifeTotal);
+        HashedZone sharedBattleField = HashedZone.getIntersection(A.cardsBattleField, B.cardsBattleField);
+        HashedZone sharedHand = HashedZone.getIntersection(A.cardsHand, B.cardsHand);
+        HashedZone sharedGraveyard = HashedZone.getIntersection(A.cardsGraveyard, B.cardsGraveyard);
+        HashedZone sharedLibrary = HashedZone.getIntersection(A.cardsLibrary, B.cardsLibrary);
+        HashedZone sharedExile = HashedZone.getIntersection(A.cardsExile, B.cardsExile);
+        HashedZone sharedStack = HashedZone.getIntersection(A.cardsStack, B.cardsStack);
 
-        HashSet<CardState> opponentCombinedBattlefield = new HashSet<>(A.opponentNode.cardsBattleField);
+        int lowestLife = Math.min(A.lifeTotal, B.lifeTotal);
+        /*
+        HashedZone opponentCombinedBattlefield = new HashedZone(A.opponentNode.cardsBattleField);
         opponentCombinedBattlefield.addAll(B.opponentNode.cardsBattleField);
-        HashSet<CardState> opponentCombinedHand = new HashSet<>(A.opponentNode.cardsHand);
+        HashedZone opponentCombinedHand = new HashedZone(A.opponentNode.cardsHand);
         opponentCombinedHand.addAll(B.opponentNode.cardsHand);
-        HashSet<CardState> opponentCombinedLibrary = new HashSet<>(A.opponentNode.cardsLibrary);
+        HashedZone opponentCombinedLibrary = new HashedZone(A.opponentNode.cardsLibrary);
         opponentCombinedLibrary.addAll(B.opponentNode.cardsLibrary);
-        HashSet<CardState> opponentCombinedExile = new HashSet<>(A.opponentNode.cardsExile);
+        HashedZone opponentCombinedExile = new HashedZone(A.opponentNode.cardsExile);
         opponentCombinedExile.addAll(B.opponentNode.cardsExile);
-        HashSet<CardState> opponentCombinedGraveyard = new HashSet<>(A.opponentNode.cardsGraveyard);
+        HashedZone opponentCombinedGraveyard = new HashedZone(A.opponentNode.cardsGraveyard);
         opponentCombinedGraveyard.addAll(B.opponentNode.cardsGraveyard);
-        HashSet<CardState> opponentCombinedStack = new HashSet<>(A.opponentNode.cardsStack);
+        HashedZone opponentCombinedStack = new HashedZone(A.opponentNode.cardsStack);
         opponentCombinedStack.addAll(B.opponentNode.cardsStack);
         int opMaxLife = Math.max(A.opponentNode.lifeTotal, B.opponentNode.lifeTotal);
-
-        GameStateGraphNode newNode = null;
-        GameStateGraphNode newOpNode = null;
-        newNode = new GameStateGraphNode(sharedStack, sharedHand, sharedBattleField, sharedGraveyard, sharedExile, sharedLibrary, lowestLife, newOpNode);
-        newOpNode = new GameStateGraphNode(opponentCombinedStack, opponentCombinedHand,
-                opponentCombinedBattlefield, opponentCombinedGraveyard, opponentCombinedExile, opponentCombinedLibrary, opMaxLife, newNode);
-        return newNode;
+        */
+        return new GameStateGraphNode(sharedStack, sharedHand, sharedBattleField, sharedGraveyard, sharedExile, sharedLibrary, lowestLife, null);
+        //newNode.opponentNode = new GameStateGraphNode(opponentCombinedStack, opponentCombinedHand,
+        //        opponentCombinedBattlefield, opponentCombinedGraveyard, opponentCombinedExile, opponentCombinedLibrary, opMaxLife, newNode);
+        //return newNode;
 
     }
-    boolean Equals(GameStateGraphNode node) {
+    boolean equals(GameStateGraphNode node) {
         return (cardsBattleField.equals(node.cardsBattleField) &&
                 cardsGraveyard.equals(node.cardsGraveyard) &&
                 cardsHand.equals(node.cardsHand) &&
                 cardsLibrary.equals(node.cardsLibrary) &&
                 cardsExile.equals(node.cardsExile) &&
                 cardsStack.equals(node.cardsStack) &&
-                lifeTotal == node.lifeTotal &&
-                opponentNode.Equals(node.opponentNode));
+                lifeTotal == node.lifeTotal);
+                //opponentNode.equals(node.opponentNode));
     }
     /**this = root
      * @param node node to look for
      * @return reference to matching node if found, null otherwise
      */
-    GameStateGraphNode Contains(GameStateGraphNode node) {
-        if(!node.isChildOf(this)) {
+    GameStateGraphNode contains(GameStateGraphNode node) {
+        if(!node.isDescendentOf(this)) {
             return null;
         }
-        if(this.Equals(node)) {
+        if(this.equals(node)) {
             return this;
         }
-        for(Pair<GameStateGraphNode, Float> p : children) {
-            GameStateGraphNode child = p.getKey();
-            GameStateGraphNode out = child.Contains(node);
+        for(GameStateGraphNode child : children.keySet()) {
+            GameStateGraphNode out = child.contains(node);
             if(out != null) {
                 return out;
             }
         }
         return null;
     }
-    boolean isChildOf(GameStateGraphNode node) {
+
+    /**
+     * returns true if this node is a descendent of the given node (A node is a descendent of itself)
+     * @param node
+     * @return
+     */
+    boolean isDescendentOf(GameStateGraphNode node) {
         return node.cardsBattleField.containsAll(cardsBattleField) &&
                 node.cardsHand.containsAll(cardsBattleField) &&
                 node.cardsGraveyard.containsAll(cardsBattleField) &&
@@ -116,11 +115,33 @@ public class GameStateGraphNode {
                 node.cardsExile.containsAll(cardsExile) &&
                 node.cardsStack.containsAll(cardsBattleField);
     }
-    void AddChild(GameStateGraphNode child, Float weight) {
-        Pair<GameStateGraphNode, Float> edge = new Pair<>(child, weight);
-        Pair<GameStateGraphNode, Float> backEdge = new Pair<>(this, weight);
-        child.parents.add(backEdge);
-        children.add(edge);
+    void addChild(GameStateGraphNode child, Float weight) {
+        child.parents.put(this, weight);
+        children.put(child, weight);
+    }
+    void AddChildren(Set<GameStateGraphNode> children, Float weight) {
+        for(GameStateGraphNode child : children) {
+            addChild(child, weight);
+        }
+    }
+
+    /**
+     * Gets the most immediate children of the given parent that are ancestors of the given child
+     * @param child
+     * @param grandParent
+     * @param out
+     */
+    public void getOldestChildren(GameStateGraphNode child, GameStateGraphNode grandParent, Set<GameStateGraphNode> out) {
+        boolean isOldestChild = true;
+        for(GameStateGraphNode parent : child.parents.keySet()) {
+            if(parent.isDescendentOf(grandParent)) {
+                getOldestChildren(parent, grandParent, out);
+                isOldestChild = false;
+            }
+        }
+        if(isOldestChild) {
+            out.add(child);
+        }
     }
     /**
      * finds all leaf nodes in a graph where children of given parent node are removed
@@ -128,12 +149,11 @@ public class GameStateGraphNode {
      * @param parent ignore all nodes that are children of this node
      * @param out set that all found leaves are added to.
      */
-    public void GetAllLeafNodes(GameStateGraphNode root, GameStateGraphNode parent, Set<GameStateGraphNode> out) {
+    public void getAllLeafNodes(GameStateGraphNode root, GameStateGraphNode parent, Set<GameStateGraphNode> out) {
         boolean isLeaf = true;
-        for(Pair<GameStateGraphNode, Float> p : root.children) {
-            GameStateGraphNode child = p.getKey();
-            if(!child.isChildOf(parent)) {
-                GetAllLeafNodes(child, parent, out);
+        for(GameStateGraphNode child : root.children.keySet()) {
+            if(!child.isDescendentOf(parent)) {
+                getAllLeafNodes(child, parent, out);
                 isLeaf = false;
             }
         }
@@ -145,21 +165,32 @@ public class GameStateGraphNode {
     /**
      * Heavily modifies state network to accommodate another leaf node. This process includes breaking the new node
      * into stems which are also added to the network
-     * @param newNode new leaf node to add to the network. Should generally be a high complexity naturally created game state
+     * @param newNode new leaf node to add to the network. SHOULD NOT BE A PARENT OF ANY NODE IN THE GRAPH
+     * Should generally be a high complexity naturally created game state.
      */
-    public void LinkStateNode(GameStateGraphNode newNode) {
-        Set<GameStateGraphNode> leaves = new HashSet<>();
-        GetAllLeafNodes(this, newNode, leaves);
-        for(GameStateGraphNode leaf : leaves) {
-            GameStateGraphNode sharedNode = GetLargestSharedSubset(leaf, newNode);
-            GameStateGraphNode foundNode = this.Contains(sharedNode);
-            if(foundNode != null) {
-                foundNode.AddChild(leaf, 1f);
-                continue;
+    public void linkStateNode(GameStateGraphNode newNode) {
+        PriorityQueue<GameStateGraphNode> newNodes = new PriorityQueue<>();
+        newNodes.add(newNode);
+        //new nodes should be sorted so children go before parents
+        while ((newNode = newNodes.poll()) != null) {
+            Set<GameStateGraphNode> leaves = new HashSet<>();
+            getAllLeafNodes(this, newNode, leaves);
+            for(GameStateGraphNode leaf : leaves) {
+                GameStateGraphNode sharedNode = GetLargestSharedSubset(leaf, newNode);
+                GameStateGraphNode foundNode = this.contains(sharedNode);
+                Set<GameStateGraphNode> oldestChildrenOfLeaf = new HashSet<>();
+                getOldestChildren(leaf, sharedNode, oldestChildrenOfLeaf);
+                if (foundNode != null) {
+                    foundNode.AddChildren(oldestChildrenOfLeaf, 1f);
+                    continue;
+                }
+                Set<GameStateGraphNode> oldestChildrenOfNewNode = new HashSet<>();
+                getOldestChildren(leaf, sharedNode, oldestChildrenOfNewNode);
+                sharedNode.AddChildren(oldestChildrenOfLeaf, 1f);
+                sharedNode.AddChildren(oldestChildrenOfNewNode, 1f);
+                newNodes.add(sharedNode);
+                //LinkStateNode(sharedNode);
             }
-            sharedNode.AddChild(leaf, 1f);
-            sharedNode.AddChild(newNode, 1f);
-            LinkStateNode(sharedNode);
         }
     }
 }
