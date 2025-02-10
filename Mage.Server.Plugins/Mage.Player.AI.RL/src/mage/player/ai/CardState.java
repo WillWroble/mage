@@ -4,12 +4,15 @@ import java.util.*;
 
 public class CardState {
 
-    private final String cardName;
+    public final String cardName;
     private Set<CardState> attachedCards = new HashSet<>();
     private Map<String, Integer> counters = new HashMap<>();
-    boolean can_attack;
-    boolean can_activate;
-    boolean can_block;
+    boolean can_attack = false;
+    boolean can_activate = false;
+    boolean can_block = false;
+    public CardState(String name) {
+        cardName = name;
+    }
     public CardState(String name, Set<CardState> at, Map<String, Integer> cou, boolean att, boolean act, boolean blo) {
         cardName = name;
         attachedCards = at;
@@ -20,12 +23,16 @@ public class CardState {
     }
 
     public boolean equals(CardState s) {
+        return cardName.equals(s.cardName);
+        /*
         return (attachedCards.equals(s.attachedCards) &&
                 counters.equals(s.counters) &&
                 cardName.equals(s.cardName) &&
                 can_attack == s.can_attack &&
                 can_activate == s.can_activate &&
                 can_block == s.can_block);
+
+         */
     }
 
     public boolean isChildOf(CardState c) {
@@ -45,9 +52,9 @@ public class CardState {
                 xCounters.put(counterType, Math.min(a.counters.get(counterType), b.counters.get(counterType)));
             }
         }
-        Set<CardState> xAttackedCards = new HashSet<>(a.attachedCards);
-        xAttackedCards.retainAll(b.attachedCards);
-        CardState out = new CardState(a.cardName, xAttackedCards, xCounters, a.can_attack && b.can_attack,
+        Set<CardState> xAttachedCards = new HashSet<>(a.attachedCards);
+        xAttachedCards.retainAll(b.attachedCards);
+        CardState out = new CardState(a.cardName, xAttachedCards, xCounters, a.can_attack && b.can_attack,
                 a.can_activate && b.can_activate, a.can_block && b.can_block);
         return out;
 
@@ -60,9 +67,9 @@ public class CardState {
                 dCounters.put(counterType, countersLeft);
             }
         }
-        Set<CardState> dAttackedCards = new HashSet<>(a.attachedCards);
-        dAttackedCards.removeAll(b.attachedCards);
-        CardState out = new CardState(a.cardName, dAttackedCards, dCounters, a.can_attack ^ b.can_attack,
+        Set<CardState> dAttachedCards = new HashSet<>(a.attachedCards);
+        dAttachedCards.removeAll(b.attachedCards);
+        CardState out = new CardState(a.cardName, dAttachedCards, dCounters, a.can_attack ^ b.can_attack,
                 a.can_activate ^ b.can_activate, a.can_block ^ b.can_block);
         return out;
     }
@@ -99,7 +106,7 @@ public class CardState {
      */
     public static List<CardState> bestPairing(List<CardState> A, List<CardState> B) {
         List<CardState> out = new ArrayList<>();
-        double costs[][] = new double[A.size()][B.size()];
+        double[][] costs = new double[A.size()][B.size()];
 
         for(int i = 0; i < A.size(); i++) {
             CardState best = null;

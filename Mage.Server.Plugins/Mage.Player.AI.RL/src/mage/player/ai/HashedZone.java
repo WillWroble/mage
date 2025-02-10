@@ -1,5 +1,6 @@
 package mage.player.ai;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
@@ -12,6 +13,10 @@ public class HashedZone {
             List<CardState> v2 = b.getCardStatesByKey(hash);
             if(v2 == null) continue;
             List<CardState> v1 = a.getCardStatesByKey(hash);
+            if(v1.size() == 1 && v2.size() == 1) {
+                out.model.put(hash, new ArrayList<>(v1));
+                return out;
+            }
             out.model.put(hash, CardState.bestPairing(v1, v2));
         }
         return out;
@@ -21,7 +26,8 @@ public class HashedZone {
     }
 
     public boolean equals(HashedZone z) {
-        return (model.equals(z.model));
+        //return model.equals(z.model);
+        return (model.keySet().equals(z.model.keySet()));
     }
 
     public HashedZone(HashedZone zone) {
@@ -35,14 +41,30 @@ public class HashedZone {
     }
     public void addCardState(CardState cardState) {
         Integer key = cardState.hashCode();
-        model.get(key).add(cardState);
+        if(model.containsKey(key)) {
+            model.get(key).add(cardState);
+        } else {
+            model.put(key, new ArrayList<>());
+            model.get(key).add(cardState);
+        }
     }
     public boolean containsAll(HashedZone z) {
+        if(z.model.isEmpty()) {
+            return true;
+        }
+        //return getKeySet().containsAll(z.getKeySet());
+
         for(Integer hash : z.getKeySet()) {
             List<CardState> v1 = model.get(hash);
             if(v1 == null) return false;
             List<CardState> v2 = z.model.get(hash);
             if(v1.size() < v2.size()) return false;
+
+            if(v1.size() == 1 && v2.size() == 1) {
+                if(v1.get(0).isChildOf(v2.get(0))) {
+                    continue;
+                }
+            }
 
             double[][] costs = new double[v1.size()][v2.size()];
             for(int i = 0; i< v1.size(); i++) {
