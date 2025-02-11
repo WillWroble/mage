@@ -15,7 +15,7 @@ public class HashedZone {
             List<CardState> v1 = a.getCardStatesByKey(hash);
             if(v1.size() == 1 && v2.size() == 1) {
                 out.model.put(hash, new ArrayList<>(v1));
-                return out;
+                continue;
             }
             out.model.put(hash, CardState.bestPairing(v1, v2));
         }

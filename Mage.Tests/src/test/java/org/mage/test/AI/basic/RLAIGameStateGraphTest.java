@@ -11,6 +11,7 @@ import org.mage.test.player.TestComputerPlayerRL;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -43,6 +44,7 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         GameStateGraphNode A_ = GameStateGraphNode.GetLargestSharedSubset(AB, A);
 
         assert (A_.equals(A));
+        assert (root.equals(new GameStateGraphNode()));
 
         root.linkStateNode(A);
         root.linkStateNode(B);
@@ -72,13 +74,44 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         GameStateGraphNode AC = new GameStateGraphNode();
         AC.cardsBattleField.addCardState(new CardState("A"));
         AC.cardsBattleField.addCardState(new CardState("C"));
+        GameStateGraphNode ACD = new GameStateGraphNode();
+        ACD.cardsBattleField.addCardState(new CardState("A"));
+        ACD.cardsBattleField.addCardState(new CardState("C"));
+        ACD.cardsBattleField.addCardState(new CardState("D"));
+
 
         GameStateGraphNode A_ = GameStateGraphNode.GetLargestSharedSubset(AC, AB);
         assert (A.equals(A_));
+        assert (GameStateGraphNode.GetLargestSharedSubset(ACD, AC).equals(AC));
 
         root.linkStateNode(AB);
         root.linkStateNode(BC);
         root.linkStateNode(AC);
+        root.linkStateNode(ACD);
+        assert(root.contains(AC) != null);
+        root.printGraph(0);
+        System.out.println("Hello World!");
+    }
+    @Test
+    public void test_Graph_Simple3() {
+        // both must kill x2 bears by x2 bolts
+        GameStateGraphNode root = new GameStateGraphNode();
+
+
+        GameStateGraphNode ABC = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("A", "B", "C"));
+        GameStateGraphNode BCDE = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("D", "B", "C", "E"));
+        GameStateGraphNode DEFG = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("D", "E", "F", "G"));
+        GameStateGraphNode FGHI = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G"));
+        GameStateGraphNode AFGHI = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G", "A"));
+
+
+
+        root.linkStateNode(ABC);
+        root.linkStateNode(BCDE);
+        root.linkStateNode(DEFG);
+        root.linkStateNode(FGHI);
+        root.linkStateNode(AFGHI);
+
 
         root.printGraph(0);
         System.out.println("Hello World!");
