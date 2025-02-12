@@ -116,6 +116,44 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         root.printGraph(0);
         System.out.println("Hello World!");
     }
+    @Test
+    public void test_Graph_triangle() {
+        // both must kill x2 bears by x2 bolts
+        GameStateGraphNode root = new GameStateGraphNode();
+
+
+//        GameStateGraphNode I = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("I"));
+//        GameStateGraphNode J = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("J"));
+//
+//        GameStateGraphNode HI = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("D", "E", "F", "G"));
+//        GameStateGraphNode IJ = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G"));
+//        GameStateGraphNode JK = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G"));
+//
+//        GameStateGraphNode GHI = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G"));
+//        GameStateGraphNode HIJ = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G", "A"));
+//        GameStateGraphNode IJK = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G"));
+//        GameStateGraphNode JKL = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "F", "G"));
+
+        GameStateGraphNode FGHI = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("F", "G", "H", "I"));
+        GameStateGraphNode GHIJ = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("G", "H", "I", "J"));
+        GameStateGraphNode HIJK = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("H", "I", "J", "K"));
+        GameStateGraphNode IJKL = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("I", "J", "K", "L"));
+        GameStateGraphNode JKLM = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("J", "K", "L", "M"));
+        GameStateGraphNode KLMN = GameStateGraphNode.quickMakeGraphNode(Arrays.asList("K", "L", "M", "N"));
+
+
+
+        root.linkStateNode(FGHI);
+        root.linkStateNode(GHIJ);
+        root.linkStateNode(HIJK);
+        root.linkStateNode(IJKL);
+        root.linkStateNode(JKLM);
+        root.linkStateNode(KLMN);
+
+
+        root.printGraph(0);
+        System.out.println("Hello World!");
+    }
 
     @Test
     public void test_AIvsAI_LongGame() {

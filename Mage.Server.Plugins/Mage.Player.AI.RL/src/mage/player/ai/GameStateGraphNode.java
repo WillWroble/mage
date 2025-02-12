@@ -139,8 +139,50 @@ public class GameStateGraphNode implements Comparable{
                 cardsStack.containsAll(node.cardsStack);
     }
     void addChild(GameStateGraphNode child, Float weight) {
+
         child.parents.put(this, weight);
         children.put(child, weight);
+    }
+    void addChildSafe(GameStateGraphNode child, Float weight) {
+        if(this.contains(child) != null) {//make sure it isn't already connected via children
+            return;
+        }
+        Set<GameStateGraphNode> childrenOfParent = new HashSet<>(this.children.keySet());
+        for (GameStateGraphNode childOfParent : childrenOfParent) {
+            if (childOfParent.isDescendentOf(child)) {
+                this.removeChild(childOfParent);
+            }
+        }
+        Set<GameStateGraphNode> parentsOfChild = new HashSet<>(child.parents.keySet());
+        for (GameStateGraphNode parentOfChild : parentsOfChild) {
+            if (this.isDescendentOf(parentOfChild)) {
+                parentOfChild.removeChild(child);
+            }
+        }
+        addChild(child, weight);
+    }
+    void addParentAbove(GameStateGraphNode parent, Float weight) {//check parent's children
+        if(parent.contains(this) != null) {//make sure it isn't already connected via children
+            return;
+        }
+        Set<GameStateGraphNode> children = new HashSet<>(parent.children.keySet());
+        for (GameStateGraphNode child : children) {
+            if (child.isDescendentOf(this)) {
+                parent.removeChild(child);
+                //this.addChild(child, 1f);
+            }
+        }
+        parent.addChild(this, weight);
+    }
+    void addChildBelow(GameStateGraphNode child, Float weight) {//check child's parents
+        Set<GameStateGraphNode> parents = new HashSet<>(child.parents.keySet());
+        for (GameStateGraphNode parent : parents) {
+            if (this.isDescendentOf(parent)) {
+                parent.removeChild(child);
+                //parent.addChild(this, 1f);
+            }
+        }
+        this.addChild(child, weight);
     }
     void removeChild(GameStateGraphNode child) {
         this.children.remove(child);
@@ -217,12 +259,21 @@ public class GameStateGraphNode implements Comparable{
         GameStateGraphNode floor = treeset.floor(key);   // highest elt <= key
         return ceil == floor? ceil : null;
     }
+    public void clearAllHistory() {
+        for(GameStateGraphNode child : children.keySet()) {
+            child.clearAllHistory();
+        }
+        parentsShouldNotCompare.clear();
+        parentsShouldNotCompare.add(this);
+    }
     /**
      * Heavily modifies state network to accommodate another leaf node. This process includes breaking the new node
      * into stems which are also added to the network
      */
     public void linkStateNode(GameStateGraphNode newNode) {
+        this.clearAllHistory();
         TreeSet<GameStateGraphNode> newNodes = new TreeSet<>();
+        this.addChild(newNode, 1f);
         newNodes.add(newNode);
         //new nodes should be sorted so children go before parents
         while ((newNode = newNodes.pollFirst()) != null) {
@@ -234,29 +285,20 @@ public class GameStateGraphNode implements Comparable{
             getAllLeafNodes(this, leaves, allRemoved);
 
             for(GameStateGraphNode leaf : leaves) {
-                if(newNode == leaf) continue;
+                assert (newNode != leaf);
+
                 GameStateGraphNode sharedNode = GetLargestSharedSubset(leaf, newNode);
                 GameStateGraphNode foundNode = this.contains(sharedNode);
                 if(foundNode != null) {
-                    if(foundNode.contains(newNode) == null) {//not already connected to this node via children
-                        Set<GameStateGraphNode> newParents = new HashSet<>(newNode.parents.keySet());
-                        for (GameStateGraphNode parent : newParents) {
-                            if (foundNode.isDescendentOf(parent)) {
-                                parent.removeChild(newNode);
-                            }
-                        }
-                        foundNode.addChild(newNode, 1f);
-                    }
+                    //link to an existing node
+                    foundNode.addChildSafe(newNode, 1f);
+                    foundNode.addChildSafe(leaf, 1f);
+
                 } else {
-                    Set<GameStateGraphNode> leafParents = new HashSet<>(leaf.parents.keySet());
-                    for(GameStateGraphNode parent : leafParents) {
-                        if(newNode.isDescendentOf(parent)) {
-                            parent.removeChild(leaf);
-                        }
-                    }
                     newNodes.add(sharedNode);
-                    sharedNode.addChild(leaf, 1f);
-                    sharedNode.addChild(newNode, 1f);
+                    sharedNode.addChildSafe(leaf, 1f);
+                    sharedNode.addChildSafe(newNode, 1f);
+                    //link to root temporarily, so it can be found by the leaf retriever
                     this.addChild(sharedNode, 1f);
                 }
                 newNode.parentsShouldNotCompare.add(leaf);
