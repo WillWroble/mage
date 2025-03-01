@@ -11,9 +11,7 @@ import org.mage.test.player.TestComputerPlayerRL;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 /**
  * @author JayDi85
@@ -40,22 +38,36 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         GameStateGraphNode AB = new GameStateGraphNode();
         AB.cardsBattleField.addCardState(new CardState("A"));
         AB.cardsBattleField.addCardState(new CardState("B"));
+        GameStateGraphNode A__ = GameStateGraphNode.GetLargestSharedSubset(A, root);
+        GameStateGraphNode B__ = GameStateGraphNode.GetLargestSharedSubset(B, root);
+        assert (A__.equals(root));
+        assert (B__.equals(root));
+
 
         GameStateGraphNode A_ = GameStateGraphNode.GetLargestSharedSubset(AB, A);
 
         assert (A_.equals(A));
         assert (root.equals(new GameStateGraphNode()));
 
-        root.linkStateNode(A);
-        root.linkStateNode(B);
-        root.linkStateNode(AB);
+        //root.linkStateNode(A);
+        //root.linkStateNode(B);
+        //root.linkStateNode(AB);
+
+        Set<GameStateGraphNode> source = new HashSet<>();
+        source.add(A);
+        source.add(B);
+        source.add(AB);
+        source.add(root);
+
+        assert (source.contains(A_));
 
         assert (A.isDescendentOf(root));
         assert (!A.isDescendentOf(B));
         assert (!B.isDescendentOf(A));
         assert(AB.isDescendentOf(A));
 
-        root.printGraph(0);
+        //root.printGraph(0);
+        GameStateGraphNode.validateGraph(root, source);
         System.out.println("Hello World!");
     }
     @Test
@@ -83,13 +95,23 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         GameStateGraphNode A_ = GameStateGraphNode.GetLargestSharedSubset(AC, AB);
         assert (A.equals(A_));
         assert (GameStateGraphNode.GetLargestSharedSubset(ACD, AC).equals(AC));
+        Set<GameStateGraphNode> sourceLeaves = new HashSet<>();
+        sourceLeaves.add(AB);
+        sourceLeaves.add(BC);
+        sourceLeaves.add(AC);
+        sourceLeaves.add(ACD);
+        sourceLeaves.add(root);
+        assert (sourceLeaves.size() == 5);
+        assert (!sourceLeaves.contains(A));
+        assert (GameStateGraphNode.GetLargestSharedSubset(AB, AC).equals(A));
+        GameStateGraphNode.validateGraph(root, sourceLeaves);
 
         root.linkStateNode(AB);
         root.linkStateNode(BC);
         root.linkStateNode(AC);
         root.linkStateNode(ACD);
         assert(root.contains(AC) != null);
-        root.printGraph(0);
+        //root.printGraph(0);
         System.out.println("Hello World!");
     }
     @Test
@@ -148,7 +170,7 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         root.linkStateNode(HIJK);
         root.linkStateNode(IJKL);
         root.linkStateNode(JKLM);
-        root.linkStateNode(KLMN);
+        //root.linkStateNode(KLMN);
 
 
         root.printGraph(0);

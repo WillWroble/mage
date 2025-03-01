@@ -30,6 +30,11 @@ public class HashedZone {
         return (model.keySet().equals(z.model.keySet()));
     }
 
+    @Override
+    public int hashCode() {
+        return model.hashCode();
+    }
+
     public HashedZone(HashedZone zone) {
         model = new HashMap<>(zone.model);
     }

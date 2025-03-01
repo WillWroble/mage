@@ -87,6 +87,12 @@ public class GameStateGraphNode implements Comparable{
         return super.equals(obj);
     }
 
+    @Override
+    public int hashCode() {
+        return cardsBattleField.hashCode()+cardsGraveyard.hashCode()
+                +cardsHand.hashCode()+cardsExile.hashCode()+cardsStack.hashCode()+cardsLibrary.hashCode();
+    }
+
     boolean equals(GameStateGraphNode node) {
         return (cardsBattleField.equals(node.cardsBattleField) &&
                 cardsGraveyard.equals(node.cardsGraveyard) &&
@@ -200,6 +206,12 @@ public class GameStateGraphNode implements Comparable{
     }
     public void printGraph(int depth) {
         System.out.printf("Node depth: %d Life total: %d\n", depth, lifeTotal);
+        printNode();
+        for(GameStateGraphNode c : children.keySet()) {
+            c.printGraph(depth+1);
+        }
+    }
+    public void printNode() {
         System.out.printf("Battlefield: ");
         for(Integer hash : cardsBattleField.getKeySet()) {
             System.out.printf("%s ", cardsBattleField.getCardStatesByKey(hash).get(0).cardName);
@@ -209,9 +221,6 @@ public class GameStateGraphNode implements Comparable{
             System.out.printf("%s ", cardsHand.getCardStatesByKey(hash).get(0).cardName);
         }
         System.out.printf("\n%d CHILDREN ===================================================\n\n", children.size());
-        for(GameStateGraphNode c : children.keySet()) {
-            c.printGraph(depth+1);
-        }
     }
     /**
      * Gets the most immediate children of the given parent that are ancestors of the given child
@@ -271,16 +280,20 @@ public class GameStateGraphNode implements Comparable{
      * into stems which are also added to the network
      */
     public void linkStateNode(GameStateGraphNode newNode) {
-        this.clearAllHistory();
-        TreeSet<GameStateGraphNode> newNodes = new TreeSet<>();
+        //this.clearAllHistory();
+
+        PriorityQueue<GameStateGraphNode> newNodes = new PriorityQueue<>();
         this.addChild(newNode, 1f);
         newNodes.add(newNode);
+        Set<GameStateGraphNode> newlyGenerated = new HashSet<>();
         //new nodes should be sorted so children go before parents
-        while ((newNode = newNodes.pollFirst()) != null) {
+        while ((newNode = newNodes.poll()) != null) {
+            //System.out.println(newNodes.size());
             Set<GameStateGraphNode> leaves = new HashSet<>();
 
             Set<GameStateGraphNode> allRemoved = new HashSet<>();
             getRemovedLeavesFromChildren(newNode, allRemoved);
+            allRemoved.addAll(newlyGenerated);
 
             getAllLeafNodes(this, leaves, allRemoved);
 
@@ -289,21 +302,47 @@ public class GameStateGraphNode implements Comparable{
 
                 GameStateGraphNode sharedNode = GetLargestSharedSubset(leaf, newNode);
                 GameStateGraphNode foundNode = this.contains(sharedNode);
-                if(foundNode != null) {
+                if (foundNode != null) {
                     //link to an existing node
                     foundNode.addChildSafe(newNode, 1f);
                     foundNode.addChildSafe(leaf, 1f);
 
                 } else {
+                    //new node cannot possibly already be in the queue by this point (or it would have been found on the graph)
                     newNodes.add(sharedNode);
                     sharedNode.addChildSafe(leaf, 1f);
                     sharedNode.addChildSafe(newNode, 1f);
                     //link to root temporarily, so it can be found by the leaf retriever
                     this.addChild(sharedNode, 1f);
+                    //new internodes derived from the same newnode don't need to compare to each other
+                    newlyGenerated.add(sharedNode);
                 }
-                newNode.parentsShouldNotCompare.add(leaf);
-                leaf.parentsShouldNotCompare.add(newNode);
+                if (!newNode.isDescendentOf(leaf)) { //don't ignore the leaf if it is equal to the comparison's shared set and vice versa(leaf is parent)
+                    newNode.parentsShouldNotCompare.add(leaf);
+                }
+                if(!leaf.isDescendentOf(newNode)) {
+                    leaf.parentsShouldNotCompare.add(newNode);
+                }
             }
+        }
+    }
+    public static void validateGraph(GameStateGraphNode root, Set<GameStateGraphNode> sourceLeaves) {
+        PriorityQueue<GameStateGraphNode> allNodes = new PriorityQueue<>(sourceLeaves);
+        assert (allNodes.size() == sourceLeaves.size());
+        Set<GameStateGraphNode> out = new HashSet<>(sourceLeaves);
+        GameStateGraphNode first;
+        while((first = allNodes.poll()) != null) {
+            Set<GameStateGraphNode> leaves = new HashSet<>(allNodes);
+            for(GameStateGraphNode leaf : leaves) {
+                GameStateGraphNode sharedNode = GetLargestSharedSubset(first, leaf);
+                if(!out.contains(sharedNode)) {
+                    allNodes.add(sharedNode);
+                    out.add(sharedNode);
+                }
+            }
+        }
+        for(GameStateGraphNode n : out) {
+            n.printNode();
         }
     }
     @Override
