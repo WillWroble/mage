@@ -1,9 +1,22 @@
 package mage.player.ai;
 
 
-import java.util.*;
+import mage.game.permanent.Battlefield;
 
+import java.util.*;
+/**
+ * Node for the Game state graph which is the main engine behind state evaluation.
+ * The game state graph is a massive Hasse Diagram containing all relevant set intersections between provided game states
+ * this graph is weighted in tuned to produce deck-specific evaluation scores
+ *
+ * @author willwroble
+ */
 public class GameStateGraphNode implements Comparable{
+
+
+    private Battlefield battlefield;
+
+
     GameStateGraphNode opponentNode;
     private HashedZone cardsStack = new HashedZone();
     public HashedZone cardsHand = new HashedZone();
@@ -78,7 +91,6 @@ public class GameStateGraphNode implements Comparable{
         //return newNode;
 
     }
-
     @Override
     public boolean equals(Object obj) {
         if(obj.getClass() == GameStateGraphNode.class) {
@@ -276,8 +288,8 @@ public class GameStateGraphNode implements Comparable{
         parentsShouldNotCompare.add(this);
     }
     /**
-     * Heavily modifies state network to accommodate another leaf node. This process includes breaking the new node
-     * into stems which are also added to the network
+     * Heavily modifies state network to accommodate another leaf node. This process includes calculating
+     * intersections between every existing node and adding them to the graph
      */
     public void linkStateNode(GameStateGraphNode newNode) {
         //this.clearAllHistory();

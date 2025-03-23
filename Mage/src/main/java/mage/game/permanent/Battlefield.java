@@ -335,4 +335,7 @@ public class Battlefield implements Serializable {
     public String toString() {
         return "Permanents: " + field.size();
     }
+
+    public void count() {
+    }
 }

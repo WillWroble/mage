@@ -54,6 +54,7 @@ public class ComputerPlayer7 extends ComputerPlayer6 {
                 // in old version it passes opponent's pre-combat step (game.isActivePlayer(playerId) -> pass(game))
                 // why?!
                 printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
+                //add stuff here
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {

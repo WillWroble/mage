@@ -1,13 +1,19 @@
 package org.mage.test.serverside.base;
 
+import mage.cards.decks.Deck;
+import mage.cards.decks.DeckCardLists;
+import mage.cards.decks.importer.DeckImporter;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.GameException;
 import mage.game.TwoPlayerDuel;
 import mage.game.mulligan.MulliganType;
+import mage.player.ai.ComputerPlayer8;
+import mage.player.ai.StateEmbedder;
 import mage.players.Player;
 import org.mage.test.player.TestComputerPlayer7;
+import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.impl.CardTestPlayerAPIImpl;
 
@@ -44,21 +50,44 @@ public abstract class CardTestPlayerBaseAI extends CardTestPlayerAPIImpl {
     public List<String> getFullSimulatedPlayers() {
         return Arrays.asList("PlayerA");
     }
+    @Override
+    protected TestPlayer createPlayer(Game game, String name, String deckName) throws GameException {
+        TestPlayer player = createNewPlayer(name, game.getRangeOfInfluence());
+        player.setTestMode(true);
 
+        logger.debug("Loading deck...");
+        DeckCardLists list;
+        if (loadedDecks.containsKey(deckName)) {
+            list = loadedDecks.get(deckName);
+        } else {
+            list = DeckImporter.importDeckFromFile(deckName, true);
+            loadedDecks.put(deckName, list);
+        }
+        Deck deck = Deck.load(list, false, false, loadedCardInfo);
+        logger.debug("Done!");
+        if (deck.getMaindeckCards().size() < 40) {
+            throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
+        }
+        ((ComputerPlayer8)player.getComputerPlayer()).setEmbedder(new StateEmbedder(list));
+        game.loadCards(deck.getCards(), player.getId());
+        game.loadCards(deck.getSideboard(), player.getId());
+        game.addPlayer(player, deck);
+        currentMatch.addPlayer(player, deck); // fake match
 
+        return player;
+    }
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-
-        playerA = createPlayer(game, "PlayerA");
-        playerB = createPlayer(game, "PlayerB");
+        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\simplegreen.dck");
+        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\simplegreen.dck");
         return game;
     }
-
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
-            TestPlayer testPlayer = new TestPlayer(new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel()));
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestPlayer testPlayer = new TestPlayer(t8);
             testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
             return testPlayer;
         }
