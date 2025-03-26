@@ -43,7 +43,7 @@ public class RLEmbeddingTests extends CardTestPlayerBaseAI {
     }
     @Test
     public void test_Embedding_of_Perms() {
-        // many bears and bolts must help to end game fast
+        // simple test of 5 turns
         int maxTurn = 5;
 
         // full ai simulation

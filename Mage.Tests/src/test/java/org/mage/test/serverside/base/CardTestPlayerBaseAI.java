@@ -68,7 +68,7 @@ public abstract class CardTestPlayerBaseAI extends CardTestPlayerAPIImpl {
         if (deck.getMaindeckCards().size() < 40) {
             throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
         }
-        ((ComputerPlayer8)player.getComputerPlayer()).setEmbedder(new StateEmbedder(list));
+        //((ComputerPlayer8)player.getComputerPlayer()).setEmbedder(new StateEmbedder(list));
         game.loadCards(deck.getCards(), player.getId());
         game.loadCards(deck.getSideboard(), player.getId());
         game.addPlayer(player, deck);
@@ -81,15 +81,27 @@ public abstract class CardTestPlayerBaseAI extends CardTestPlayerAPIImpl {
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
         playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\simplegreen.dck");
         playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\simplegreen.dck");
+
+        ComputerPlayer8 learningAgent = (ComputerPlayer8)playerA.getComputerPlayer();
+        learningAgent.getEmbedder().setAgent(playerA.getId());
+        learningAgent.getEmbedder().setOpponent(playerB.getId());
         return game;
     }
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(t8);
-            testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
-            return testPlayer;
+            if(name.equals("PlayerA")) {
+                TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+                t8.setEmbedder(new StateEmbedder());
+                TestPlayer testPlayer = new TestPlayer(t8);
+                testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
+                return testPlayer;
+            } else {
+                TestComputerPlayer7 t7 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestPlayer testPlayer = new TestPlayer(t7);
+                testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
+                return testPlayer;
+            }
         }
         return super.createPlayer(name, rangeOfInfluence);
     }

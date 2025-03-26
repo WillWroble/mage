@@ -20,6 +20,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     public void setEmbedder(StateEmbedder emb) {
         this.embedder = emb;
     }
+    public StateEmbedder getEmbedder() {return embedder;}
 
     @Override
     public boolean priority(Game game) {
@@ -31,6 +32,10 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     private boolean priorityPlay(Game game) {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
+
+        //state learning testing
+        embedder.processState(game);
+
         switch (game.getTurnStepType()) {
             case UPKEEP:
             case DRAW:
@@ -42,8 +47,8 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 // why?!
 
                 //add stuff here
-                System.out.print("State Vector: ");
-                System.out.println(Arrays.toString(embedder.stateToVec(game.getState())));
+                //System.out.print("State Vector: ");
+                //System.out.println(Arrays.toString(embedder.stateToVec(game.getState())));
 
                 printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
 
