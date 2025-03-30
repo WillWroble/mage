@@ -53,7 +53,7 @@ public class ComputerPlayer7 extends ComputerPlayer6 {
                 // 09.03.2020:
                 // in old version it passes opponent's pre-combat step (game.isActivePlayer(playerId) -> pass(game))
                 // why?!
-                printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
+                //printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
                 //add stuff here
                 if (actions.isEmpty()) {
                     calculateActions(game);
@@ -67,7 +67,7 @@ public class ComputerPlayer7 extends ComputerPlayer6 {
                 pass(game);
                 return false;
             case DECLARE_ATTACKERS:
-                printBattlefieldScore(game, "Sim PRIORITY on DECLARE ATTACKERS");
+                //printBattlefieldScore(game, "Sim PRIORITY on DECLARE ATTACKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -77,7 +77,7 @@ public class ComputerPlayer7 extends ComputerPlayer6 {
                 act(game);
                 return true;
             case DECLARE_BLOCKERS:
-                printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
+                //printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -92,7 +92,7 @@ public class ComputerPlayer7 extends ComputerPlayer6 {
                 pass(game);
                 return false;
             case POSTCOMBAT_MAIN:
-                printBattlefieldScore(game, "Sim PRIORITY on MAIN 2");
+                //printBattlefieldScore(game, "Sim PRIORITY on MAIN 2");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {

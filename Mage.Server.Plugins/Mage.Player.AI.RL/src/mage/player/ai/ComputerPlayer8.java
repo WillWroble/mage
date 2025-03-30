@@ -34,10 +34,14 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         game.firePriorityEvent(playerId);
 
         //state learning testing
-        embedder.processState(game);
+        //embedder.processState(game);
 
         switch (game.getTurnStepType()) {
             case UPKEEP:
+                //state learning testing
+                embedder.processState(game);
+                game.toString();
+                printBattlefieldScore(game, "UPKEEP====================");
             case DRAW:
                 pass(game);
                 return false;
@@ -50,7 +54,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 //System.out.print("State Vector: ");
                 //System.out.println(Arrays.toString(embedder.stateToVec(game.getState())));
 
-                printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
+                //printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
 
                 if (actions.isEmpty()) {
                     calculateActions(game);
@@ -64,7 +68,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 pass(game);
                 return false;
             case DECLARE_ATTACKERS:
-                printBattlefieldScore(game, "Sim PRIORITY on DECLARE ATTACKERS");
+                //printBattlefieldScore(game, "Sim PRIORITY on DECLARE ATTACKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -74,7 +78,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 act(game);
                 return true;
             case DECLARE_BLOCKERS:
-                printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
+                //printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -89,7 +93,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 pass(game);
                 return false;
             case POSTCOMBAT_MAIN:
-                printBattlefieldScore(game, "Sim PRIORITY on MAIN 2");
+                //printBattlefieldScore(game, "Sim PRIORITY on MAIN 2");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {

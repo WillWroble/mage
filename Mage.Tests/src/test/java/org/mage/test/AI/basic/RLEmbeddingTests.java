@@ -47,6 +47,7 @@ public class RLEmbeddingTests extends CardTestPlayerBaseAI {
         int maxTurn = 5;
 
         // full ai simulation
+        addCard(Zone.HAND, playerA, "Fauna Shaman", 3);
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
