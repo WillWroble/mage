@@ -2,14 +2,11 @@ package org.mage.test.player;
 
 import mage.abilities.Ability;
 import mage.cards.Cards;
-import mage.cards.decks.DeckCardLists;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.player.ai.ComputerPlayer7;
 import mage.player.ai.ComputerPlayer8;
-import mage.player.ai.StateEmbedder;
 import mage.target.Target;
 import mage.target.TargetCard;
 

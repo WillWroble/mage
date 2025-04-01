@@ -10,8 +10,8 @@ import mage.game.GameException;
 import mage.game.TwoPlayerDuel;
 import mage.game.mulligan.MulliganType;
 import mage.player.ai.ComputerPlayer8;
-import mage.player.ai.StateEmbedder;
-import mage.players.Player;
+import mage.player.ai.StateEncoder;
+import org.mage.test.AI.basic.RLEncodingTests;
 import org.mage.test.player.TestComputerPlayer7;
 import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
@@ -19,9 +19,7 @@ import org.mage.test.serverside.base.impl.CardTestPlayerAPIImpl;
 
 import java.io.FileNotFoundException;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * PlayerA is full AI player and process all actions as AI logic. You don't need aiXXX commands in that tests.
@@ -79,12 +77,8 @@ public abstract class CardTestPlayerBaseAI extends CardTestPlayerAPIImpl {
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\simplegreen.dck");
-        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\simplegreen.dck");
-
-        ComputerPlayer8 learningAgent = (ComputerPlayer8)playerA.getComputerPlayer();
-        learningAgent.getEmbedder().setAgent(playerA.getId());
-        learningAgent.getEmbedder().setOpponent(playerB.getId());
+        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\" + RLEncodingTests.deckNameA);
+        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\" + RLEncodingTests.deckNameB);
         return game;
     }
     @Override
@@ -92,7 +86,6 @@ public abstract class CardTestPlayerBaseAI extends CardTestPlayerAPIImpl {
         if (getFullSimulatedPlayers().contains(name)) {
             if(name.equals("PlayerA")) {
                 TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
-                t8.setEmbedder(new StateEmbedder());
                 TestPlayer testPlayer = new TestPlayer(t8);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;

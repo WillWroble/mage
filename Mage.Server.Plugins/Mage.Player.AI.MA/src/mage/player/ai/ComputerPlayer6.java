@@ -170,7 +170,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
             while (actions.peek() != null) {
                 Ability ability = actions.poll();
                 // example: ===> SELECTED ACTION for PlayerA: Play Swamp
-                logger.info(String.format("===> SELECTED ACTION for %s: %s",
+                logger.debug(String.format("===> SELECTED ACTION for %s: %s",
                         getName(),
                         getAbilityAndSourceInfo(game, ability, true)
                 ));
@@ -304,20 +304,20 @@ public class ComputerPlayer6 extends ComputerPlayer {
             if (root.playerId.equals(playerId)
                     && root.abilities != null
                     && game.getState().getValue(true).hashCode() == test.gameValue) {
-                logger.info("simulating -- continuing previous actions chain");
+                logger.debug("simulating -- continuing previous actions chain");
                 actions = new LinkedList<>(root.abilities);
                 combat = root.combat;
                 return true;
             } else {
                 if (root.abilities == null || root.abilities.isEmpty()) {
-                    logger.info("simulating -- need re-calculation (no more actions)");
+                    logger.debug("simulating -- need re-calculation (no more actions)");
                 } else if (game.getState().getValue(true).hashCode() != test.gameValue) {
-                    logger.info("simulating -- need re-calculation (game state changed between actions)");
+                    logger.debug("simulating -- need re-calculation (game state changed between actions)");
                 } else if (!root.playerId.equals(playerId)) {
                     // TODO: need research, why need playerId and why it taken from stack objects as controller
-                    logger.info("simulating -- need re-calculation (active controller changed)");
+                    logger.debug("simulating -- need re-calculation (active controller changed)");
                 } else {
-                    logger.info("simulating -- need re-calculation (unknown reason)");
+                    logger.debug("simulating -- need re-calculation (unknown reason)");
                 }
                 return false;
             }
@@ -469,7 +469,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
         if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS
                 && Thread.interrupted()) {
             Thread.currentThread().interrupt();
-            logger.info("interrupted");
+            logger.debug("interrupted");
             return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
         }
         node.setGameValue(game.getState().getValue(true).hashCode());
@@ -481,7 +481,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
         if (logger.isInfoEnabled()
                 && !allActions.isEmpty()
                 && depth == maxDepth) {
-            logger.info(String.format("POSSIBLE ACTION CHAINS for %s (%d, started score: %d)%s",
+            logger.debug(String.format("POSSIBLE ACTION CHAINS for %s (%d, started score: %d)%s",
                     getName(),
                     allActions.size(),
                     startedScore,
@@ -490,7 +490,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
             for (int i = 0; i < allActions.size(); i++) {
                 // print possible actions with detailed targets
                 Ability possibleAbility = allActions.get(i);
-                logger.info(String.format("-> #%d (%s)", i + 1, getAbilityAndSourceInfo(game, possibleAbility, true)));
+                logger.debug(String.format("-> #%d (%s)", i + 1, getAbilityAndSourceInfo(game, possibleAbility, true)));
             }
         }
         int actionNumber = 0;
@@ -500,7 +500,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
             if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS
                     && Thread.interrupted()) {
                 Thread.currentThread().interrupt();
-                logger.info("Sim Prio [" + depth + "] -- interrupted");
+                logger.debug("Sim Prio [" + depth + "] -- interrupted");
                 break;
             }
             Game sim = game.createSimulationForAI();
@@ -550,7 +550,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
 
                     // example: Sim Prio [6] #1 <diff -19, +4444> (Lightning Bolt [aa5]: Cast Lightning Bolt -> Balduvian Bears [c49])
                     // total
-                    logger.info(String.format("Sim Prio [%d] #%d <total score diff %s (from %s to %s)>",
+                    logger.debug(String.format("Sim Prio [%d] #%d <total score diff %s (from %s to %s)>",
                             depth,
                             actionNumber,
                             printDiffScore(finalScore - startedScore),
@@ -581,7 +581,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
                             if (!currentNode.getTargets().isEmpty() || !currentNode.getChoices().isEmpty()) {
                                 throw new IllegalStateException("WTF, simulated abilities with targets/choices");
                             }
-                            logger.info(String.format("Sim Prio [%d] -> next action: [%d]<diff %s> (%s)",
+                            logger.debug(String.format("Sim Prio [%d] -> next action: [%d]<diff %s> (%s)",
                                     depth,
                                     currentNode.getDepth(),
                                     printDiffScore(currentScore - prevScore),
@@ -603,7 +603,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
                                         return "unknown";
                                     })
                                     .collect(Collectors.joining(", "));
-                            logger.info(String.format("Sim Prio [%d] -> with choices (TODO): [%d]<diff %s> (%s)",
+                            logger.debug(String.format("Sim Prio [%d] -> with choices (TODO): [%d]<diff %s> (%s)",
                                     depth,
                                     currentNode.getDepth(),
                                     printDiffScore(currentScore - prevScore),
@@ -612,7 +612,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
                         } else if (!currentNode.getChoices().isEmpty()) {
                             // ON CHOICES
                             String choicesInfo = String.join(", ", currentNode.getChoices());
-                            logger.info(String.format("Sim Prio [%d] -> with choices (TODO): [%d]<diff %s> (%s)",
+                            logger.debug(String.format("Sim Prio [%d] -> with choices (TODO): [%d]<diff %s> (%s)",
                                     depth,
                                     currentNode.getDepth(),
                                     printDiffScore(currentScore - prevScore),
@@ -646,7 +646,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
 
                         // keep only best node
                         if (depth == maxDepth) {
-                            logger.info("Sim Prio [" + depth + "] -* BEST actions chain so far: <final score " + bestNode.getScore() + ">");
+                            logger.debug("Sim Prio [" + depth + "] -* BEST actions chain so far: <final score " + bestNode.getScore() + ">");
                             node.children.clear();
                             node.children.add(bestNode);
                             node.setScore(bestNode.getScore());
@@ -689,7 +689,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
 
         if (depth == maxDepth) {
             // TODO: buggy? Why it ended with depth limit 6 on one Pass action?!
-            logger.info("Sim Prio [" + depth + "] ## Ended due max actions chain depth limit (" + maxDepth + ") -- Nodes calculated: " + SimulationNode2.nodeCount);
+            logger.debug("Sim Prio [" + depth + "] ## Ended due max actions chain depth limit (" + maxDepth + ") -- Nodes calculated: " + SimulationNode2.nodeCount);
         }
         if (bestNode != null) {
             node.children.clear();

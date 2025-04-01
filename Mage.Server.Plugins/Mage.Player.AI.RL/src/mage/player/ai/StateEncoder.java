@@ -1,9 +1,6 @@
 package mage.player.ai;
 
-import mage.Mana;
-import mage.ObjectColor;
 import mage.abilities.*;
-import mage.abilities.costs.CompositeCost;
 import mage.abilities.costs.Cost;
 import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.ManaCost;
@@ -11,8 +8,6 @@ import mage.abilities.costs.mana.ManaCosts;
 import mage.abilities.effects.Effect;
 import mage.cards.Card;
 import mage.cards.Cards;
-import mage.cards.decks.DeckCardLists;
-import mage.cards.repository.CardRepository;
 import mage.constants.CardType;
 import mage.constants.SubType;
 import mage.constants.Zone;
@@ -27,22 +22,24 @@ import mage.players.Player;
 import java.util.*;
 
 /**
- * Deck specific state embedder for reinforcement learning.
- * Before embeddings can be made, the embedder must learn all game features of
+ * Deck specific state encoder for reinforcement learning.
+ * Before vectors can be made, the encoder must learn all game features of
  * the given 60 card deck through a first pass of 1,000 simulated mcst games
  */
-public class StateEmbedder {
+public class StateEncoder {
     public static int indexCount;
     private Features features;
     public static boolean[] featureVector;
     private UUID opponentID;
     private UUID myPlayerID;
+    public List<boolean[]> stateVectors;
 
-    public StateEmbedder() {
+    public StateEncoder() {
         //using statics for convenience for now
         indexCount = 0;
         features = new Features();
         featureVector = new boolean[10000];
+        stateVectors = new ArrayList<>();
     }
     public void setAgent(UUID me) {
         myPlayerID = me;
@@ -51,16 +48,16 @@ public class StateEmbedder {
         opponentID = op;
     }
     //this uses special flag to not lump casting cost in with abilities during aggregation
-    public void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, String flag) {
+    public void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
         //f.addFeature(manaCost.getText());
-        f.addNumericFeature("ManaValue_"+flag, manaCost.manaValue());
+        f.addNumericFeature("ManaValue", manaCost.manaValue(), callParent);
         for(ManaCost mc : manaCost) {
-            f.addFeature(mc.getText()+"_"+flag);
+            f.addFeature(mc.getText());
         }
     }
-    public void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f, String flag) {
+    public void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f, Boolean callParent) {
         //if(c.c) f.addFeature("CanPay"); //use c.canPay()
-        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, flag);
+        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, callParent);
         if(costs == null || costs.isEmpty()) return;
         for(Cost cc : costs) {
             f.addFeature(cc.getText());
@@ -68,10 +65,12 @@ public class StateEmbedder {
     }
     public void processAbility(Ability a, Game game, Features f) {
         Costs<Cost> c = a.getCosts();
-        ManaCosts<ManaCost> mcs = a.getManaCosts();
-        Features costFeature = f.getSubFeatures(mcs.getText() + ", " + c.getText());
-        processCosts(c, mcs, game, costFeature, "Ability");
-
+        //for now lets not worry about encoding costs per abilities
+        /*ManaCosts<ManaCost> mcs = a.getManaCostsToPay();
+        if(!c.isEmpty() || !mcs.isEmpty()) {
+            Features costFeature = f.getSubFeatures("AbilityCost");
+            processCosts(c, mcs, game, costFeature, false); //dont propagate mana cost up for abilities
+        }*/
         for(Effect e : a.getAllEffects()) {
             for(Mode m : a.getModes().getAvailableModes(a, game)) {
                 f.addFeature(e.getText(m));
@@ -93,31 +92,31 @@ public class StateEmbedder {
     }
     public void processCard(Card c, Game game, Features f) {
 
-        f.addFeature("Card");//raw universal type of card added as feature to pass up to parents for counting purposes
+        f.addFeature("Card");//raw universal type of card added for counting purposes
 
-        if(c.isPermanent()) f.addFeature("Permanent");
+        if(c.isPermanent()) f.addCategory("Permanent");
         //add types
         for (CardType ct : c.getCardType()) {
-            f.addFeature(ct.name());
+            f.addCategory(ct.name());
         }
         //add subtypes
         for (SubType st : c.getSubtype(game)) {
-            f.addFeature(st.name());
-        }
-        //add cost
-        ManaCosts<ManaCost> mc = c.getManaCost();
-        if(!mc.isEmpty()) {
-            Features costFeature = f.getSubFeatures("ManaCost");
-            processManaCosts(mc, game, costFeature, "CastingCost");
+            f.addCategory(st.name());
         }
         //add color
-        if(c.getColor(game).isRed()) f.addFeature("RedCard");
-        if(c.getColor(game).isWhite()) f.addFeature("WhiteCard");
-        if(c.getColor(game).isBlack()) f.addFeature("BlackCard");
-        if(c.getColor(game).isGreen()) f.addFeature("GreenCard");
-        if(c.getColor(game).isBlue()) f.addFeature("BlueCard");
-        if(c.getColor(game).isColorless()) f.addFeature("ColorlessCard");
-        if(c.getColor(game).isMulticolored()) f.addFeature("isMultiColored");
+        if(c.getColor(game).isRed()) f.addCategory("RedCard");
+        if(c.getColor(game).isWhite()) f.addCategory("WhiteCard");
+        if(c.getColor(game).isBlack()) f.addCategory("BlackCard");
+        if(c.getColor(game).isGreen()) f.addCategory("GreenCard");
+        if(c.getColor(game).isBlue()) f.addCategory("BlueCard");
+        if(c.getColor(game).isColorless()) f.addCategory("ColorlessCard");
+        if(c.getColor(game).isMulticolored()) f.addCategory("MultiColored");
+
+        //add cost
+        ManaCosts<ManaCost> mc = c.getManaCost();
+        Features costFeature = f.getSubFeatures("CastingCost");
+        processManaCosts(mc, game, costFeature, true);
+
 
         //process counters
         Counters counters = c.getCounters(game);
@@ -129,20 +128,19 @@ public class StateEmbedder {
 
             f.addNumericFeature("Power", c.getPower().getValue());
             f.addNumericFeature("Toughness", c.getToughness().getValue());
-
         }
 
     }
     public void processPermBattlefield(Permanent p, Game game, Features f) {
-
         processCard(p, game, f);
-
+        //is tapped?
+        if(p.isTapped()) f.addFeature("Tapped");
 
         //process attachments
         for (UUID id : p.getAttachments()) {
             Permanent attachment = game.getPermanent(id);
             //modify name to not count auras/equipment twice
-            Features attachmentFeatures = f.getSubFeatures(attachment.getName() + "Attachment");
+            Features attachmentFeatures = f.getSubFeatures(attachment.getName() + "_Attachment");
             processPermBattlefield(attachment, game, attachmentFeatures);
         }
 
@@ -201,8 +199,10 @@ public class StateEmbedder {
         }
         //activated abilities
         for(ActivatedAbility aa : c.getAbilities(game).getActivatedAbilities(Zone.HAND)) {
-            Features aaFeatures = f.getSubFeatures(aa.getRule());
-            processActivatedAbility(aa, game, aaFeatures);
+            if(!(aa instanceof SpellAbility)) {
+                Features aaFeatures = f.getSubFeatures(aa.getRule());
+                processActivatedAbility(aa, game, aaFeatures);
+            }
         }
         //triggered abilities
         for(TriggeredAbility ta : c.getAbilities(game).getTriggeredAbilities(Zone.HAND)) {
@@ -210,7 +210,6 @@ public class StateEmbedder {
             processTriggeredAbility(ta, game, taFeatures);
 
         }
-
     }
     public void processBattlefield(Battlefield bf, Game game, Features f) {
         for (Permanent p : bf.getAllActivePermanents(myPlayerID)) {
@@ -231,7 +230,7 @@ public class StateEmbedder {
         }
     }
     public void processState(Game game) {
-        features.resetOccurrences();
+        features.stateRefresh();
         Arrays.fill(featureVector, false);
 
         Player myPlayer = game.getPlayer(myPlayerID);
@@ -258,6 +257,7 @@ public class StateEmbedder {
 
 
         System.out.println(Arrays.toString(featureVector));
+        stateVectors.add(featureVector);
 
     }
 }

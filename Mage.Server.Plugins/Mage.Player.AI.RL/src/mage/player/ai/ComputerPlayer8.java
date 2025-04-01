@@ -1,14 +1,10 @@
 package mage.player.ai;
 
-import mage.cards.decks.DeckCardInfo;
-import mage.cards.decks.DeckCardLists;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 
-import java.util.Arrays;
-
 public class ComputerPlayer8 extends ComputerPlayer7{
-    private StateEmbedder embedder;
+    private StateEncoder encoder;
     public ComputerPlayer8(ComputerPlayer7 player) {
         super(player);
     }
@@ -17,10 +13,10 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         super(name, range, skill);
     }
 
-    public void setEmbedder(StateEmbedder emb) {
-        this.embedder = emb;
+    public void setEncoder(StateEncoder enc) {
+        this.encoder = enc;
     }
-    public StateEmbedder getEmbedder() {return embedder;}
+    public StateEncoder getEncoder() {return encoder;}
 
     @Override
     public boolean priority(Game game) {
@@ -34,14 +30,11 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         game.firePriorityEvent(playerId);
 
         //state learning testing
-        //embedder.processState(game);
+        //encoder.processState(game);
 
         switch (game.getTurnStepType()) {
             case UPKEEP:
-                //state learning testing
-                embedder.processState(game);
-                game.toString();
-                printBattlefieldScore(game, "UPKEEP====================");
+
             case DRAW:
                 pass(game);
                 return false;
@@ -50,9 +43,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 // in old version it passes opponent's pre-combat step (game.isActivePlayer(playerId) -> pass(game))
                 // why?!
 
-                //add stuff here
-                //System.out.print("State Vector: ");
-                //System.out.println(Arrays.toString(embedder.stateToVec(game.getState())));
 
                 //printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
 
@@ -103,6 +93,11 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 act(game);
                 return true;
             case END_TURN:
+                //state learning testing only check state at end of each turn
+                if(game.getActivePlayerId() == getId()) {
+                    encoder.processState(game);
+                    printBattlefieldScore(game, "END STEP====================");
+                }
             case CLEANUP:
                 actionCache.clear();
                 pass(game);
