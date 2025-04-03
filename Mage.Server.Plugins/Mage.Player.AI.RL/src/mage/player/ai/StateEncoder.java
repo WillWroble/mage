@@ -24,7 +24,7 @@ import java.util.*;
 /**
  * Deck specific state encoder for reinforcement learning.
  * Before vectors can be made, the encoder must learn all game features of
- * the given 60 card deck through a first pass of 1,000 simulated mcst games
+ * the given 60 card decks through a first pass of 1,000 simulated mcst games
  */
 public class StateEncoder {
     public static int indexCount;
@@ -33,12 +33,14 @@ public class StateEncoder {
     private UUID opponentID;
     private UUID myPlayerID;
     public List<boolean[]> stateVectors;
+    public static Set<Integer> ignoreList;
 
     public StateEncoder() {
         //using statics for convenience for now
         indexCount = 0;
         features = new Features();
-        featureVector = new boolean[10000];
+        featureVector = new boolean[20000];
+        ignoreList = new HashSet<>();
         stateVectors = new ArrayList<>();
     }
     public void setAgent(UUID me) {
@@ -47,7 +49,7 @@ public class StateEncoder {
     public void setOpponent(UUID op) {
         opponentID = op;
     }
-    //this uses special flag to not lump casting cost in with abilities during aggregation
+
     public void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
         //f.addFeature(manaCost.getText());
         f.addNumericFeature("ManaValue", manaCost.manaValue(), callParent);
@@ -211,8 +213,8 @@ public class StateEncoder {
 
         }
     }
-    public void processBattlefield(Battlefield bf, Game game, Features f) {
-        for (Permanent p : bf.getAllActivePermanents(myPlayerID)) {
+    public void processBattlefield(Battlefield bf, Game game, Features f, UUID playerID) {
+        for (Permanent p : bf.getAllActivePermanents(playerID)) {
             Features permFeatures = f.getSubFeatures(p.getName());
             processPermBattlefield(p, game, permFeatures);
         }
@@ -229,6 +231,28 @@ public class StateEncoder {
             processCardInHand(c, game, handCardFeatures);
         }
     }
+    public void processOpponentState(Game game) {
+        Player myPlayer = game.getPlayer(opponentID);
+        //game metadata
+        features.addNumericFeature("OpponentLifeTotal", myPlayer.getLife());
+        if(myPlayer.canPlayLand()) features.addFeature("OpponentCanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
+
+        //start with battlefield
+        Battlefield bf = game.getBattlefield();
+        Features bfFeatures = features.getSubFeatures("OpponentBattlefield");
+        processBattlefield(bf, game, bfFeatures, opponentID);
+
+        //now do graveyard
+        Graveyard gy = myPlayer.getGraveyard();
+        Features gyFeatures = features.getSubFeatures("OpponentGraveyard");
+        processGraveyard(gy, game, gyFeatures);
+
+        //now do hand (cards are face down so only keep count of number of cards
+        // TODO: keep track of face up cards
+        Cards hand = myPlayer.getHand();
+        features.addNumericFeature("OpponentCardsInHand", hand.size());
+
+    }
     public void processState(Game game) {
         features.stateRefresh();
         Arrays.fill(featureVector, false);
@@ -243,7 +267,7 @@ public class StateEncoder {
         //start with battlefield
         Battlefield bf = game.getBattlefield();
         Features bfFeatures = features.getSubFeatures("Battlefield");
-        processBattlefield(bf, game, features);
+        processBattlefield(bf, game, bfFeatures, myPlayerID);
 
         //now do graveyard
         Graveyard gy = myPlayer.getGraveyard();
@@ -255,9 +279,13 @@ public class StateEncoder {
         Features handFeatures = features.getSubFeatures("Hand");
         processHand(hand, game, handFeatures);
 
+        //lastly do opponent
+        processOpponentState(game);
 
-        System.out.println(Arrays.toString(featureVector));
-        stateVectors.add(featureVector);
-
+        for(int i = 0; i < indexCount; i++) {
+            System.out.printf("[%d:%d] ", i, featureVector[i] ? 1 : 0);
+        }
+        System.out.println();
+        stateVectors.add(Arrays.copyOf(featureVector, 20000));
     }
 }
