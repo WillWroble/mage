@@ -1,7 +1,6 @@
-package org.mage.test.AI.basic;
+package org.mage.test.AI.RL;
 
 import mage.constants.PhaseStep;
-import mage.game.GameException;
 import mage.player.ai.ComputerPlayer8;
 import mage.player.ai.StateEncoder;
 import org.junit.After;
@@ -9,11 +8,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 public class VectorExtractionTests extends CardTestPlayerBaseAI {
     private List<LabeledState> labeledStates;

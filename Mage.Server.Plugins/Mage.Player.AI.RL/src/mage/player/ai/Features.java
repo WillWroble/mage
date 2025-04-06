@@ -1,9 +1,14 @@
 package mage.player.ai;
 
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 
-public class Features {
+public class Features  implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private Map<String, Map<Integer, Features>> subFeatures;
     private Map<String, Map<Integer, Integer>> features;
     private Map<String, TreeMap<Integer, Map<Integer, Integer>>> numericFeatures; //name->value->occurrences
@@ -159,7 +164,6 @@ public class Features {
                     if(printNewFeatures) System.out.printf("Numeric feature %s with %d exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s\n",
                             name, num, count, StateEncoder.indexCount-1, count, featureName);
                 }
-                //System.out.printf("Index %d is already reserved for numeric feature %s with %d in %s\n", numericFeatures.get(name).get(num), name, num, featureName);
             } else { //contains category but not this number
                 Map<Integer, Map<Integer, Integer>> map = numericFeatures.get(name);
                 Map<Integer, Integer> subMap = new HashMap<>();
@@ -196,6 +200,20 @@ public class Features {
         }
         for (String n : categoriesForChildren.keySet()) {
             categoriesForChildren.get(n).stateRefresh();
+        }
+    }
+
+    // Helper method to persist the Features mapping to a file
+    public void saveMapping(String filename) throws IOException {
+        try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(filename)))) {
+            oos.writeObject(this);
+        }
+    }
+
+    // Helper method to load a Features mapping from a file
+    public static Features loadMapping(String filename) throws IOException, ClassNotFoundException {
+        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(Paths.get(filename)))) {
+            return (Features) ois.readObject();
         }
     }
 }

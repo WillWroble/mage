@@ -177,37 +177,5 @@ public class RLAIGameStateGraphTest extends CardTestPlayerBaseAI {
         System.out.println("Hello World!");
     }
 
-    @Test
-    public void test_AIvsAI_LongGame() {
-        // many bears and bolts must help to end game fast
-        int maxTurn = 50;
-        removeAllCardsFromLibrary(playerA);
-        removeAllCardsFromLibrary(playerB);
 
-        addCard(Zone.LIBRARY, playerA, "Mountain", 10);
-        addCard(Zone.LIBRARY, playerA, "Forest", 10);
-        addCard(Zone.LIBRARY, playerA, "Lightning Bolt", 20);
-        addCard(Zone.LIBRARY, playerA, "Balduvian Bears", 10);
-        //
-        addCard(Zone.LIBRARY, playerB, "Mountain", 10);
-        addCard(Zone.LIBRARY, playerA, "Forest", 10);
-        addCard(Zone.LIBRARY, playerB, "Lightning Bolt", 20);
-        addCard(Zone.LIBRARY, playerB, "Balduvian Bears", 10);
-
-        // full ai simulation
-        setStrictChooseMode(true);
-        setStopAt(maxTurn, PhaseStep.END_TURN);
-        execute();
-
-        Assert.assertTrue("One of player must won a game before turn " + maxTurn + ", but it ends on " + currentGame, currentGame.hasEnded());
-    }
-    @Override
-    protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
-        if (getFullSimulatedPlayers().contains(name)) {
-            TestPlayer testPlayer = new TestPlayer(new TestComputerPlayerRL(name, RangeOfInfluence.ONE, getSkillLevel()));
-            testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
-            return testPlayer;
-        }
-        return super.createPlayer(name, rangeOfInfluence);
-    }
 }

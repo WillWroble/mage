@@ -26,17 +26,17 @@ import java.util.concurrent.*;
  */
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
-    private static final int THINK_MIN_RATIO = 40;
-    private static final int THINK_MAX_RATIO = 100;
-    private static final double THINK_TIME_MULTIPLIER = 2.0;
-    private static final boolean USE_MULTIPLE_THREADS = true;
+    protected static final int THINK_MIN_RATIO = 40;
+    protected static final int THINK_MAX_RATIO = 100;
+    protected static final double THINK_TIME_MULTIPLIER = 2.0;
+    protected static final boolean USE_MULTIPLE_THREADS = true;
 
     protected transient MCTSNode root;
     protected int maxThinkTime;
-    private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
-    private int poolSize;
+    protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
+    protected int poolSize;
 
-    private ExecutorService threadPoolSimulations = null;
+    protected ExecutorService threadPoolSimulations = null;
 
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
@@ -161,7 +161,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void applyMCTS(final Game game, final NextAction action) {
 
         int thinkTime = calculateThinkTime(game, action);
-
+        thinkTime = 5;
         if (thinkTime > 0) {
             if (USE_MULTIPLE_THREADS) {
                 if (this.threadPoolSimulations == null) {
@@ -185,7 +185,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                     MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);
                     tasks.add(exec);
                 }
-
                 try {
                     List<Future<Boolean>> runningTasks = threadPoolSimulations.invokeAll(tasks, thinkTime, TimeUnit.SECONDS);
                     for (Future<Boolean> runningTask : runningTasks) {
@@ -239,6 +238,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                         result = current.simulate(this.playerId);
                         simCount++;
                     } else {
+                        //System.out.println("Terminal State Reached!");
                         result = current.isWinner(this.playerId) ? 1 : -1;
                     }
                     // Backpropagation
@@ -252,7 +252,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
 
     //try to ensure that there are at least THINK_MIN_RATIO simulations per node at all times
-    private int calculateThinkTime(Game game, NextAction action) {
+    protected int calculateThinkTime(Game game, NextAction action) {
         int thinkTime;
         int nodeSizeRatio = 0;
         if (root.getNumChildren() > 0)

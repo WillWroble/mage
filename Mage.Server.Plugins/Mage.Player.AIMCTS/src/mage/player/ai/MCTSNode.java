@@ -21,6 +21,9 @@ import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 
+import static java.lang.Math.floor;
+import static java.lang.Math.round;
+
 /**
  *
  * @author BetaSteward_at_googlemail.com
@@ -34,6 +37,7 @@ public class MCTSNode {
 
     private int visits = 0;
     private int wins = 0;
+    private int score = 0;
     private MCTSNode parent;
     private final List<MCTSNode> children = new ArrayList<>();
     private Ability action;
@@ -107,9 +111,9 @@ public class MCTSNode {
             double uct;
             if (node.visits > 0)
                 if (isTarget)
-                    uct = (node.wins / (node.visits)) + (selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
+                    uct = (node.score / (node.visits)) + (selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
                 else
-                    uct = ((node.visits - node.wins) / (node.visits)) + (selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
+                    uct = ((-1*node.score) / (node.visits)) + (selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
             else
                 // ensure that a random unvisited node is played first
                 uct = 10000 + 1000 * RandomUtil.nextDouble();
@@ -139,7 +143,7 @@ public class MCTSNode {
         for (Player simPlayer: sim.getPlayers().values()) {
 //            logger.info(simPlayer.getName() + " calculated " + ((SimulatedPlayerMCTS)simPlayer).getActionCount() + " actions in " + duration/1000000000.0 + "s");
             if (simPlayer.getId().equals(playerId) && simPlayer.hasWon()) {
-//                logger.info("AI won the simulation");
+                logger.info("AI won the simulation");
                 retVal = 1;
             }
         }
@@ -151,6 +155,7 @@ public class MCTSNode {
             return;
         if (result == 1)
             wins++;
+        score += result;
         visits++;
         if (parent != null)
             parent.backpropagate(result);
@@ -171,18 +176,18 @@ public class MCTSNode {
             //favour passing vs any other action except for playing land if ratio is close
             if (node.visits > bestCount) {
                 if (bestIsPass) {
-                    double ratio = node.wins/(node.visits * 1.0);
+                    double ratio = node.score/(node.visits * 1.0);
                     if (ratio < bestRatio + passRatioTolerance)
                         continue;
                 }
                 bestChild = node;
                 bestCount = node.visits;
-                bestRatio = node.wins/(node.visits * 1.0);
+                bestRatio = node.score/(node.visits * 1.0);
                 bestIsPass = false;
             }
             else if (node.action instanceof PassAbility && node.visits > 10 && !(bestChild.action instanceof PlayLandAbility)) {
                 //favour passing vs any other action if ratio is close
-                double ratio = node.wins/(node.visits * 1.0);
+                double ratio = node.score/(node.visits * 1.0);
                 if (ratio > bestRatio - passRatioTolerance) {
                     logger.info("choosing pass over " + bestChild.getAction());
                     bestChild = node;
@@ -228,7 +233,7 @@ public class MCTSNode {
 
     public double getWinRatio() {
         if (visits > 0)
-            return wins/(visits * 1.0);
+            return score/(visits * 1.0);
         return -1.0;
     }
 
@@ -323,6 +328,7 @@ public class MCTSNode {
 
         this.visits += merge.visits;
         this.wins += merge.wins;
+        this.score += merge.score;
         int mismatchCount = 0;
         
         List<MCTSNode> mergeChildren = new ArrayList<>();
@@ -478,7 +484,11 @@ public class MCTSNode {
 
         return count;
     }
-    
+
+    public Game getGame() {
+        return game;
+    }
+
     public static void logHitMiss() {
         if (USE_ACTION_CACHE) {
             StringBuilder sb = new StringBuilder();

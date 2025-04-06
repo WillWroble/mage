@@ -19,6 +19,7 @@ import mage.game.permanent.Permanent;
 import mage.players.Player;
 
 
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -279,6 +280,8 @@ public class StateEncoder {
         Features handFeatures = features.getSubFeatures("Hand");
         processHand(hand, game, handFeatures);
 
+        //TODO: add exile
+
         //lastly do opponent
         processOpponentState(game);
 
@@ -287,5 +290,14 @@ public class StateEncoder {
         }
         System.out.println();
         stateVectors.add(Arrays.copyOf(featureVector, 20000));
+    }
+    // Persist the persistent feature mapping
+    public void persistMapping(String filename) throws IOException {
+        features.saveMapping(filename);
+    }
+
+    // Load the feature mapping from file
+    public void loadMapping(String filename) throws IOException, ClassNotFoundException {
+        features = Features.loadMapping(filename);
     }
 }

@@ -7,6 +7,7 @@ import mage.abilities.common.PassAbility;
 import mage.abilities.costs.mana.GenericManaCost;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
+import mage.players.Player;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
@@ -171,7 +172,11 @@ public class MCTSPlayer extends ComputerPlayer {
     public void setNextAction(NextAction action) {
         this.nextAction = action;
     }
-
+    @Override
+    public void restore(Player player) {
+        // simulated player can be created from any player type
+        super.restore(player.getRealPlayer());
+    }
     @Override
     public boolean priority(Game game) {
         game.pause();

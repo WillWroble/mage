@@ -30,6 +30,12 @@
             <artifactId>mage-player-ai-ma</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.mage</groupId>
+            <artifactId>mage-player-ai-mcts</artifactId>
+            <version>1.4.56</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>
