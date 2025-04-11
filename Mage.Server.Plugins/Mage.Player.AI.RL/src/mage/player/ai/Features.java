@@ -5,7 +5,13 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
-
+/**
+ *this hierarchical structure represents the mapping of every possible relevant feature encountered from a game state to
+ * an index on a 200000 dimension binary vector. the reduced form of this vector (4000) will be used as input for both a policy and
+ * value neural network. To see how game features are mapped look at StateEncoder.java this data structure only handles and stores the
+ * mappings
+ * @author willwroble
+ */
 public class Features  implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -66,7 +72,7 @@ public class Features  implements Serializable {
 
         int n = occurances.get(name);
         if(subFeatures.containsKey(name)) {//already contains feature
-            if(subFeatures.get(name).containsKey(n)) {//conatins count too
+            if(subFeatures.get(name).containsKey(n)) {//contains count too
                 return subFeatures.get(name).get(n);
             } else {//new count
                 Map<Integer, Features> map = subFeatures.get(name);

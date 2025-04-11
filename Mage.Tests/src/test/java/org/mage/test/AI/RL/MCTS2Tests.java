@@ -7,10 +7,8 @@ import mage.game.Game;
 import mage.game.GameException;
 import mage.game.TwoPlayerDuel;
 import mage.game.mulligan.MulliganType;
-import mage.player.ai.ComputerPlayer8;
-import mage.player.ai.FeatureMerger;
-import mage.player.ai.Features;
-import mage.player.ai.StateEncoder;
+import mage.player.ai.*;
+import mage.util.RandomUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -62,6 +60,9 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
         return super.createPlayer(name, rangeOfInfluence);
     }
     public void reset_game() {
+        ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2) playerA.getComputerPlayer();
+        mcts2.clearTree();
+        MCTSNode.clearCaches();
         try {
             reset();
         } catch (FileNotFoundException e) {
@@ -70,6 +71,12 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
             throw new RuntimeException(e);
         }
 
+    }
+    @Before
+    public void init_seed() {
+        int seed = RandomUtil.nextInt();
+        System.out.printf("USING SEED: %d\n", seed);
+        RandomUtil.setSeed(seed);
     }
     //5 turns across 1 game
     @Test

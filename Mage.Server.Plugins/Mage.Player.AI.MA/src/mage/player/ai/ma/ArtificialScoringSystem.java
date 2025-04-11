@@ -127,7 +127,7 @@ public final class ArtificialScoringSystem {
         if (permanent.isCreature(game)) {
             return -100;
         } else if (permanent.isLand(game)) {
-            return -20; // means probably no mana available  (should be greater than passivity penalty
+            return -20; // means probably no mana available  (should be greater than passivity penalty(was 20)
         } else {
             return -2;
         }

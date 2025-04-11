@@ -44,6 +44,7 @@ public final class RandomUtil {
         random.setSeed(newSeed);
     }
 
+
     public static <T> T randomFromCollection(Collection<T> collection) {
         if (collection.size() < 2) {
             return collection.stream().findFirst().orElse(null);

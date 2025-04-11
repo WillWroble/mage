@@ -177,13 +177,13 @@ public abstract class CardTestPlayerAPIImpl extends MageTestPlayerBase implement
 
         // prepare fake match (needs for testing some client-server code)
         // always 4 seats
-        MatchOptions matchOptions = new MatchOptions("test match", "test game type", true, 4);
+        MatchOptions matchOptions = new MatchOptions("test match", "test game type", true, 2);
         currentMatch = new FreeForAllMatch(matchOptions);
         currentGame = createNewGameAndPlayers();
 
         activePlayer = playerA;
-        stopOnTurn = 2;
-        stopAtStep = PhaseStep.UNTAP;
+        //stopOnTurn = 2;
+        //stopAtStep = PhaseStep.UNTAP;
 
         for (Player player : currentGame.getPlayers().values()) {
             TestPlayer testPlayer = (TestPlayer) player;

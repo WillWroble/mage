@@ -31,6 +31,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
 
         //state learning testing
         //encoder.processState(game);
+        //printBattlefieldScore(game, "PRIORITY====================");
 
         switch (game.getTurnStepType()) {
             case UPKEEP:
@@ -93,7 +94,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 act(game);
                 return true;
             case END_TURN:
-                //state learning testing only check state at end of each turn
+                //state learning testing only check state at end of its turns
                 if(game.getActivePlayerId() == getId()) {
                     encoder.processState(game);
                     printBattlefieldScore(game, "END STEP====================");

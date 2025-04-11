@@ -120,12 +120,12 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
     }
-    //10 turns across 10 games
+    //10 turns across 5 games
     @Test
-    public void test_encoding_10_10() {
+    public void test_encoding_10_5() {
         int maxTurn = 10;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 10; i++) {
+        for(int i = 0; i < 5; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -134,10 +134,10 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         }
     }
     @Test
-    public void test_encoding_10_10_with_reduction100() {
+    public void test_encoding_10_5_with_reduction100() {
         int maxTurn = 10;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 10; i++) {
+        for(int i = 0; i < 5; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();

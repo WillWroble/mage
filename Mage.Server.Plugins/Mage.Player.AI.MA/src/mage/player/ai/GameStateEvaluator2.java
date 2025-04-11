@@ -7,6 +7,8 @@ import mage.players.Player;
 import org.apache.log4j.Logger;
 
 import java.util.UUID;
+import java.util.stream.Collectors;
+
 import mage.abilities.Ability;
 import mage.abilities.effects.Effect;
 import mage.constants.Outcome;
@@ -124,7 +126,36 @@ public final class GameStateEvaluator2 {
                 playerLifeScore, playerHandScore, playerPermanentsScore,
                 opponentLifeScore, opponentHandScore, opponentPermanentsScore);
     }
+    public static void printBattlefield(Game game, UUID playerId) {
+        // hand
+        Player player = game.getPlayer(playerId);
+        GameStateEvaluator2.PlayerEvaluateScore score = GameStateEvaluator2.evaluate(playerId, game);
+        logger.info(new StringBuilder("[").append(game.getPlayer(playerId).getName()).append("]")
+                .append(", life = ").append(player.getLife())
+                .append(", score = ").append(score.getTotalScore())
+                .append(" (").append(score.getPlayerInfoFull()).append(")")
+                .toString());
+        String cardsInfo = player.getHand().getCards(game).stream()
+                .map(card -> card.getName() + ":" + GameStateEvaluator2.HAND_CARD_SCORE) // TODO: add card score here after implement
+                .collect(Collectors.joining("; "));
+        StringBuilder sb = new StringBuilder("-> Hand: [")
+                .append(cardsInfo)
+                .append("]");
+        logger.info(sb.toString());
 
+        // battlefield
+        sb.setLength(0);
+        String ownPermanentsInfo = game.getBattlefield().getAllPermanents().stream()
+                .filter(p -> p.isOwnedBy(player.getId()))
+                .map(p -> p.getName()
+                        + (p.isTapped() ? ",tapped" : "")
+                        + (p.isAttacking() ? ",attacking" : "")
+                        + (p.getBlocking() > 0 ? ",blocking" : "")
+                        + ":" + GameStateEvaluator2.evaluatePermanent(p, game, true))
+                .collect(Collectors.joining("; "));
+        sb.append("-> Permanents: [").append(ownPermanentsInfo).append("]");
+        logger.info(sb.toString());
+    }
     public static int evaluatePermanent(Permanent permanent, Game game, boolean useCombatPermanentScore) {
         // prevent AI from attaching bad auras to its own permanents ex: Brainwash and Demonic Torment (no immediate penalty on the battlefield)
         int value = 0;

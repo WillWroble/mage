@@ -8,6 +8,7 @@ import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
+import mage.game.turn.Phase;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
 import mage.util.ThreadUtils;
@@ -26,6 +27,8 @@ import java.util.concurrent.*;
 public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
+
+    private StateEncoder encoder;
 
     public ComputerPlayerMCTS2(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
@@ -54,10 +57,28 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      */
     protected int evaluateState(Game game, UUID playerId) {
         // TODO: Integrate your value network here.
-        // For now, return a dummy value (0).
+        // For now, return heuristic value
         return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
     }
-
+    public void setEncoder(StateEncoder enc) {
+        encoder = enc;
+    }
+    public StateEncoder getEncoder() {
+        return encoder;
+    }
+    @Override
+    public boolean priority(Game game) {
+        if(game.getTurnStepType() == PhaseStep.END_TURN && game.getActivePlayerId() == getId()) {
+            if(encoder != null) {
+                System.out.println("ENCODING STATE...");
+                encoder.processState(game);
+            }
+            GameStateEvaluator2.printBattlefield(game, getId());
+        }
+        boolean out =  super.priority(game);
+        ActionEncoder.addAction(root.getAction());
+        return out;
+    }
     /**
      * Overrides applyMCTS to use the value function at leaf nodes.
      */
@@ -106,13 +127,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                         throw new IllegalStateException("One of the simulated games raised an error: " + e, e);
                     }
                 }
-
+                System.out.printf("%d threads were created\nSimcounts: ", tasks.size());
                 int simCount = 0;
                 for (MCTSExecutor task : tasks) {
+                    if(task.reachedTerminalState) System.out.print("-task reached a terminal state-");
+                    System.out.printf("%d ", task.simCount);
                     simCount += task.getSimCount();
                     root.merge(task.getRoot());
                     task.clear();
                 }
+                System.out.println();
                 tasks.clear();
                 totalThinkTime += thinkTime;
                 totalSimulations += simCount;
@@ -142,7 +166,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                         result = evaluateState(current.getGame(), this.playerId);
                         simCount++;
                     } else {
-                        result = current.isWinner(this.playerId) ? 1 : -1;
+                        result = current.isWinner(this.playerId) ? 100000000 : -100000000;
                     }
                     // Backpropagation:
                     current.backpropagate(result);
@@ -150,5 +174,43 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 logger.info("Simulated " + simCount + " evaluations - nodes in tree: " + root.size());
             }
         }
+    }
+    @Override
+    protected int calculateThinkTime(Game game, NextAction action) {
+        int thinkTime;
+        int nodeSizeRatio = 0;
+        if (root.getNumChildren() > 0)
+            nodeSizeRatio = root.getVisits() / root.getNumChildren();
+//        logger.info("Ratio: " + nodeSizeRatio);
+        PhaseStep curStep = game.getTurnStepType();
+        if (action == NextAction.SELECT_ATTACKERS || action == NextAction.SELECT_BLOCKERS) {
+            if (nodeSizeRatio < THINK_MIN_RATIO) {
+                thinkTime = maxThinkTime*5;
+            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
+                thinkTime = 0;
+                //thinkTime = maxThinkTime*3/2;
+            } else {
+                thinkTime = maxThinkTime*5 / 2;
+            }
+        } else if (game.isActivePlayer(playerId) && (curStep == PhaseStep.PRECOMBAT_MAIN || curStep == PhaseStep.POSTCOMBAT_MAIN) && game.getStack().isEmpty()) {
+            if (nodeSizeRatio < THINK_MIN_RATIO) {
+                thinkTime = 3*maxThinkTime;
+            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
+                thinkTime = 0;
+            } else {
+                thinkTime = maxThinkTime/2;
+            }
+            //thinkTime = maxThinkTime;
+        } else {
+            if (nodeSizeRatio < THINK_MIN_RATIO) {
+                thinkTime = 2*maxThinkTime;
+            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
+                thinkTime = 0;
+                thinkTime = maxThinkTime/4;
+            } else {
+                thinkTime = maxThinkTime/2;
+            }
+        }
+        return thinkTime;
     }
 }

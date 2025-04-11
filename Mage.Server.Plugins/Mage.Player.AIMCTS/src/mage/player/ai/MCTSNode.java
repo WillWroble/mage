@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+
+import mage.MageInt;
 import mage.constants.PhaseStep;
 import mage.constants.Zone;
 import mage.abilities.Ability;
@@ -21,8 +23,7 @@ import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 
-import static java.lang.Math.floor;
-import static java.lang.Math.round;
+import static java.lang.Math.*;
 
 /**
  *
@@ -37,7 +38,7 @@ public class MCTSNode {
 
     private int visits = 0;
     private int wins = 0;
-    private int score = 0;
+    private long score = 0;
     private MCTSNode parent;
     private final List<MCTSNode> children = new ArrayList<>();
     private Ability action;
@@ -99,29 +100,47 @@ public class MCTSNode {
             }
         }
     }
-
+    public static double sigmoid(double x) {
+        return 1 / (1 + Math.exp(-x));
+    }
     public MCTSNode select(UUID targetPlayerId) {
         double bestValue = Double.NEGATIVE_INFINITY;
+        double worstValue = Double.POSITIVE_INFINITY;
         boolean isTarget = playerId.equals(targetPlayerId);
         MCTSNode bestChild = null;
         if (children.size() == 1) {
             return children.get(0);
         }
+        List<MCTSNode> unvisited = new ArrayList<>();
         for (MCTSNode node: children) {
             double uct;
-            if (node.visits > 0)
-                if (isTarget)
-                    uct = (node.score / (node.visits)) + (selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
-                else
-                    uct = ((-1*node.score) / (node.visits)) + (selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
-            else
+            if (node.visits > 0) {
+                //System.out.println(node.visits);
+                uct = (node.score / (node.visits * 1.0));
+                if (isTarget) {
+                    uct += 10*(selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
+                    if (uct > bestValue) {
+                        bestChild = node;
+                        bestValue = uct;
+                    }
+                }
+                else {
+                    uct -= 10*(selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
+                    if (uct < worstValue) {
+                        bestChild = node;
+                        worstValue = uct;
+                    }
+                }
+            }
+            else {
                 // ensure that a random unvisited node is played first
-                uct = 10000 + 1000 * RandomUtil.nextDouble();
-            if (uct > bestValue) {
-                bestChild = node;
-                bestValue = uct;
+                unvisited.add(node);
             }
         }
+        if(!unvisited.isEmpty()) {
+            return unvisited.get(abs(RandomUtil.nextInt())%unvisited.size());
+        }
+        assert (bestChild != null);
         return bestChild;
     }
 
@@ -131,7 +150,8 @@ public class MCTSNode {
             logger.fatal("next action is null");
         }
         children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
-        game = null;
+        //game = null;
+        if(parent != null) parent.game = null;
     }
 
     public int simulate(UUID playerId) {
@@ -151,12 +171,8 @@ public class MCTSNode {
     }
 
     public void backpropagate(int result) {
-        if (result == 0)
-            return;
-        if (result == 1)
-            wins++;
-        score += result;
         visits++;
+        score += result;
         if (parent != null)
             parent.backpropagate(result);
     }
@@ -172,7 +188,10 @@ public class MCTSNode {
         double bestRatio = 0;
         boolean bestIsPass = false;
         MCTSNode bestChild = null;
+        System.out.print("actions: ");
         for (MCTSNode node: children) {
+            if(node.action != null) System.out.printf("[%s score: %.3f count: %d] ", node.action.toString(), node.getWinRatio(), node.visits);
+            if(node.combat != null && !node.combat.getAttackers().isEmpty()) System.out.printf("[%s score: %.3f count: %d] ", node.combat.toString(), node.getWinRatio(), node.visits);
             //favour passing vs any other action except for playing land if ratio is close
             if (node.visits > bestCount) {
                 if (bestIsPass) {
@@ -197,6 +216,7 @@ public class MCTSNode {
                 }
             }
         }
+        System.out.println();
         return bestChild;
     }
 
@@ -233,8 +253,8 @@ public class MCTSNode {
 
     public double getWinRatio() {
         if (visits > 0)
-            return score/(visits * 1.0);
-        return -1.0;
+            return (score*1.0)/(visits * 1.0);
+        return -666;
     }
 
     public int getVisits() {
@@ -321,61 +341,66 @@ public class MCTSNode {
     }
 
     public void merge(MCTSNode merge) {
+        // Check that states match; if not, no merge occurs.
         if (!stateValue.equals(merge.stateValue)) {
             logger.info("mismatched merge states at root");
             return;
         }
 
-        this.visits += merge.visits;
-        this.wins += merge.wins;
-        this.score += merge.score;
-        int mismatchCount = 0;
-        
-        List<MCTSNode> mergeChildren = new ArrayList<>();
-        for (MCTSNode child: merge.children) {
-            mergeChildren.add(child);
+        // Update accumulated statistics atomically.
+        synchronized (this) {
+            this.visits += merge.visits;
+            this.wins += merge.wins;
+            this.score += merge.score;
         }
 
-        for (MCTSNode child: children) {
-            for (MCTSNode mergeChild: mergeChildren) {
-                if (mergeChild.action != null && child.action != null) {
-                    if (mergeChild.action.toString().equals(child.action.toString())) {
+        // Make a snapshot of the merge node's children.
+        List<MCTSNode> mergeChildren;
+        synchronized (merge.children) {
+            mergeChildren = new ArrayList<>(merge.children);
+        }
+
+        // Synchronize on this.children for safe merging.
+        synchronized (this.children) {
+            Iterator<MCTSNode> iterator = mergeChildren.iterator();
+            while (iterator.hasNext()) {
+                MCTSNode mergeChild = iterator.next();
+                boolean merged = false;
+                // Iterate over our children.
+                for (MCTSNode child : this.children) {
+                    if (mergeChild.action != null && child.action != null) {
+                        if (mergeChild.action.toString().equals(child.action.toString())) {
+                            if (!mergeChild.stateValue.equals(child.stateValue)) {
+                                // Record mismatch if needed; skip merge.
+                            } else {
+                                // Recursively merge the matching child.
+                                child.merge(mergeChild);
+                                merged = true;
+                                break;
+                            }
+                        }
+                    } else if (mergeChild.combat != null && child.combat != null &&
+                            mergeChild.combat.getValue().equals(child.combat.getValue())) {
                         if (!mergeChild.stateValue.equals(child.stateValue)) {
-                            mismatchCount++;
-//                            logger.info("mismatched merge states");
-//                            mergeChildren.remove(mergeChild);
-                        }
-                        else {
+                            // Record mismatch if needed.
+                        } else {
                             child.merge(mergeChild);
-                            mergeChildren.remove(mergeChild);
+                            merged = true;
+                            break;
                         }
-                        break;
                     }
                 }
-                else {
-                    if (mergeChild.combat.getValue().equals(child.combat.getValue())) {
-                        if (!mergeChild.stateValue.equals(child.stateValue)) {
-                            mismatchCount++;
-//                            logger.info("mismatched merge states");
-//                            mergeChildren.remove(mergeChild);
-                        }
-                        else {
-                            child.merge(mergeChild);
-                            mergeChildren.remove(mergeChild);
-                        }
-                        break;
-                    }
+                if (merged) {
+                    iterator.remove();
                 }
             }
-        }
-        if (!mergeChildren.isEmpty()) {
-            for (MCTSNode child: mergeChildren) {
+
+            // Any remaining merge children that weren't merged get added as new children.
+            for (MCTSNode child : mergeChildren) {
                 child.parent = this;
-                children.add(child);
+                this.children.add(child);
             }
         }
-//        if (mismatchCount > 0)
-//            logger.info("mismatched merge states: " + mismatchCount);
     }
 
 //    public void print(int depth) {
@@ -393,12 +418,13 @@ public class MCTSNode {
 
     public int size() {
         int num = 1;
-        for (MCTSNode child: children) {
-            num += child.size();
+        synchronized (children) {
+            for (MCTSNode child : children) {
+                num += child.size();
+            }
         }
         return num;
     }
-
     private static final ConcurrentHashMap<String, List<Ability>> playablesCache = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<List<UUID>>> attacksCache = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<List<List<UUID>>>> blocksCache = new ConcurrentHashMap<>();
@@ -497,5 +523,10 @@ public class MCTSNode {
             sb.append("Blocks Cache -- Hits: ").append(blocksHit).append(" Misses: ").append(blocksMiss).append('\n');
             logger.info(sb.toString());
         }
-    }    
+    }
+    public static void clearCaches() {
+        playablesCache.clear();
+        attacksCache.clear();
+        blocksCache.clear();
+    }
 }

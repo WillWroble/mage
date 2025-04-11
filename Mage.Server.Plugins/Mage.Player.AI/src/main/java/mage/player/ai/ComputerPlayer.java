@@ -67,7 +67,7 @@ public class ComputerPlayer extends PlayerImpl {
     private static final Logger log = Logger.getLogger(ComputerPlayer.class);
     private long lastThinkTime = 0; // msecs for last AI actions calc
 
-    protected int PASSIVITY_PENALTY = 5; // Penalty value for doing nothing if some actions are available
+    protected int PASSIVITY_PENALTY = 5; // Penalty value for doing nothing if some actions are available (was 5)
 
     // debug only: set TRUE to debug simulation's code/games (on false sim thread will be stopped after few secs by timeout)
     protected boolean COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS = false;

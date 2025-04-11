@@ -2,6 +2,8 @@ package mage.player.ai;
 
 import java.util.UUID;
 import java.util.concurrent.Callable;
+
+import mage.constants.TurnPhase;
 import mage.game.Game;
 import org.apache.log4j.Logger;
 
@@ -11,6 +13,7 @@ public class MCTSExecutor implements Callable<Boolean> {
     protected int thinkTime;
     protected UUID playerId;
     protected int simCount;
+    public boolean reachedTerminalState = false;
 
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
 
@@ -26,27 +29,29 @@ public class MCTSExecutor implements Callable<Boolean> {
         MCTSNode current;
         // This loop termination is controlled externally by timeout.
         while (true) {
+            if(simCount > 2000) {
+                return true;
+            }
             current = root;
+            simCount++;
             // Selection: traverse until a leaf node is reached.
             while (!current.isLeaf()) {
+                current = current.select(this.playerId);
+            }
+            // Don't stop to eval state until combat is over and there are multiple children
+            while (!current.isTerminal() && (current.getNumChildren() == 1 || current.getGame().getTurnPhaseType() == TurnPhase.COMBAT || !current.getGame().getStack().isEmpty())) {
+                current.expand();
                 current = current.select(this.playerId);
             }
             int result;
             if (!current.isTerminal()) {
                 // Expansion:
                 current.expand();
-                // If multiple children exist, choose one to evaluate.
-                if (current.getNumChildren() > 1) {
-                    current = current.select(this.playerId);
-                    result = rollout(current);
-                    simCount++;
-                } else {
-                    current = current.select(this.playerId);
-                    result = 0;
-                }
+                result = rollout(current);
+
             } else {
-                //System.out.println("Reached Terminal State!");
-                result = current.isWinner(this.playerId) ? 1 : -1;
+                reachedTerminalState = true;
+                result = current.isWinner(this.playerId) ? 100000000 : -100000000;
             }
             // Backpropagation:
             current.backpropagate(result);
@@ -61,6 +66,7 @@ public class MCTSExecutor implements Callable<Boolean> {
      * @return an integer evaluation of the node's state
      */
     protected int rollout(MCTSNode node) {
+        System.out.println("you should never see this");
         return node.simulate(this.playerId);
     }
 

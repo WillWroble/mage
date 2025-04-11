@@ -26,8 +26,8 @@ import java.util.concurrent.*;
  */
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
-    protected static final int THINK_MIN_RATIO = 40;
-    protected static final int THINK_MAX_RATIO = 100;
+    protected static final int THINK_MIN_RATIO = 100; //was originally 40
+    protected static final int THINK_MAX_RATIO = 140; //was 80
     protected static final double THINK_TIME_MULTIPLIER = 2.0;
     protected static final boolean USE_MULTIPLE_THREADS = true;
 
@@ -161,7 +161,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void applyMCTS(final Game game, final NextAction action) {
 
         int thinkTime = calculateThinkTime(game, action);
-        thinkTime = 5;
+        //thinkTime = 5;
         if (thinkTime > 0) {
             if (USE_MULTIPLE_THREADS) {
                 if (this.threadPoolSimulations == null) {
@@ -239,7 +239,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                         simCount++;
                     } else {
                         //System.out.println("Terminal State Reached!");
-                        result = current.isWinner(this.playerId) ? 1 : -1;
+                        result = current.isWinner(this.playerId) ? 100000000 : -100000000;
                     }
                     // Backpropagation
                     current.backpropagate(result);
@@ -261,25 +261,30 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         PhaseStep curStep = game.getTurnStepType();
         if (action == NextAction.SELECT_ATTACKERS || action == NextAction.SELECT_BLOCKERS) {
             if (nodeSizeRatio < THINK_MIN_RATIO) {
-                thinkTime = maxThinkTime;
+                thinkTime = maxThinkTime*5;
             } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
                 thinkTime = 0;
+                //thinkTime = maxThinkTime*3/2;
             } else {
-                thinkTime = maxThinkTime / 2;
+                thinkTime = maxThinkTime*5 / 2;
             }
         } else if (game.isActivePlayer(playerId) && (curStep == PhaseStep.PRECOMBAT_MAIN || curStep == PhaseStep.POSTCOMBAT_MAIN) && game.getStack().isEmpty()) {
             if (nodeSizeRatio < THINK_MIN_RATIO) {
-                thinkTime = maxThinkTime;
+                thinkTime = 3*maxThinkTime;
             } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
                 thinkTime = 0;
             } else {
-                thinkTime = maxThinkTime / 2;
+                thinkTime = maxThinkTime/2;
             }
+            //thinkTime = maxThinkTime;
         } else {
             if (nodeSizeRatio < THINK_MIN_RATIO) {
-                thinkTime = maxThinkTime / 2;
-            } else {
+                thinkTime = 2*maxThinkTime;
+            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
                 thinkTime = 0;
+                thinkTime = maxThinkTime/4;
+            } else {
+                thinkTime = maxThinkTime/2;
             }
         }
         return thinkTime;
@@ -340,5 +345,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         logger.info(sb.toString());
     }
-
+    public void clearTree() {
+        root = null;
+    }
 }
