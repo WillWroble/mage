@@ -4047,7 +4047,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         return null;
     }
 
-    private void getPlayableFromObjectAll(Game game, Zone fromZone, MageObject object, ManaOptions availableMana, List<ActivatedAbility> output) {
+    public void getPlayableFromObjectAll(Game game, Zone fromZone, MageObject object, ManaOptions availableMana, List<ActivatedAbility> output) {
         if (fromZone == null || object == null) {
             return;
         }

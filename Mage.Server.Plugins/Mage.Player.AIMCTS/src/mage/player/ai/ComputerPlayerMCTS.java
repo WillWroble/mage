@@ -28,7 +28,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     protected static final int THINK_MIN_RATIO = 100; //was originally 40
     protected static final int THINK_MAX_RATIO = 140; //was 80
-    protected static final double THINK_TIME_MULTIPLIER = 2.0;
+    protected static final double THINK_TIME_MULTIPLIER = 1.0;
     protected static final boolean USE_MULTIPLE_THREADS = true;
 
     protected transient MCTSNode root;
@@ -83,7 +83,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (ability instanceof PassAbility)
             return false;
         logLife(game);
-        logger.info("choose action:" + root.getAction() + " success ratio: " + root.getWinRatio());
+        logger.info(game.getTurn().getValue(game.getTurnNum())+"choose action:" + root.getAction() + " success ratio: " + root.getWinRatio());
         return true;
     }
 
@@ -92,6 +92,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
+            player.isRoot = true;
             root = new MCTSNode(playerId, sim);
         }
         applyMCTS(game, action);

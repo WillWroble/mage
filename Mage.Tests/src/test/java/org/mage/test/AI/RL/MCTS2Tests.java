@@ -12,22 +12,21 @@ import mage.util.RandomUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mage.test.AI.basic.RLEncodingTests;
 import org.mage.test.player.*;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
 import java.io.FileNotFoundException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 /**
  * @author WillWroble
  */
 public class MCTS2Tests extends CardTestPlayerBaseAI {
 
-    private String deckNameA = "simplegreen.dck"; //simplegreen, UWTempo
+    private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
+    private int seed;
 
 
     @Override
@@ -74,7 +73,9 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     }
     @Before
     public void init_seed() {
-        int seed = RandomUtil.nextInt();
+        seed = RandomUtil.nextInt();
+        seed = -1421792887;
+
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
@@ -94,7 +95,7 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     @Test
     public void test_mcts_20_1() {
         int maxTurn = 20;
-
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
@@ -126,5 +127,9 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
     }
-
+    @After
+    public void show_data() {
+        System.out.printf("USING SEED: %d\n", seed);
+        System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
+    }
 }

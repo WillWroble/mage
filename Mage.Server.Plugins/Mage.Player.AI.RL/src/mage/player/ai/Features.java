@@ -15,12 +15,12 @@ import java.util.*;
 public class Features  implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    private Map<String, Map<Integer, Features>> subFeatures;
-    private Map<String, Map<Integer, Integer>> features;
-    private Map<String, TreeMap<Integer, Map<Integer, Integer>>> numericFeatures; //name->value->occurrences
-    private Map<String, Integer> occurances;
-    private Map<String, TreeMap<Integer, Integer>> numericOccurences;
-    private Map<String, Features> categoriesForChildren; //isnt reset between states represent all possible categories for children
+    private final Map<String, Map<Integer, Features>> subFeatures;
+    private final Map<String, Map<Integer, Integer>> features;
+    private final Map<String, TreeMap<Integer, Map<Integer, Integer>>> numericFeatures; //name->value->occurrences
+    private final Map<String, Integer> occurrences;
+    private final Map<String, TreeMap<Integer, Integer>> numericOccurrences;
+    private final Map<String, Features> categoriesForChildren; //isnt reset between states represent all possible categories for children
     public Set<Features> categories; //resets every state represents temporary category features fall under
 
     public String featureName;
@@ -31,9 +31,9 @@ public class Features  implements Serializable {
         //constructor
         subFeatures = new HashMap<>();
         features = new HashMap<>();
-        occurances = new HashMap<>();
+        occurrences = new HashMap<>();
         numericFeatures = new HashMap<>();
-        numericOccurences = new HashMap<>();
+        numericOccurrences = new HashMap<>();
         categoriesForChildren = new HashMap<>();
         categories = new HashSet<>();
         parent = null;
@@ -70,7 +70,7 @@ public class Features  implements Serializable {
         //first add as a normal binary feature
         addFeature(name);
 
-        int n = occurances.get(name);
+        int n = occurrences.get(name);
         if(subFeatures.containsKey(name)) {//already contains feature
             if(subFeatures.get(name).containsKey(n)) {//contains count too
                 return subFeatures.get(name).get(n);
@@ -115,8 +115,8 @@ public class Features  implements Serializable {
         }
 
         if(features.containsKey(name)) {//has feature
-            int count = occurances.get(name)+1;
-            occurances.put(name, count);
+            int count = occurrences.get(name)+1;
+            occurrences.put(name, count);
             if(features.get(name).containsKey(count)) {//already contains feature at this count
                 if(printOldFeatures) System.out.printf("Index %d is already reserved for feature %s at %d times in %s\n", features.get(name).get(count), name, count, featureName);
             } else {//contains feature but different count
@@ -125,13 +125,13 @@ public class Features  implements Serializable {
                         name, count, StateEncoder.indexCount-1, count, featureName);
             }
         } else {//completely new feature
-            occurances.put(name, 1);
+            occurrences.put(name, 1);
             Map<Integer, Integer> n = new HashMap<>();
             n.put(1, StateEncoder.indexCount++);
             features.put(name, n);
             if(printNewFeatures) System.out.printf("New feature %s discovered in %s, reserving index %d for this feature\n", name, featureName, n.get(1));
         }
-        StateEncoder.featureVector[features.get(name).get(occurances.get(name))] = true;
+        StateEncoder.featureVector[features.get(name).get(occurrences.get(name))] = true;
     }
     public void addNumericFeature(String name, int num) {
         addNumericFeature(name, num, true);
@@ -160,8 +160,8 @@ public class Features  implements Serializable {
         if(numericFeatures.containsKey(name)) {
 
             if(numericFeatures.get(name).containsKey(num)) {
-                int count = numericOccurences.get(name).get(num)+1;
-                numericOccurences.get(name).put(num, count);
+                int count = numericOccurrences.get(name).get(num)+1;
+                numericOccurrences.get(name).put(num, count);
 
                 if(numericFeatures.get(name).get(num).containsKey(count)) {//already contains feature at this count
                     if(printOldFeatures) System.out.printf("Index %d is already reserved for numeric feature %s with %d at %d times in %s\n", numericFeatures.get(name).get(num).get(count), name, num, count, featureName);
@@ -175,7 +175,7 @@ public class Features  implements Serializable {
                 Map<Integer, Integer> subMap = new HashMap<>();
                 subMap.put(1, StateEncoder.indexCount++);
                 map.put(num, subMap);
-                numericOccurences.get(name).put(num, 1);
+                numericOccurrences.get(name).put(num, 1);
                 if(printNewFeatures) System.out.printf("Numeric feature %s exists but has not occurred with %d, reserving index %d for this feature at %d in %s\n",
                         name, num, StateEncoder.indexCount-1, num, featureName);
             }
@@ -187,17 +187,17 @@ public class Features  implements Serializable {
             numericFeatures.put(name, newMap);
             TreeMap<Integer, Integer> newTreeMap = new TreeMap<>();
             newTreeMap.put(num, 1);
-            numericOccurences.put(name, newTreeMap);
+            numericOccurrences.put(name, newTreeMap);
             if(printNewFeatures) System.out.printf("New numeric feature %s discovered with %d in %s, reserving index %d for this feature at %d\n", name,
                     num, featureName, StateEncoder.indexCount-1, num);
         }
-        StateEncoder.featureVector[numericFeatures.get(name).get(num).get(numericOccurences.get(name).get(num))] = true;
+        StateEncoder.featureVector[numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num))] = true;
     }
     public void stateRefresh() {
         categories.clear();
-        occurances.replaceAll((k, v) -> 0);
-        for(String c : numericOccurences.keySet()) {
-            numericOccurences.get(c).replaceAll((k, v) -> 0);
+        occurrences.replaceAll((k, v) -> 0);
+        for(String c : numericOccurrences.keySet()) {
+            numericOccurrences.get(c).replaceAll((k, v) -> 0);
         }
         for(String n : subFeatures.keySet()) {
             for(int i : subFeatures.get(n).keySet()) {

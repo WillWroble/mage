@@ -1,4 +1,4 @@
-package org.mage.test.AI.basic;
+package org.mage.test.AI.RL;
 
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;

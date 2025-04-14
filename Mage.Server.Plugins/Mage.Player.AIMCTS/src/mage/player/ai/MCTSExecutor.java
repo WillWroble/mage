@@ -29,26 +29,35 @@ public class MCTSExecutor implements Callable<Boolean> {
         MCTSNode current;
         // This loop termination is controlled externally by timeout.
         while (true) {
-            if(simCount > 2000) {
-                return true;
-            }
+//            if(simCount > 300) {
+//                return true;
+//            }
             current = root;
             simCount++;
             // Selection: traverse until a leaf node is reached.
+            int testCount = 0;
             while (!current.isLeaf()) {
                 current = current.select(this.playerId);
+                testCount++;
+                if(testCount > 1000) {
+                    System.out.println("stuck in selection");
+                }
             }
-            // Don't stop to eval state until combat is over and there are multiple children
-            while (!current.isTerminal() && (current.getNumChildren() == 1 || current.getGame().getTurnPhaseType() == TurnPhase.COMBAT || !current.getGame().getStack().isEmpty())) {
+            // Don't stop to eval state until stack is empty and there are multiple children
+            int traverseCount = 0;
+            while (!current.isTerminal() && traverseCount < 10
+                    //&& (current.getNumChildren() == 1
+                    //|| current.getGame().getTurnPhaseType() == TurnPhase.COMBAT
+                    && !current.getGame().getStack().isEmpty()) {
+                traverseCount++;
                 current.expand();
                 current = current.select(this.playerId);
             }
             int result;
             if (!current.isTerminal()) {
                 // Expansion:
-                current.expand();
                 result = rollout(current);
-
+                current.expand();
             } else {
                 reachedTerminalState = true;
                 result = current.isWinner(this.playerId) ? 100000000 : -100000000;

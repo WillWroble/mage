@@ -311,6 +311,7 @@ public class Mana implements Comparable<Mana>, Serializable, Copyable<Mana> {
      * @param mana mana to add to this object.
      */
     public void add(final Mana mana) {
+        //assert (!(mana instanceof ConditionalMana) || (this instanceof ConditionalMana));
         white = CardUtil.overflowInc(white, mana.white);
         blue = CardUtil.overflowInc(blue, mana.blue);
         black = CardUtil.overflowInc(black, mana.black);
@@ -1217,6 +1218,7 @@ public class Mana implements Comparable<Mana>, Serializable, Copyable<Mana> {
      * @return if the passed in {@link Mana} values are equal to this object.
      */
     public boolean equalManaValue(final Mana mana) {
+        //if(mana instanceof ConditionalMana || this instanceof ConditionalMana) return false;
         return this.any == mana.any
                 && this.white == mana.white
                 && this.blue == mana.blue

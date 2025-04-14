@@ -110,6 +110,7 @@ class PlazaOfHeroesManaCondition extends ManaCondition implements Condition {
         if (source instanceof SpellAbility && !source.isActivated()) {
             MageObject object = game.getObject(source);
             if (object != null && object.isLegendary(game)) {
+                //System.out.print(source.toString());
                 return true;
             }
         }

@@ -14,7 +14,7 @@ public class ActionEncoder {
     public static Map<String, Integer> actionMap = new HashMap<>();
     public static boolean[] addAction(Ability sa) {
         String name = sa.toString();
-        boolean[] actionVector = new boolean[1000]; //inits with falses
+        boolean[] actionVector = new boolean[1000]; //inits with false's
         if(actionMap.containsKey(name)) {//already contains action
             System.out.printf("Action: %s already maps to index %d\n", name, actionMap.get(name));
         } else {
@@ -22,7 +22,7 @@ public class ActionEncoder {
             System.out.printf("New action: %s discovered, reserving index %d for this action\n", name, actionMap.get(name));
         }
         actionVector[actionMap.get(name)] = true;
-        System.out.println(Arrays.toString(actionVector));
+        //System.out.println(Arrays.toString(actionVector));
         return actionVector;
     }
 }

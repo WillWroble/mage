@@ -36,7 +36,9 @@ public class MCTSNode {
     private static final double passRatioTolerance = 0.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
 
-    private int visits = 0;
+    private boolean stackIsEmpty = true;
+
+    public int visits = 0;
     private int wins = 0;
     private long score = 0;
     private MCTSNode parent;
@@ -48,7 +50,7 @@ public class MCTSNode {
     private final String fullStateValue;
     private UUID playerId;
     private boolean terminal = false;
-    private UUID targetPlayer;
+    public UUID targetPlayer;
 
     private static int nodeCount;
 
@@ -57,6 +59,7 @@ public class MCTSNode {
         this.game = game;
         this.stateValue = game.getState().getValue(game, targetPlayer);
         this.fullStateValue = game.getState().getValue(true, game);
+        this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         setPlayer();
         nodeCount = 1;
@@ -68,6 +71,7 @@ public class MCTSNode {
         this.game = game;
         this.stateValue = game.getState().getValue(game, targetPlayer);
         this.fullStateValue = game.getState().getValue(true, game);
+        this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
         this.action = action;
@@ -82,6 +86,7 @@ public class MCTSNode {
         this.combat = combat;
         this.stateValue = game.getState().getValue(game, targetPlayer);
         this.fullStateValue = game.getState().getValue(true, game);
+        this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
         setPlayer();
@@ -112,6 +117,7 @@ public class MCTSNode {
             return children.get(0);
         }
         List<MCTSNode> unvisited = new ArrayList<>();
+        List<MCTSNode> unvisitedWithNoStack = new ArrayList<>();
         for (MCTSNode node: children) {
             double uct;
             if (node.visits > 0) {
@@ -135,7 +141,14 @@ public class MCTSNode {
             else {
                 // ensure that a random unvisited node is played first
                 unvisited.add(node);
+                if(node.stackIsEmpty) {
+                    unvisitedWithNoStack.add(node);
+                }
             }
+        }
+        //prioritize unvisited nodes with no stack
+        if(!unvisitedWithNoStack.isEmpty()) {
+            return unvisitedWithNoStack.get(abs(RandomUtil.nextInt())%unvisitedWithNoStack.size());
         }
         if(!unvisited.isEmpty()) {
             return unvisited.get(abs(RandomUtil.nextInt())%unvisited.size());
@@ -150,8 +163,8 @@ public class MCTSNode {
             logger.fatal("next action is null");
         }
         children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
-        //game = null;
-        if(parent != null) parent.game = null;
+        game = null;
+        //if(parent != null) parent.game = null;
     }
 
     public int simulate(UUID playerId) {
@@ -194,29 +207,29 @@ public class MCTSNode {
             if(node.combat != null && !node.combat.getAttackers().isEmpty()) System.out.printf("[%s score: %.3f count: %d] ", node.combat.toString(), node.getWinRatio(), node.visits);
             //favour passing vs any other action except for playing land if ratio is close
             if (node.visits > bestCount) {
-                if (bestIsPass) {
-                    double ratio = node.score/(node.visits * 1.0);
-                    if (ratio < bestRatio + passRatioTolerance)
-                        continue;
-                }
+//                if (bestIsPass) {
+//                    double ratio = node.score/(node.visits * 1.0);
+//                    if (ratio < bestRatio + passRatioTolerance)
+//                        continue;
+//                }
                 bestChild = node;
                 bestCount = node.visits;
                 bestRatio = node.score/(node.visits * 1.0);
                 bestIsPass = false;
             }
-            else if (node.action instanceof PassAbility && node.visits > 10 && !(bestChild.action instanceof PlayLandAbility)) {
-                //favour passing vs any other action if ratio is close
-                double ratio = node.score/(node.visits * 1.0);
-                if (ratio > bestRatio - passRatioTolerance) {
-                    logger.info("choosing pass over " + bestChild.getAction());
-                    bestChild = node;
-                    bestCount = node.visits;
-                    bestRatio = ratio;
-                    bestIsPass = true;
-                }
-            }
+//            else if (node.action instanceof PassAbility && node.visits > 10 && !(bestChild.action instanceof PlayLandAbility)) {
+//                //favour passing vs any other action if ratio is close
+//                double ratio = node.score/(node.visits * 1.0);
+//                if (ratio > bestRatio - passRatioTolerance) {
+//                    logger.info("choosing pass over " + bestChild.getAction());
+//                    bestChild = node;
+//                    bestCount = node.visits;
+//                    bestRatio = ratio;
+//                    bestIsPass = true;
+//                }
+//            }
         }
-        System.out.println();
+        if(!children.isEmpty()) System.out.println();
         return bestChild;
     }
 
@@ -367,7 +380,8 @@ public class MCTSNode {
                 MCTSNode mergeChild = iterator.next();
                 boolean merged = false;
                 // Iterate over our children.
-                for (MCTSNode child : this.children) {
+                List<MCTSNode> tempChildren = new ArrayList<>(this.children);
+                for (MCTSNode child : tempChildren) {
                     if (mergeChild.action != null && child.action != null) {
                         if (mergeChild.action.toString().equals(child.action.toString())) {
                             if (!mergeChild.stateValue.equals(child.stateValue)) {
@@ -510,7 +524,15 @@ public class MCTSNode {
 
         return count;
     }
-
+    public int maxVisits() {
+        int max = -1;
+        for(MCTSNode n : children) {
+            if(n.visits > max) {
+                max = n.visits;
+            }
+        }
+        return max;
+    }
     public Game getGame() {
         return game;
     }

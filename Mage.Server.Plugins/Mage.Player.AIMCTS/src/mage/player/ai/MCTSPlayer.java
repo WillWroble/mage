@@ -1,18 +1,22 @@
 package mage.player.ai;
 
+import mage.ConditionalMana;
+import mage.MageObject;
+import mage.Mana;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.SpellAbility;
 import mage.abilities.common.PassAbility;
+import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.GenericManaCost;
+import mage.abilities.mana.ManaOptions;
+import mage.constants.Zone;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.players.Player;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * AI: server side bot with monte carlo logic (experimental, the latest version)
@@ -27,6 +31,7 @@ public class MCTSPlayer extends ComputerPlayer {
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
 
     private NextAction nextAction;
+    public boolean isRoot = false;
 
     public enum NextAction {
         PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS
@@ -48,6 +53,33 @@ public class MCTSPlayer extends ComputerPlayer {
 
     protected List<ActivatedAbility> getPlayableAbilities(Game game) {
         List<ActivatedAbility> playables = getPlayable(game, true);
+        ManaOptions availableMana = getManaAvailable(game);
+        //if only land tapping abilities - just return pass JUST FOR TESTING THIS CANT BE USED FOR TRAINING SINCE SOME DECKS CARE ABOUT THIS TODO:remove
+        boolean onlyMana = true;
+        for(ActivatedAbility aa : playables) {
+            if(!aa.isManaAbility()) onlyMana = false;
+        }
+        if(onlyMana) playables.clear();
+        //List<ActivatedAbility> out = new ArrayList<>();
+        for(ActivatedAbility aa : playables) {
+            Set<Mana> possiblePayments = new HashSet<>();
+            for(Mana m : availableMana) {
+                Set<Mana> paySet = ManaOptions.getPossiblePayCombinations(aa.getManaCosts().getMana(), m);
+                possiblePayments.addAll(paySet);
+//                if (m instanceof ConditionalMana && !((ConditionalMana) m).apply(aa.copy(), game, getId(), aa.getManaCosts())) {
+//                    //idk do something lol
+//                } else {
+//                    isValid = true;
+//                }
+            }
+            if(false) {
+                System.out.printf("payment options for ability %s\n", aa.toString());
+                for(Mana m : possiblePayments) {
+                    System.out.printf("%s, ", m.toString());
+                }
+            }
+        }
+
         playables.add(new PassAbility());
         return playables;
     }
