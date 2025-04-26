@@ -1327,7 +1327,7 @@ public abstract class GameImpl implements Game {
             if (!gameOptions.testMode || player.getLife() == 0) {
                 player.initLife(this.getStartingLife());
             }
-            if (false || !gameOptions.testMode) {
+            if (true || !gameOptions.testMode) {
                 mulligan.drawHand(startingHandSize, player, this);
             }
         }

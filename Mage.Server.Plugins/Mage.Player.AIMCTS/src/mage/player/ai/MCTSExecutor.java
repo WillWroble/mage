@@ -20,12 +20,25 @@ public class MCTSExecutor implements Callable<Boolean> {
     public MCTSExecutor(Game sim, UUID playerId, int thinkTime) {
         this.playerId = playerId;
         this.thinkTime = thinkTime;
+        this.simCount = 0;
         root = new MCTSNode(playerId, sim);
     }
-
+    public MCTSExecutor(UUID playerId, int thinkTime, MCTSNode givenRoot) {
+        this.playerId = playerId;
+        this.thinkTime = thinkTime;
+        this.simCount = 0;
+        root = new MCTSNode(givenRoot);
+    }
+    public MCTSExecutor(MCTSExecutor exec) {
+        this.playerId = exec.playerId;
+        this.thinkTime = exec.thinkTime;
+        this.simCount = exec.simCount;
+        this.reachedTerminalState = exec.reachedTerminalState;
+        root = new MCTSNode(exec.root);
+    }
     @Override
     public Boolean call() {
-        simCount = 0;
+        //simCount = 0;
         MCTSNode current;
         // This loop termination is controlled externally by timeout.
         while (true) {

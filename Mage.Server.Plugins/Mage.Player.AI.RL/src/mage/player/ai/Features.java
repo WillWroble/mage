@@ -14,6 +14,8 @@ import java.util.*;
  */
 public class Features  implements Serializable {
     private static final long serialVersionUID = 1L;
+    public int globalIndexCount;
+    Set<Integer> ignoreList;
 
     private final Map<String, Map<Integer, Features>> subFeatures;
     private final Map<String, Map<Integer, Integer>> features;

@@ -40,9 +40,9 @@ public class MCTSNode {
 
     public int visits = 0;
     private int wins = 0;
-    private long score = 0;
+    private double score = 0;
     private MCTSNode parent;
-    private final List<MCTSNode> children = new ArrayList<>();
+    public final List<MCTSNode> children = new ArrayList<>();
     private Ability action;
     private Game game;
     private Combat combat;
@@ -51,6 +51,7 @@ public class MCTSNode {
     private UUID playerId;
     private boolean terminal = false;
     public UUID targetPlayer;
+    public int depth = 1;
 
     private static int nodeCount;
 
@@ -93,7 +94,32 @@ public class MCTSNode {
         nodeCount++;
 //        logger.info(this.stateValue);
     }
+    protected MCTSNode(MCTSNode node) {
+        combat = null; action = null; game = null;
+        if(node.combat != null) combat = node.combat.copy();
+        if(node.action != null) action = node.action.copy();
+        if(node.game != null) game = node.game.copy();
+        playerId = node.playerId;
+        targetPlayer = node.targetPlayer;
+        stackIsEmpty = node.stackIsEmpty;
+        terminal = node.terminal;
+        stateValue = node.stateValue;
+        fullStateValue = node.fullStateValue;
+        depth = node.depth;
+        visits = node.visits;
+        score = node.score;
+        wins = node.wins;
+        parent = null;
+        nodeCount++;
+        List<MCTSNode> listCopy = new ArrayList<>(node.children);
+        //List<MCTSNode> toAdd = new ArrayList<>();
+        for (MCTSNode child : listCopy) {
+            MCTSNode newChild = new MCTSNode(child);
+            newChild.parent = this;
+            children.add(newChild);
+        }
 
+    }
     private void setPlayer() {
         if (game.getStep().getStepPart() == StepPart.PRIORITY) {
             playerId = game.getPriorityPlayerId();
@@ -124,14 +150,14 @@ public class MCTSNode {
                 //System.out.println(node.visits);
                 uct = (node.score / (node.visits * 1.0));
                 if (isTarget) {
-                    uct += 10*(selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
+                    uct += (850.0)*(selectionCoefficient * Math.sqrt((visits*1.0) / (node.visits)));
                     if (uct > bestValue) {
                         bestChild = node;
                         bestValue = uct;
                     }
                 }
                 else {
-                    uct -= 10*(selectionCoefficient * Math.sqrt(Math.log(visits) / (node.visits)));
+                    uct -= (850.0)*(selectionCoefficient * Math.sqrt((visits*1.0) / (node.visits)));
                     if (uct < worstValue) {
                         bestChild = node;
                         worstValue = uct;
@@ -163,6 +189,9 @@ public class MCTSNode {
             logger.fatal("next action is null");
         }
         children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
+        for(MCTSNode c : children) {
+            c.depth = depth+1;
+        }
         game = null;
         //if(parent != null) parent.game = null;
     }
@@ -524,6 +553,13 @@ public class MCTSNode {
 
         return count;
     }
+    public void reset() {
+        children.clear();
+        score = 0;
+        wins = 0;
+        visits = 0;
+        depth = 1;
+    }
     public int maxVisits() {
         int max = -1;
         for(MCTSNode n : children) {
@@ -532,6 +568,19 @@ public class MCTSNode {
             }
         }
         return max;
+    }
+    public int diffVisits() {
+        int max = -1;
+        int max2 = -1;//second highest
+        for(MCTSNode n : children) {
+            if(n.visits > max) {
+                max2 = max;
+                max = n.visits;
+            } else if(n.visits > max2) {
+                max2 = n.visits;
+            }
+        }
+        return max-max2;
     }
     public Game getGame() {
         return game;

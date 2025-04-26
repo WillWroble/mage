@@ -40,7 +40,7 @@ public class StateEncoder {
     private UUID opponentID;
     private UUID myPlayerID;
     public List<boolean[]> stateVectors;
-    public static Set<Integer> ignoreList;
+    public Set<Integer> ignoreList;
 
     public StateEncoder() {
         //using statics for convenience for now
@@ -48,9 +48,9 @@ public class StateEncoder {
         reducedIndexCount = 1; //pending features map to zero
         originalVectorSize = 0;
         features = new Features();
-        featureVector = new boolean[20000];
+        featureVector = new boolean[30000];
         reducedFeatureVector = new boolean[5000];
-        rawToReduced = new int[20000];
+        rawToReduced = new int[30000];
         Arrays.fill(rawToReduced, 0);
         pendingFeatures = new HashMap<>();
         ignoreList = new HashSet<>();
@@ -312,7 +312,7 @@ public class StateEncoder {
         }
          */
         System.out.println();
-        stateVectors.add(Arrays.copyOf(featureVector, 20000));
+        stateVectors.add(Arrays.copyOf(featureVector, 30000));
     }
 
     /**
@@ -368,11 +368,15 @@ public class StateEncoder {
     }
     // Persist the persistent feature mapping
     public void persistMapping(String filename) throws IOException {
+        features.globalIndexCount = indexCount;
+        features.ignoreList = ignoreList;
         features.saveMapping(filename);
     }
 
     // Load the feature mapping from file
     public void loadMapping(String filename) throws IOException, ClassNotFoundException {
         features = Features.loadMapping(filename);
+        indexCount = features.globalIndexCount;
+        ignoreList = features.ignoreList;
     }
 }

@@ -49,7 +49,7 @@ public final class ArtificialScoringSystem {
 
     public static int getFixedPermanentScore(final Game game, final Permanent permanent) {
         //TODO: cache it inside Card
-        int score = getCardDefinitionScore(game, permanent);
+        int score = permanent.getManaCost().manaValue()*100;//getCardDefinitionScore(game, permanent);
         score += PERMANENT_SCORE;
         if (permanent.getCardType(game).contains(CardType.CREATURE)) {
             // TODO: implement in the mage core

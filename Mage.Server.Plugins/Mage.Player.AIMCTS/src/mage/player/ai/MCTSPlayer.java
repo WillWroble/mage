@@ -60,17 +60,15 @@ public class MCTSPlayer extends ComputerPlayer {
             if(!aa.isManaAbility()) onlyMana = false;
         }
         if(onlyMana) playables.clear();
-        //List<ActivatedAbility> out = new ArrayList<>();
+        List<ActivatedAbility> out = new ArrayList<>();
         for(ActivatedAbility aa : playables) {
+
+            out.add(aa);
+
             Set<Mana> possiblePayments = new HashSet<>();
             for(Mana m : availableMana) {
                 Set<Mana> paySet = ManaOptions.getPossiblePayCombinations(aa.getManaCosts().getMana(), m);
                 possiblePayments.addAll(paySet);
-//                if (m instanceof ConditionalMana && !((ConditionalMana) m).apply(aa.copy(), game, getId(), aa.getManaCosts())) {
-//                    //idk do something lol
-//                } else {
-//                    isValid = true;
-//                }
             }
             if(false) {
                 System.out.printf("payment options for ability %s\n", aa.toString());
@@ -80,8 +78,8 @@ public class MCTSPlayer extends ComputerPlayer {
             }
         }
 
-        playables.add(new PassAbility());
-        return playables;
+        out.add(new PassAbility());
+        return out;
     }
 
     public List<Ability> getPlayableOptions(Game game) {

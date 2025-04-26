@@ -1514,7 +1514,6 @@ public class ComputerPlayer extends PlayerImpl {
             producers = this.getAvailableManaProducers(game);
             producers.addAll(this.getAvailableManaProducersWithCost(game));
         }
-
         // use fully compatible colored mana producers first
         for (MageObject mageObject : producers) {
             ManaAbility:

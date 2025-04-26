@@ -1,7 +1,14 @@
 package mage.player.ai;
 
+import jdk.nashorn.internal.ir.annotations.Ignore;
+import mage.abilities.Ability;
+import mage.abilities.ActivatedAbility;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
+import mage.game.events.GameEvent;
+import mage.target.Target;
+
+import java.util.UUID;
 
 public class ComputerPlayer8 extends ComputerPlayer7{
     private StateEncoder encoder;
@@ -28,7 +35,8 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     private boolean priorityPlay(Game game) {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
-
+        //process every priority
+        //encoder.processState(game);
         //state learning testing
         //encoder.processState(game);
         //printBattlefieldScore(game, "PRIORITY====================");
@@ -96,7 +104,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
             case END_TURN:
                 //state learning testing only check state at end of its turns
                 if(game.getActivePlayerId() == getId()) {
-                    encoder.processState(game);
+                    //encoder.processState(game);
                     printBattlefieldScore(game, "END STEP====================");
                 }
             case CLEANUP:
@@ -105,5 +113,43 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 return false;
         }
         return false;
+    }
+    @Override
+    protected void act(Game game) {
+        if (actions == null
+                || actions.isEmpty()) {
+            pass(game);
+        } else {
+            boolean usedStack = false;
+            while (actions.peek() != null) {
+                Ability ability = actions.poll();
+                // example: ===> SELECTED ACTION for PlayerA: Play Swamp
+                System.out.println(String.format("===> SELECTED ACTION for %s: %s",
+                        getName(),
+                        getAbilityAndSourceInfo(game, ability, true)
+                ));
+                //save action vector
+                ActionEncoder.addAction(ability);
+                //save state vector
+                encoder.processState(game);
+                if (!ability.getTargets().isEmpty()) {
+                    for (Target target : ability.getTargets()) {
+                        for (UUID id : target.getTargets()) {
+                            target.updateTarget(id, game);
+                            if (!target.isNotTarget()) {
+                                game.addSimultaneousEvent(GameEvent.getEvent(GameEvent.EventType.TARGETED, id, ability, ability.getControllerId()));
+                            }
+                        }
+                    }
+                }
+                this.activateAbility((ActivatedAbility) ability, game);
+                if (ability.isUsesStack()) {
+                    usedStack = true;
+                }
+            }
+            if (usedStack) {
+                pass(game);
+            }
+        }
     }
 }

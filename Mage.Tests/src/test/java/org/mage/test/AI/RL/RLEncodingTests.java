@@ -7,10 +7,7 @@ import mage.game.Game;
 import mage.game.GameException;
 import mage.game.TwoPlayerDuel;
 import mage.game.mulligan.MulliganType;
-import mage.player.ai.ComputerPlayer8;
-import mage.player.ai.FeatureMerger;
-import mage.player.ai.Features;
-import mage.player.ai.StateEncoder;
+import mage.player.ai.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -195,7 +192,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         //run one more game this time using ignore list
         Features.printOldFeatures = true;
         Features.printNewFeatures = false;
-        StateEncoder.ignoreList = ignore;
+        encoder.ignoreList = ignore;
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
@@ -218,7 +215,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         //run one more game this time using ignore list
         Features.printOldFeatures = true;
         Features.printNewFeatures = false;
-        StateEncoder.ignoreList = ignore;
+        encoder.ignoreList = ignore;
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
@@ -250,5 +247,10 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
     @After
     public void print_vector_size() {
         System.out.printf("FINAL (unreduced) VECTOR SIZE: %d\n", StateEncoder.indexCount);
+        System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
+        for(String s : ActionEncoder.actionMap.keySet()) {
+            System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
+        }
+        System.out.println();
     }
 }

@@ -74,8 +74,8 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     @Before
     public void init_seed() {
         seed = RandomUtil.nextInt();
-        seed = -1421792887;
-
+        //seed = -1421792887;
+        seed = 233400479;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
