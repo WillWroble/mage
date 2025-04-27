@@ -35,7 +35,6 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
     private static final String TRAIN_OUT_FILE = "training.bin";
     private static final String TEST_OUT_FILE = "testing.bin";
 
-    private static final String IGNORE_FILE = "features_ignore.ser";
 
     @Override
     public List<String> getFullSimulatedPlayers() {
@@ -120,6 +119,7 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
     }
     public void reset_vectors() {
         encoder.stateVectors.clear();
+        encoder.stateScores.clear();
         ActionEncoder.actionVectors.clear();
     }
 
@@ -127,27 +127,49 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
      * uses saved list of actions and states to make a labeled vector batch for training
      */
     public void create_labeled_states() {
-        System.out.println(encoder.ignoreList.size());
-        for(int i = 0; i<encoder.stateVectors.size(); i++) {
+        int N = encoder.stateVectors.size();
+        double γ = 0.99;          // discount factor
+        double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
 
+        labeledStateBatch.clear();
+        for(int i = 0; i < N; i++) {
+            // 1) decompress your raw state and action bits (you already have this)
             boolean[] rawState = encoder.stateVectors.get(i);
-            boolean[] state = new boolean[4000];//compressed state
-            int k = 0;
-            for(int j = 0; j < StateEncoder.indexCount; j++) {
-                if(k >= 4000) break;
+            boolean[] state = new boolean[4000];
+            for(int k = 0, j = 0; j < StateEncoder.indexCount && k < 4000; j++) {
                 if(!encoder.ignoreList.contains(j)) {
-                    state[k] = rawState[j];
-                    k++;
+                    state[k++] = rawState[j];
                 }
             }
             boolean[] action = ActionEncoder.actionVectors.get(i);
-            boolean result = playerA.hasWon();
-            labeledStateBatch.add(new LabeledState(state, action, result));
-        }
-        Collections.shuffle(labeledStateBatch); //shuffle for training
 
-        // Print out the labeled vectors.
-        for (LabeledState ls : labeledStateBatch) {
+            // 2) get your raw minimax score and normalize into [-1,+1]
+            double rawScore = encoder.stateScores.get(i);
+            //double normScore = rawScore / (double)Math.abs(GameStateEvaluator2.LOSE_GAME_SCORE);
+
+            double scale = 20000.0;              // or better yet: maxAbs(stateScores)
+            double normScore = Math.tanh(rawScore/scale);
+
+
+            // 3) build your discounted terminal label in [-1,+1]
+            boolean win = playerA.hasWon();
+            double terminal = win ? +1.0 : -1.0;
+            double discount = Math.pow(γ, N - i - 1);
+
+            // 4) blend them
+            double blended = λ * normScore + (1.0 - λ) * terminal * discount;
+
+            // 5) store a single LabeledState with that double label
+            labeledStateBatch.add(new LabeledState(state, action, blended));
+        }
+
+        // shuffle before writing out / persisting
+        //Collections.shuffle(labeledStateBatch);
+
+        reset_vectors();
+    }
+    public void print_labeled_states() {
+        for (LabeledState ls : labeledStates) {
             StringBuilder sb1 = new StringBuilder();
             for (int i = 0; i < 100; i++) {
                 sb1.append(ls.stateVector[i] ? "1" : "0");
@@ -160,7 +182,6 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
             }
             System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), sb2.toString(), ls.resultLabel);
         }
-        reset_vectors();
     }
     @Test
     public void make_ignore_X_50() {
@@ -197,6 +218,8 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
+        //Collections.shuffle(labeledStates);
+        print_labeled_states();
         persistLabeledStates(TRAIN_OUT_FILE);
         persistData();
     }
@@ -207,7 +230,7 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
     @Test
     public void make_test_ds_X_50() {
         int maxTurn = 50;
-        for(int i = 0; i < 20; i++) {
+        for(int i = 0; i < 50; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -217,6 +240,7 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
+        print_labeled_states();
         persistLabeledStates(TEST_OUT_FILE);
         persistData();
     }
@@ -243,7 +267,7 @@ public class VectorExtractionTests extends CardTestPlayerBaseAI {
             for (LabeledState ls : labeledStates) {
                 for (boolean b : ls.stateVector) out.writeByte(b ? 1 : 0);
                 for (boolean b : ls.actionVector) out.writeByte(b ? 1 : 0);
-                out.writeByte(ls.resultLabel ? 1 : 0);
+                out.writeDouble(ls.resultLabel);
             }
         } catch (IOException e) {
             e.printStackTrace();

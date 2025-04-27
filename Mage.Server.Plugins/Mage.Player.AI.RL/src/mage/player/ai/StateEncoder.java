@@ -40,6 +40,8 @@ public class StateEncoder {
     private UUID opponentID;
     private UUID myPlayerID;
     public List<boolean[]> stateVectors;
+    public List<Integer> stateScores = new ArrayList<>();
+
     public Set<Integer> ignoreList;
 
     public StateEncoder() {
