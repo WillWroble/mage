@@ -7,6 +7,7 @@ import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.costs.mana.ManaCosts;
 import mage.abilities.effects.Effect;
+import mage.abilities.mana.ManaOptions;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.constants.CardType;
@@ -17,6 +18,7 @@ import mage.game.Game;
 import mage.game.Graveyard;
 import mage.game.permanent.Battlefield;
 import mage.game.permanent.Permanent;
+import mage.players.ManaPool;
 import mage.players.Player;
 
 
@@ -39,7 +41,9 @@ public class StateEncoder {
     public static Map<Integer, boolean[][]> pendingFeatures; //maps raw index to occurrence matrix for cohort
     private UUID opponentID;
     private UUID myPlayerID;
-    public List<boolean[]> stateVectors;
+    public List<boolean[]> macroStateVectors = new ArrayList<>();
+    public List<boolean[]> microStateVectors = new ArrayList<>();
+
     public List<Integer> stateScores = new ArrayList<>();
 
     public Set<Integer> ignoreList;
@@ -56,7 +60,6 @@ public class StateEncoder {
         Arrays.fill(rawToReduced, 0);
         pendingFeatures = new HashMap<>();
         ignoreList = new HashSet<>();
-        stateVectors = new ArrayList<>();
     }
     public void setAgent(UUID me) {
         myPlayerID = me;
@@ -251,6 +254,8 @@ public class StateEncoder {
         //game metadata
         features.addNumericFeature("OpponentLifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("OpponentCanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
+        Features mpFeatures = features.getSubFeatures("OpponentManaPool");
+        processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
         //start with battlefield
         Battlefield bf = game.getBattlefield();
@@ -263,10 +268,19 @@ public class StateEncoder {
         processGraveyard(gy, game, gyFeatures);
 
         //now do hand (cards are face down so only keep count of number of cards
-        // TODO: keep track of face up cards
+        // TODO: keep track of face up cards and exile
         Cards hand = myPlayer.getHand();
         features.addNumericFeature("OpponentCardsInHand", hand.size());
 
+    }
+    public void processManaPool(ManaPool mp, Game game,  Features f) {
+        f.addNumericFeature("GreenMana", mp.getGreen());
+        f.addNumericFeature("RedMana", mp.getRed());
+        f.addNumericFeature("BlueMana", mp.getBlue());
+        f.addNumericFeature("WhiteMana", mp.getWhite());
+        f.addNumericFeature("BlackMana", mp.getBlack());
+        f.addNumericFeature("ColorlessMana", mp.getColorless());
+        //TODO: deal with conditional mana
     }
     public void processState(Game game) {
         features.stateRefresh();
@@ -276,9 +290,13 @@ public class StateEncoder {
         Player myPlayer = game.getPlayer(myPlayerID);
 
         //game metadata
+        features.addFeature(game.getPhase().getType().name());
+        if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
+
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
-        features.addFeature(game.getPhase().getType().name());
+        Features mpFeatures = features.getSubFeatures("ManaPool");
+        processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
         //start with battlefield
         Battlefield bf = game.getBattlefield();
@@ -302,21 +320,29 @@ public class StateEncoder {
 
         //update reduced vector
         //updateReducedVector();
-
-        System.out.println("Raw vector:");
-        for(int i = 0; i < indexCount; i++) {
-            System.out.printf("[%d:%d] ", i, featureVector[i] ? 1 : 0);
+        if(false) {
+            System.out.println("Raw vector:");
+            for (int i = 0; i < indexCount; i++) {
+                System.out.printf("[%d:%d] ", i, featureVector[i] ? 1 : 0);
+            }
+            /*
+            System.out.println("\nReduced vector:");
+            for(int i = 0; i < reducedIndexCount; i++) {
+                System.out.printf("[%d:%d] ", i, reducedFeatureVector[i] ? 1 : 0);
+            }
+             */
+            System.out.println();
         }
-        /*
-        System.out.println("\nReduced vector:");
-        for(int i = 0; i < reducedIndexCount; i++) {
-            System.out.printf("[%d:%d] ", i, reducedFeatureVector[i] ? 1 : 0);
-        }
-         */
-        System.out.println();
-        stateVectors.add(Arrays.copyOf(featureVector, 30000));
+        //stateVectors.add(Arrays.copyOf(featureVector, 30000));
     }
-
+    public void processMicroState(Game game) {
+        processState(game);
+        microStateVectors.add(Arrays.copyOf(featureVector, 30000));
+    }
+    public void processMacroState(Game game) {
+        processState(game);
+        macroStateVectors.add(Arrays.copyOf(featureVector, 30000));
+    }
     /**
      * call at the end of each processState to filter changes from raw vector to reduced one
      */
@@ -367,6 +393,15 @@ public class StateEncoder {
         }
         //lastly update original size
         originalVectorSize = indexCount;
+    }
+    public boolean[] getCompressedVector(boolean[] rawState) {
+        boolean[] state = new boolean[4000];
+        for(int k = 0, j = 0; j < indexCount && k < 4000; j++) {
+            if(!ignoreList.contains(j)) {
+                state[k++] = rawState[j];
+            }
+        }
+        return state;
     }
     // Persist the persistent feature mapping
     public void persistMapping(String filename) throws IOException {

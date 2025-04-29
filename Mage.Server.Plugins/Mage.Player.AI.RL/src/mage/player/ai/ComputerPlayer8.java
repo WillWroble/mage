@@ -131,7 +131,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 //save action vector
                 ActionEncoder.addAction(ability);
                 //save state vector
-                encoder.processState(game);
+                encoder.processMacroState(game);
                 //add scores
                 encoder.stateScores.add(root.score);
                 if (!ability.getTargets().isEmpty()) {

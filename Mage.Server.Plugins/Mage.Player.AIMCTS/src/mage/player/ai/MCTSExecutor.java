@@ -42,9 +42,9 @@ public class MCTSExecutor implements Callable<Boolean> {
         MCTSNode current;
         // This loop termination is controlled externally by timeout.
         while (true) {
-//            if(simCount > 300) {
-//                return true;
-//            }
+            if(simCount > 300) {
+                return true;
+            }
             current = root;
             simCount++;
             // Selection: traverse until a leaf node is reached.
@@ -56,7 +56,7 @@ public class MCTSExecutor implements Callable<Boolean> {
                     System.out.println("stuck in selection");
                 }
             }
-            // Don't stop to eval state until stack is empty and there are multiple children
+            // Don't stop to eval state until stack is empty or limit reached
             int traverseCount = 0;
             while (!current.isTerminal() && traverseCount < 10
                     //&& (current.getNumChildren() == 1
@@ -66,14 +66,14 @@ public class MCTSExecutor implements Callable<Boolean> {
                 current.expand();
                 current = current.select(this.playerId);
             }
-            int result;
+            double result;
             if (!current.isTerminal()) {
                 // Expansion:
                 result = rollout(current);
                 current.expand();
             } else {
                 reachedTerminalState = true;
-                result = current.isWinner(this.playerId) ? 100000000 : -100000000;
+                result = current.isWinner(this.playerId) ? 1 : -1;
             }
             // Backpropagation:
             current.backpropagate(result);
@@ -87,7 +87,7 @@ public class MCTSExecutor implements Callable<Boolean> {
      * @param node the leaf node to evaluate
      * @return an integer evaluation of the node's state
      */
-    protected int rollout(MCTSNode node) {
+    protected double rollout(MCTSNode node) {
         System.out.println("you should never see this");
         return node.simulate(this.playerId);
     }

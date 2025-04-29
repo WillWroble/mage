@@ -72,7 +72,6 @@ public class MCTSEncoderTests extends CardTestPlayerBaseAI {
     }
 
     public void set_encoder() {
-        // Assumes ComputerPlayerMCTS2 has a setEncoder(StateEncoder) method
         ComputerPlayerMCTS2 cp = (ComputerPlayerMCTS2) playerA.getComputerPlayer();
         cp.setEncoder(encoder);
         encoder.setAgent(playerA.getId());
@@ -147,7 +146,7 @@ public class MCTSEncoderTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors, 1.00);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors, 1.00);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }

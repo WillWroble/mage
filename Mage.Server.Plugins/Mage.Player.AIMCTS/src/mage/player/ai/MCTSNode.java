@@ -1,12 +1,7 @@
 
 package mage.player.ai;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import mage.MageInt;
@@ -52,6 +47,8 @@ public class MCTSNode {
     private boolean terminal = false;
     public UUID targetPlayer;
     public int depth = 1;
+    public float[] policy = null;
+    private double prior = 1;
 
     private static int nodeCount;
 
@@ -147,17 +144,16 @@ public class MCTSNode {
         for (MCTSNode node: children) {
             double uct;
             if (node.visits > 0) {
-                //System.out.println(node.visits);
                 uct = (node.score / (node.visits * 1.0));
                 if (isTarget) {
-                    uct += (850.0)*(selectionCoefficient * Math.sqrt((visits*1.0) / (node.visits)));
+                    uct += node.prior*(selectionCoefficient * Math.sqrt((visits*1.0)) / (1+node.visits));
                     if (uct > bestValue) {
                         bestChild = node;
                         bestValue = uct;
                     }
                 }
                 else {
-                    uct -= (850.0)*(selectionCoefficient * Math.sqrt((visits*1.0) / (node.visits)));
+                    uct -= node.prior*(selectionCoefficient * Math.sqrt((visits*1.0)) / (1+node.visits));
                     if (uct < worstValue) {
                         bestChild = node;
                         worstValue = uct;
@@ -189,11 +185,35 @@ public class MCTSNode {
             logger.fatal("next action is null");
         }
         children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
-        for(MCTSNode c : children) {
-            c.depth = depth+1;
+        for (MCTSNode node : children) {
+            node.depth = depth + 1;
+            node.prior = 1.0/children.size();
+        }
+        if(policy != null) {
+            // 2) find max logit for numeric stability
+            double maxLogit = Double.NEGATIVE_INFINITY;
+            for (MCTSNode node : children) {
+                if(node.action == null) continue;
+                int idx = ActionEncoder.addAction(node.getAction());
+                maxLogit = Math.max(maxLogit, policy[idx]);
+            }
+
+            // 3) compute raw exps and sum
+            double sumExp = 0;
+            for (MCTSNode node : children) {
+                if(node.action == null) continue;
+                int idx = ActionEncoder.addAction(node.action);
+                double raw = Math.exp(policy[idx] - maxLogit);
+                node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
+                sumExp += raw;
+            }
+
+            // 4) normalize in place
+            for (MCTSNode node : children) {
+                node.prior /= sumExp;
+            }
         }
         game = null;
-        //if(parent != null) parent.game = null;
     }
 
     public int simulate(UUID playerId) {
@@ -212,7 +232,7 @@ public class MCTSNode {
         return retVal;
     }
 
-    public void backpropagate(int result) {
+    public void backpropagate(double result) {
         visits++;
         score += result;
         if (parent != null)
@@ -559,6 +579,10 @@ public class MCTSNode {
         wins = 0;
         visits = 0;
         depth = 1;
+    }
+    public int getAverageVisits() {
+        if(children.isEmpty()) return 0;
+        return visits/children.size();
     }
     public int maxVisits() {
         int max = -1;

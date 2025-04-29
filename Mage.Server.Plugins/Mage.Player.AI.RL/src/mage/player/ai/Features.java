@@ -22,7 +22,7 @@ public class Features  implements Serializable {
     private final Map<String, TreeMap<Integer, Map<Integer, Integer>>> numericFeatures; //name->value->occurrences
     private final Map<String, Integer> occurrences;
     private final Map<String, TreeMap<Integer, Integer>> numericOccurrences;
-    private final Map<String, Features> categoriesForChildren; //isnt reset between states represent all possible categories for children
+    private final Map<String, Features> categoriesForChildren; //isn't reset between states, represents all possible categories for children
     public Set<Features> categories; //resets every state represents temporary category features fall under
 
     public String featureName;

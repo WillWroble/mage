@@ -1,5 +1,6 @@
 package org.mage.test.AI.RL;
 
+import ai.onnxruntime.OrtException;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -63,6 +64,11 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
         mcts2.clearTree();
         MCTSNode.clearCaches();
         try {
+            mcts2.nn.close();
+        } catch (OrtException oe) {
+            oe.printStackTrace();
+        }
+        try {
             reset();
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
@@ -85,8 +91,7 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
         // simple test of 5 turns
         int maxTurn = 50;
 
-        //addCard(Zone.HAND, playerA, "Fauna Shaman", 3);
-        //setStrictChooseMode(true);
+        setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
 

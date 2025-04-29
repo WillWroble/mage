@@ -16,7 +16,7 @@ public class FeatureMerger {
         if (stateVectors.isEmpty()) {
             return ignoreList;
         }
-        int vectorLength = stateVectors.get(0).length;
+        int vectorLength = StateEncoder.indexCount;
         int numStates = stateVectors.size();
 
         // Count how many times each feature is active.
@@ -46,7 +46,6 @@ public class FeatureMerger {
                     double coRatioI = (double) coOccurrence[i][j] / featureCounts[i];
                     double coRatioJ = (double) coOccurrence[i][j] / featureCounts[j];
                     if (coRatioI >= threshold && coRatioJ >= threshold) {
-                        // They co-occur almost always.
                         if (featureCounts[i] <= featureCounts[j]) {
                             ignoreList.add(i);
                         } else {

@@ -1,5 +1,7 @@
 package mage.player.ai;
 
+import ai.onnxruntime.OrtException;
+import javafx.util.Pair;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
@@ -28,15 +30,26 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
-    private StateEncoder encoder;
+    private StateEncoder encoder = null;
     private static final int MAX_MCTS_CYCLES = 5;//number of additional cycles the search is allowed to run
-    private static final int BASE_THREAD_TIMEOUT = 3;
-    private static final int MIN_TREE_VISITS = 500;
+    private static final int BASE_THREAD_TIMEOUT = 3;//seconds
+    private static final int MIN_TREE_VISITS = 100;
+    private static final int MAX_TREE_VISITS = 200;
+
     public static boolean SHOW_THREAD_INFO = false;
+    public NeuralNetEvaluator nn;
+
+    public static String PATH_TO_NN = "null";
+    private final Object encoderLock = new Object();
 
 
     public ComputerPlayerMCTS2(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
+        try {
+            nn = new NeuralNetEvaluator(PATH_TO_NN);
+        } catch (OrtException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     protected ComputerPlayerMCTS2(UUID id) {
@@ -44,7 +57,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     }
 
     public ComputerPlayerMCTS2(final ComputerPlayerMCTS2 player) {
-        super(player);
+        super(player); nn = player.nn;
+        encoder = player.encoder;
     }
 
     @Override
@@ -56,14 +70,31 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      * Evaluate the game state for the given player.
      * Replace this placeholder with your actual value network call.
      *
-     * @param game     the game state to evaluate
-     * @param playerId the player's UUID
-     * @return an integer evaluation (positive for favorable, negative otherwise)
+     * @param node     the game state to evaluate
+
      */
-    protected int evaluateState(Game game, UUID playerId) {
-        // TODO: Integrate your value network here.
-        // For now, return heuristic value
-        return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+    protected double evaluateState(MCTSNode node) {
+        //return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+
+        // 1) First, encode the state exactly as you do in processState(),
+        //    but return it as a float[] of length S (with 0f/1f).
+        boolean[] bits;
+        NeuralNetEvaluator.InferenceResult out;
+        synchronized(encoderLock) {
+            encoder.processState(node.getGame());
+            bits = encoder.getCompressedVector(StateEncoder.featureVector);
+
+            float[] input = new float[bits.length];
+            for (int i = 0; i < bits.length; i++) input[i] = bits[i] ? 1.0f : 0.0f;
+
+            // 2) Run the ONNX model
+            out = nn.infer(input);
+        }
+
+        node.policy = out.policy;
+        // 3a) If you just want a value‐based rollout, return the value:
+        return (out.value);  // scale or cast to int as you like
+
     }
 
     public void setEncoder(StateEncoder enc) {
@@ -86,19 +117,27 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         return max-max2;
     }
+    public int averageVisits(List<Integer> children) {
+        int sum = 0;
+        if(children.isEmpty()) return 0;
+        for(int c : children) {
+            sum += c;
+        }
+        return sum/children.size();
+    }
     @Override
     public boolean priority(Game game) {
         if (game.getTurnStepType() == PhaseStep.END_TURN) {
             if (game.getActivePlayerId() == getId()) {
                 if (encoder != null) {
                     System.out.println("ENCODING STATE...");
-                    encoder.processState(game);
+                    encoder.processMacroState(game);
                 }
             }
             GameStateEvaluator2.printBattlefield(game, game.getActivePlayerId());
         }
         boolean out = super.priority(game);
-        ActionEncoder.addAction(root.getAction());
+        //ActionEncoder.addAction(root.getAction());
         return out;
     }
 
@@ -107,10 +146,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      */
     @Override
     protected void applyMCTS(final Game game, final NextAction action) {
-
-        if(root.getNumChildren() > 0 && root.visits/root.getNumChildren() > 1500) return;
-        if(root.visits/(root.getNumChildren()+1) < 300) root.reset(); //better to start fresh if existing tree is too shallow
-        if(SHOW_THREAD_INFO) System.out.printf("STARTING ROOT VISITS: %d\n", root.visits);
+        int initialVisits = root.getAverageVisits();
+        //if(initialVisits > MAX_TREE_VISITS) return;//just keep using tree
+        if(SHOW_THREAD_INFO) System.out.printf("STARTING ROOT VISITS: %d\n", initialVisits);
         int thinkTime = BASE_THREAD_TIMEOUT;//calculateThinkTime(game, action);
 
 
@@ -132,21 +170,19 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             // Create an executor that overrides rollout() to use evaluateState().
             MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime) {
                 @Override
-                protected int rollout(MCTSNode node) {
+                protected double rollout(MCTSNode node) {
                     // Instead of a full simulation, evaluate the leaf state with our value function.
-                    return evaluateState(node.getGame(), playerId);
+                    return evaluateState(node);
                 }
             };
-            if(i < 2 && root.getNumChildren() > 0) {//reserve first 2 threads to build off existing root
-                //exec.root = new MCTSNode(root);
-            }
             tasks.add(exec);
         }
         //runs mcts sims until the root has been visited enough times
-        int diffVisits = 0;
+        List<Integer> childVisits = new ArrayList<>();
         int cycleCounter = 0;
+        int fullTime = 0;
 
-        while (diffVisits < MIN_TREE_VISITS) {//use max visits of children as indicator
+        while (averageVisits(childVisits)+initialVisits < MIN_TREE_VISITS) {//use max visits of children as indicator
 
             if (cycleCounter > MAX_MCTS_CYCLES) break;
             cycleCounter++;
@@ -163,44 +199,51 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     throw new IllegalStateException("One of the simulated games raised an error: " + e, e);
                 }
             }
-            if (SHOW_THREAD_INFO) System.out.printf("CYCLE %d: %d threads were created\n", cycleCounter, tasks.size());
-
-            List<Integer> childVisits = new ArrayList<>();
-
-            for(int i = 0; i <  tasks.get(7).root.children.size(); i++) {
-                int visitSum = 0;
-                for(int j = 0; j < 8; j++) {
-                    visitSum += tasks.get(j).root.children.get(i).visits;
-                }
-                childVisits.add(visitSum);
-            }
-            diffVisits = diffVisits(childVisits);
+            childVisits = getChildVisits(tasks);
             if (SHOW_THREAD_INFO) {
-                System.out.printf("COMPOSITE CHILDREN: %s\n", childVisits.toString());
-                System.out.printf("MAX DIFF OF CHILDREN: %d\n", diffVisits);
+                System.out.printf("CYCLE %d: %d threads were created\n", cycleCounter, tasks.size());
+                for (MCTSExecutor task : tasks) {
+                    if (task.reachedTerminalState && SHOW_THREAD_INFO)
+                        System.out.print("-task reached a terminal state-");
+                    if (SHOW_THREAD_INFO) System.out.printf("%d ", task.simCount);
+                }
+                System.out.printf("\nCOMPOSITE CHILDREN: %s\n", childVisits.toString());
             }
+            fullTime += thinkTime;
             thinkTime += 1;
         }
-
         int simCount = 0;
         for (MCTSExecutor task : tasks) {
-            if (task.reachedTerminalState && SHOW_THREAD_INFO)
-                System.out.print("-task reached a terminal state-");
-            if (SHOW_THREAD_INFO) System.out.printf("%d ", task.simCount);
             simCount += task.getSimCount();
             root.merge(task.getRoot());
             task.clear();
         }
-        if (SHOW_THREAD_INFO) System.out.println();
         tasks.clear();
-        totalThinkTime += thinkTime;
+        totalThinkTime += fullTime;
         totalSimulations += simCount;
         if (SHOW_THREAD_INFO) {
-            logger.info("Player: " + name + " simulated " + simCount + " evaluations in " + thinkTime
+            logger.info("Player: " + name + " simulated " + simCount + " evaluations in " + fullTime
                     + " seconds - nodes in tree: " + root.size());
             logger.info("Total: simulated " + totalSimulations + " evaluations in " + totalThinkTime
                     + " seconds - Average: " + totalSimulations / totalThinkTime);
         }
         MCTSNode.logHitMiss();
+    }
+
+    private static List<Integer> getChildVisits(List<MCTSExecutor> tasks) {
+        List<Integer> childVisits = new ArrayList<>();
+        int min = Integer.MAX_VALUE;
+        for(MCTSExecutor task : tasks) {
+            if(task.root.children.size()< min) min = task.root.children.size();
+        }
+
+        for(int i = 0; i <  min; i++) {
+            int visitSum = 0;
+            for(int j = 0; j < 8; j++) {
+                visitSum += tasks.get(j).root.children.get(i).visits;
+            }
+            childVisits.add(visitSum);
+        }
+        return childVisits;
     }
 }
