@@ -18,6 +18,7 @@ import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
 import java.io.FileNotFoundException;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Set;
 
@@ -141,7 +142,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors, 1.00);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }
@@ -156,7 +157,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors, 1.00);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }
@@ -171,7 +172,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors, 1.00);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }
@@ -186,7 +187,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors, 1.00);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
         //run one more game this time using ignore list
@@ -209,7 +210,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors, 1.00);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
         //run one more game this time using ignore list
@@ -230,7 +231,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         execute();
         //save state after 5 turns
         int bookmarkedState = currentGame.bookmarkState();
-        boolean[] savedVec = StateEncoder.featureVector;
+        BitSet savedVec = StateEncoder.featureVector;
         reset_game();
         //simulate another 5 turns
         setStrictChooseMode(true);
@@ -239,10 +240,10 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         //reload state and read it
         currentGame.restoreState(bookmarkedState, "rolling_back_for_testing");
         encoder.processState(currentGame);
-        boolean[] newVec = StateEncoder.featureVector;
-        System.out.println(Arrays.toString(savedVec));
-        System.out.println(Arrays.toString(newVec));
-        assert (Arrays.equals(savedVec, newVec));
+        BitSet newVec = StateEncoder.featureVector;
+        System.out.println(savedVec);
+        System.out.println(newVec);
+        assert (savedVec.equals(newVec));
     }
     @After
     public void print_vector_size() {

@@ -1,18 +1,10 @@
 package mage.player.ai;
 
 import ai.onnxruntime.OrtException;
-import javafx.util.Pair;
-import mage.abilities.Ability;
-import mage.abilities.ActivatedAbility;
-import mage.abilities.common.PassAbility;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.combat.Combat;
-import mage.game.combat.CombatGroup;
-import mage.game.turn.Phase;
 import mage.player.ai.MCTSPlayer.NextAction;
-import mage.players.Player;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
@@ -23,79 +15,42 @@ import java.util.UUID;
 import java.util.concurrent.*;
 
 /**
- * ComputerPlayerMCTS2 extends ComputerPlayerMCTS and uses a value function at leaf nodes.
- * It replaces full rollout simulations with a call to evaluateState() on the leaf game state.
+ * ComputerPlayerPureMCTS extends ComputerPlayerMCTS and uses random rollouts to maxaminze feature discovery
  */
-public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
+public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
 
-    private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
+    private static final Logger logger = Logger.getLogger(ComputerPlayerPureMCTS.class);
 
     private StateEncoder encoder = null;
     private static final int MAX_MCTS_CYCLES = 5;//number of additional cycles the search is allowed to run
     private static final int BASE_THREAD_TIMEOUT = 3;//seconds
     private static final int MIN_TREE_VISITS = 100;
-    private static final int MAX_TREE_VISITS = 200;
 
     public static boolean SHOW_THREAD_INFO = false;
-    public NeuralNetEvaluator nn;
-
-    public static String PATH_TO_NN = "null";
     private final Object encoderLock = new Object();
 
 
-    public ComputerPlayerMCTS2(String name, RangeOfInfluence range, int skill) {
+
+    public ComputerPlayerPureMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
-        try {
-            nn = new NeuralNetEvaluator(PATH_TO_NN);
-        } catch (OrtException e) {
-            throw new RuntimeException(e);
-        }
+
     }
 
-    protected ComputerPlayerMCTS2(UUID id) {
+    protected ComputerPlayerPureMCTS(UUID id) {
         super(id);
     }
 
-    public ComputerPlayerMCTS2(final ComputerPlayerMCTS2 player) {
-        super(player); nn = player.nn;
+    public ComputerPlayerPureMCTS(final ComputerPlayerPureMCTS player) {
+        super(player);
         encoder = player.encoder;
     }
 
     @Override
-    public ComputerPlayerMCTS2 copy() {
-        return new ComputerPlayerMCTS2(this);
+    public ComputerPlayerPureMCTS copy() {
+        return new ComputerPlayerPureMCTS(this);
     }
 
-    /**
-     * Evaluate the game state for the given player.
-     * Replace this placeholder with your actual value network call.
-     *
-     * @param node     the game state to evaluate
 
-     */
-    protected double evaluateState(MCTSNode node) {
-        //return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
-
-        // 1) First, encode the state exactly as you do in processState(),
-        //    but return it as a float[] of length S (with 0f/1f).
-        boolean[] bits;
-        NeuralNetEvaluator.InferenceResult out;
-        synchronized(encoderLock) {
-            encoder.processState(node.getGame());
-            bits = encoder.getCompressedVector(StateEncoder.featureVector);
-
-            float[] input = new float[bits.length];
-            for (int i = 0; i < bits.length; i++) input[i] = bits[i] ? 1.0f : 0.0f;
-
-            // 2) Run the ONNX model
-            out = nn.infer(input);
-        }
-
-        node.policy = out.policy;
-        // 3a) If you just want a value‐based rollout, return the value:
-        return (out.value);  // scale or cast to int as you like
-
-    }
 
     public void setEncoder(StateEncoder enc) {
         encoder = enc;
@@ -116,6 +71,13 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             }
         }
         return max-max2;
+    }
+    protected double evaluateState(MCTSNode node) {
+        synchronized(encoderLock) {
+            encoder.processMacroState(node.getGame());
+            if(node.getAction() != null)ActionEncoder.addAction(node.getAction());
+        }
+        return 0;
     }
     public int averageVisits(List<Integer> children) {
         int sum = 0;
@@ -168,7 +130,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     // Instead of a full simulation, evaluate the leaf state with our value function.
                     return evaluateState(node);
                 }
-            };
+            };;
             tasks.add(exec);
         }
         //runs mcts sims until the root has been visited enough times

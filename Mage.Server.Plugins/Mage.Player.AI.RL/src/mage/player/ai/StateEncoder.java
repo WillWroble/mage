@@ -1,6 +1,7 @@
 package mage.player.ai;
 
 import com.j256.ormlite.stmt.query.In;
+import mage.MageObject;
 import mage.abilities.*;
 import mage.abilities.costs.Cost;
 import mage.abilities.costs.Costs;
@@ -18,6 +19,8 @@ import mage.game.Game;
 import mage.game.Graveyard;
 import mage.game.permanent.Battlefield;
 import mage.game.permanent.Permanent;
+import mage.game.stack.SpellStack;
+import mage.game.stack.StackObject;
 import mage.players.ManaPool;
 import mage.players.Player;
 
@@ -35,14 +38,14 @@ public class StateEncoder {
     public static int reducedIndexCount;
     private int originalVectorSize;
     private Features features;
-    public static boolean[] featureVector;
+    public static BitSet featureVector;
     public static boolean[] reducedFeatureVector;
     public static int[] rawToReduced;
     public static Map<Integer, boolean[][]> pendingFeatures; //maps raw index to occurrence matrix for cohort
     private UUID opponentID;
     private UUID myPlayerID;
-    public List<boolean[]> macroStateVectors = new ArrayList<>();
-    public List<boolean[]> microStateVectors = new ArrayList<>();
+    public List<BitSet> macroStateVectors = new ArrayList<>();
+    public List<BitSet> microStateVectors = new ArrayList<>();
 
     public List<Integer> stateScores = new ArrayList<>();
 
@@ -54,7 +57,7 @@ public class StateEncoder {
         reducedIndexCount = 1; //pending features map to zero
         originalVectorSize = 0;
         features = new Features();
-        featureVector = new boolean[30000];
+        featureVector = new BitSet(30000);
         reducedFeatureVector = new boolean[5000];
         rawToReduced = new int[30000];
         Arrays.fill(rawToReduced, 0);
@@ -112,7 +115,7 @@ public class StateEncoder {
     }
     public void processCard(Card c, Game game, Features f) {
 
-        f.addFeature("Card");//raw universal type of card added for counting purposes
+        f.parent.addFeature("Card");//raw universal type of card added for counting purposes
 
         if(c.isPermanent()) f.addCategory("Permanent");
         //add types
@@ -134,8 +137,7 @@ public class StateEncoder {
 
         //add cost
         ManaCosts<ManaCost> mc = c.getManaCost();
-        Features costFeature = f.getSubFeatures("CastingCost");
-        processManaCosts(mc, game, costFeature, true);
+        processManaCosts(mc, game, f, true);
 
 
         //process counters
@@ -160,8 +162,10 @@ public class StateEncoder {
         for (UUID id : p.getAttachments()) {
             Permanent attachment = game.getPermanent(id);
             //modify name to not count auras/equipment twice
-            Features attachmentFeatures = f.getSubFeatures(attachment.getName() + "_Attachment");
+            f.passToParent = false; //don't pass pooled attachment features up, or they will be counted twice
+            Features attachmentFeatures = f.getSubFeatures(attachment.getName());
             processPermBattlefield(attachment, game, attachmentFeatures);
+            f.passToParent = true;
         }
 
 
@@ -185,8 +189,6 @@ public class StateEncoder {
             if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
             if(p.canBlock(opponentID, game)) f.addFeature("CanBlock"); //use p.canBlock()
         }
-
-
     }
     public void processCardInGraveyard(Card c, Game game, Features f) {
         //process as card
@@ -219,10 +221,10 @@ public class StateEncoder {
         }
         //activated abilities
         for(ActivatedAbility aa : c.getAbilities(game).getActivatedAbilities(Zone.HAND)) {
-            if(!(aa instanceof SpellAbility)) {
-                Features aaFeatures = f.getSubFeatures(aa.getRule());
-                processActivatedAbility(aa, game, aaFeatures);
-            }
+            //if(!(aa instanceof SpellAbility)) {
+            Features aaFeatures = f.getSubFeatures(aa.getRule());
+            processActivatedAbility(aa, game, aaFeatures);
+            //}
         }
         //triggered abilities
         for(TriggeredAbility ta : c.getAbilities(game).getTriggeredAbilities(Zone.HAND)) {
@@ -249,11 +251,38 @@ public class StateEncoder {
             processCardInHand(c, game, handCardFeatures);
         }
     }
+    public void processStackObject(StackObject so, int stackPosition, Game game, Features f) {
+        f.addNumericFeature("StackPosition", stackPosition, false);
+        if(so.getControllerId()==myPlayerID) f.addFeature("isController");
+        Ability sa = so.getStackAbility();
+        if(sa instanceof TriggeredAbility) {
+            processTriggeredAbility((TriggeredAbility) sa, game, f);
+        } else {
+            processAbility(sa, game, f);
+        }
+        MageObject source = game.getObject(so.getSourceId());
+        for (Ability a : source.getAbilities().getStaticAbilities(Zone.STACK)) {
+            f.addFeature(a.toString());
+        }
+    }
+    public void processStack(SpellStack stack, Game game, Features f) {
+        Iterator<StackObject> itr = stack.descendingIterator();
+        StackObject so;
+        f.addNumericFeature("StackSize", stack.size());
+        int i = 0;
+        while(itr.hasNext()) {
+            so = itr.next();
+            i++;
+            Features soFeatures = f.getSubFeatures(so.toString());
+            processStackObject(so, i, game, soFeatures);
+        }
+    }
     public void processOpponentState(Game game) {
         Player myPlayer = game.getPlayer(opponentID);
         //game metadata
         features.addNumericFeature("OpponentLifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("OpponentCanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
+        //mana pool
         Features mpFeatures = features.getSubFeatures("OpponentManaPool");
         processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
@@ -284,7 +313,7 @@ public class StateEncoder {
     }
     public void processState(Game game) {
         features.stateRefresh();
-        Arrays.fill(featureVector, false);
+        featureVector.clear();
         Arrays.fill(reducedFeatureVector, false);
 
         Player myPlayer = game.getPlayer(myPlayerID);
@@ -292,9 +321,14 @@ public class StateEncoder {
         //game metadata
         features.addFeature(game.getPhase().getType().name());
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
-
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
+
+        //stack
+        Features stackFeatures = features.getSubFeatures("Stack");
+        processStack(game.getStack(), game, stackFeatures);
+
+        //mana pool
         Features mpFeatures = features.getSubFeatures("ManaPool");
         processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
@@ -320,32 +354,18 @@ public class StateEncoder {
 
         //update reduced vector
         //updateReducedVector();
-        if(false) {
-            System.out.println("Raw vector:");
-            for (int i = 0; i < indexCount; i++) {
-                System.out.printf("[%d:%d] ", i, featureVector[i] ? 1 : 0);
-            }
-            /*
-            System.out.println("\nReduced vector:");
-            for(int i = 0; i < reducedIndexCount; i++) {
-                System.out.printf("[%d:%d] ", i, reducedFeatureVector[i] ? 1 : 0);
-            }
-             */
-            System.out.println();
-        }
         //stateVectors.add(Arrays.copyOf(featureVector, 30000));
     }
     public void processMicroState(Game game) {
         processState(game);
-        microStateVectors.add(Arrays.copyOf(featureVector, 30000));
+        microStateVectors.add((BitSet) featureVector.clone());
     }
     public void processMacroState(Game game) {
         processState(game);
-        macroStateVectors.add(Arrays.copyOf(featureVector, 30000));
+        macroStateVectors.add((BitSet) featureVector.clone());
     }
-    /**
-     * call at the end of each processState to filter changes from raw vector to reduced one
-     */
+
+    /*
     public void updateReducedVector() {
         //map normal features
         for(int i = 0; i < originalVectorSize; i++) {
@@ -394,11 +414,12 @@ public class StateEncoder {
         //lastly update original size
         originalVectorSize = indexCount;
     }
-    public boolean[] getCompressedVector(boolean[] rawState) {
+    */
+    public boolean[] getCompressedVector(BitSet rawState) {
         boolean[] state = new boolean[4000];
         for(int k = 0, j = 0; j < indexCount && k < 4000; j++) {
             if(!ignoreList.contains(j)) {
-                state[k++] = rawState[j];
+                state[k++] = rawState.get(j);
             }
         }
         return state;

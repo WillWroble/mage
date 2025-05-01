@@ -57,15 +57,15 @@ public class MCTSExecutor implements Callable<Boolean> {
                 }
             }
             // Don't stop to eval state until stack is empty or limit reached
-            int traverseCount = 0;
-            while (!current.isTerminal() && traverseCount < 10
-                    //&& (current.getNumChildren() == 1
-                    //|| current.getGame().getTurnPhaseType() == TurnPhase.COMBAT
-                    && !current.getGame().getStack().isEmpty()) {
-                traverseCount++;
-                current.expand();
-                current = current.select(this.playerId);
-            }
+//            int traverseCount = 0;
+//            while (!current.isTerminal() && traverseCount < 10
+//                    //&& (current.getNumChildren() == 1
+//                    //|| current.getGame().getTurnPhaseType() == TurnPhase.COMBAT
+//                    && !current.getGame().getStack().isEmpty()) {
+//                traverseCount++;
+//                current.expand();
+//                current = current.select(this.playerId);
+//            }
             double result;
             if (!current.isTerminal()) {
                 // Expansion:
@@ -88,8 +88,7 @@ public class MCTSExecutor implements Callable<Boolean> {
      * @return an integer evaluation of the node's state
      */
     protected double rollout(MCTSNode node) {
-        System.out.println("you should never see this");
-        return node.simulate(this.playerId);
+        return node.simulate(this.playerId);//-1 or 1
     }
 
     public MCTSNode getRoot() {

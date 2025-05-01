@@ -141,6 +141,11 @@ public class TestPlayer implements Player {
         AIPlayer = false;
         computerPlayer.setTestPlayerLink(this);
     }
+    public TestPlayer(TestComputerPlayerPureMonteCarlo computerPlayer) {
+        this.computerPlayer = computerPlayer;
+        AIPlayer = false;
+        computerPlayer.setTestPlayerLink(this);
+    }
     public TestPlayer(TestComputerPlayerMonteCarlo computerPlayer) {
         this.computerPlayer = computerPlayer;
         AIPlayer = false;

@@ -24,6 +24,7 @@ public class Features  implements Serializable {
     private final Map<String, TreeMap<Integer, Integer>> numericOccurrences;
     private final Map<String, Features> categoriesForChildren; //isn't reset between states, represents all possible categories for children
     public Set<Features> categories; //resets every state represents temporary category features fall under
+    public boolean passToParent = true;
 
     public String featureName;
     public Features parent;
@@ -69,6 +70,9 @@ public class Features  implements Serializable {
      * @return subfeature at name (never returns null)
      */
     public Features getSubFeatures(String name) {
+        return getSubFeatures(name, true);
+    }
+    public Features getSubFeatures(String name, boolean passToParent) {
         //first add as a normal binary feature
         addFeature(name);
 
@@ -87,6 +91,7 @@ public class Features  implements Serializable {
             Features newSub = new Features(this, name + "_1");
             newMap.put(1, newSub);
             subFeatures.put(name, newMap);
+            newSub.passToParent = passToParent;
             return newSub;
         }
     }
@@ -109,7 +114,7 @@ public class Features  implements Serializable {
     }
     public void addFeature(String name, boolean callParent) {
         //usually add feature to parent/categories
-        if(parent != null && callParent) {
+        if(parent != null && callParent && passToParent) {
             parent.addFeature(name);
             for(Features c : categories) {
                 c.addFeature(name);
@@ -133,14 +138,14 @@ public class Features  implements Serializable {
             features.put(name, n);
             if(printNewFeatures) System.out.printf("New feature %s discovered in %s, reserving index %d for this feature\n", name, featureName, n.get(1));
         }
-        StateEncoder.featureVector[features.get(name).get(occurrences.get(name))] = true;
+        StateEncoder.featureVector.set(features.get(name).get(occurrences.get(name)),true);
     }
     public void addNumericFeature(String name, int num) {
         addNumericFeature(name, num, true);
     }
     public void addNumericFeature(String name, int num, boolean callParent) {
         //usually add feature to parent/categories
-        if(parent != null && callParent) {
+        if(parent != null && callParent && passToParent) {
             parent.addNumericFeature(name, num);
             //keep track of numerical sum for parents
             for(int i = 0; i < num; i++) {
@@ -193,7 +198,7 @@ public class Features  implements Serializable {
             if(printNewFeatures) System.out.printf("New numeric feature %s discovered with %d in %s, reserving index %d for this feature at %d\n", name,
                     num, featureName, StateEncoder.indexCount-1, num);
         }
-        StateEncoder.featureVector[numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num))] = true;
+        StateEncoder.featureVector.set(numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num)),true);
     }
     public void stateRefresh() {
         categories.clear();

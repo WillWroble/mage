@@ -128,9 +128,6 @@ public class MCTSNode {
             }
         }
     }
-    public static double sigmoid(double x) {
-        return 1 / (1 + Math.exp(-x));
-    }
     public MCTSNode select(UUID targetPlayerId) {
         double bestValue = Double.NEGATIVE_INFINITY;
         double worstValue = Double.POSITIVE_INFINITY;
@@ -140,7 +137,6 @@ public class MCTSNode {
             return children.get(0);
         }
         List<MCTSNode> unvisited = new ArrayList<>();
-        List<MCTSNode> unvisitedWithNoStack = new ArrayList<>();
         for (MCTSNode node: children) {
             double uct;
             if (node.visits > 0) {
@@ -163,14 +159,7 @@ public class MCTSNode {
             else {
                 // ensure that a random unvisited node is played first
                 unvisited.add(node);
-                if(node.stackIsEmpty) {
-                    unvisitedWithNoStack.add(node);
-                }
             }
-        }
-        //prioritize unvisited nodes with no stack
-        if(!unvisitedWithNoStack.isEmpty()) {
-            return unvisitedWithNoStack.get(abs(RandomUtil.nextInt())%unvisitedWithNoStack.size());
         }
         if(!unvisited.isEmpty()) {
             return unvisited.get(abs(RandomUtil.nextInt())%unvisited.size());
@@ -187,7 +176,7 @@ public class MCTSNode {
         children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
         for (MCTSNode node : children) {
             node.depth = depth + 1;
-            node.prior = 1.0/children.size();
+            node.prior = 1.0;///children.size();
         }
         if(policy != null) {
             // 2) find max logit for numeric stability
@@ -213,7 +202,8 @@ public class MCTSNode {
                 node.prior /= sumExp;
             }
         }
-        game = null;
+
+        if(!children.isEmpty()) game = null;
     }
 
     public int simulate(UUID playerId) {

@@ -1,5 +1,6 @@
 package org.mage.test.AI.RL;
 
+import ai.onnxruntime.OrtException;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -123,6 +124,11 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     }
     public void reset_game() {
         try {
+            ((ComputerPlayerMCTS2)playerA.getComputerPlayer()).nn.close();
+        } catch (OrtException oe) {
+            oe.printStackTrace();
+        }
+        try {
             reset();
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
@@ -199,8 +205,6 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
-
-
 
     }
     /**

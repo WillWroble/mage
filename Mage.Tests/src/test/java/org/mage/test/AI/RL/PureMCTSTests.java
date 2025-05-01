@@ -8,12 +8,18 @@ import mage.game.Game;
 import mage.game.GameException;
 import mage.game.TwoPlayerDuel;
 import mage.game.mulligan.MulliganType;
-import mage.player.ai.*;
+import mage.player.ai.ActionEncoder;
+import mage.player.ai.ComputerPlayerPureMCTS;
+import mage.player.ai.Features;
+import mage.player.ai.MCTSNode;
 import mage.util.RandomUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mage.test.player.*;
+import org.mage.test.player.TestComputerPlayer7;
+import org.mage.test.player.TestComputerPlayerMonteCarlo2;
+import org.mage.test.player.TestComputerPlayerPureMonteCarlo;
+import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
 import java.io.FileNotFoundException;
@@ -23,7 +29,7 @@ import java.util.List;
 /**
  * @author WillWroble
  */
-public class MCTS2Tests extends CardTestPlayerBaseAI {
+public class PureMCTSTests extends CardTestPlayerBaseAI {
 
     private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
@@ -46,8 +52,8 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
             if(name.equals("PlayerA")) {
-                TestComputerPlayerMonteCarlo2 tmc2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, getSkillLevel());
-                TestPlayer testPlayer = new TestPlayer(tmc2);
+                TestComputerPlayerPureMonteCarlo pmc = new TestComputerPlayerPureMonteCarlo(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestPlayer testPlayer = new TestPlayer(pmc);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             } else {
@@ -60,9 +66,10 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
         return super.createPlayer(name, rangeOfInfluence);
     }
     public void reset_game() {
-        ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2) playerA.getComputerPlayer();
-        mcts2.clearTree();
+        ComputerPlayerPureMCTS pmc = (ComputerPlayerPureMCTS) playerA.getComputerPlayer();
+        pmc.clearTree();
         MCTSNode.clearCaches();
+
         try {
             reset();
         } catch (FileNotFoundException e) {
@@ -80,22 +87,12 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
-    //5 turns across 1 game
+    //10 turns across 1 game
     @Test
-    public void test_mcts_5_1() {
-        // simple test of 5 turns
-        int maxTurn = 50;
-
-        setStrictChooseMode(true);
-        setStopAt(maxTurn, PhaseStep.END_TURN);
-        execute();
-
-    }
-    //20 turns across 1 game
-    @Test
-    public void test_mcts_20_1() {
-        int maxTurn = 20;
-        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+    public void test_mcts_10_1() {
+        // simple test of 10 turns
+        int maxTurn = 10;
+        ComputerPlayerPureMCTS.SHOW_THREAD_INFO = true;
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
@@ -130,6 +127,6 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     @After
     public void show_data() {
         System.out.printf("USING SEED: %d\n", seed);
-        System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
+        //System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
     }
 }

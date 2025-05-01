@@ -5,56 +5,52 @@ import java.util.*;
 public class FeatureMerger {
 
     /**
-     * Computes an ignore list of feature indices that are nearly always co-occurring.
-     *
-     * @param stateVectors A list of boolean arrays, each representing the binary feature vector for one state.
-     * @param threshold The minimum co-occurrence ratio (e.g., 0.95) above which one feature can be ignored.
-     * @return A set of feature indices to ignore.
+     * Drops only those features that perfectly co-occurred (and fired at least once) across all M states.
+     * Leaves zero-count features intact.
      */
-    public static Set<Integer> computeIgnoreList(List<boolean[]> stateVectors, double threshold) {
-        Set<Integer> ignoreList = new HashSet<>();
-        if (stateVectors.isEmpty()) {
-            return ignoreList;
-        }
-        int vectorLength = StateEncoder.indexCount;
-        int numStates = stateVectors.size();
+    public static Set<Integer> computeIgnoreList(List<BitSet> stateVectors) {
+        int M = stateVectors.size();
+        if (M == 0) return Collections.emptySet();
 
-        // Count how many times each feature is active.
-        int[] featureCounts = new int[vectorLength];
-        // Count co-occurrence between each pair of features.
-        int[][] coOccurrence = new int[vectorLength][vectorLength];
+        int S = StateEncoder.indexCount;
+        long[] fingerprint = new long[S];
+        int[]  counts      = new int[S];
+        long   token       = 1;
 
-        for (boolean[] vector : stateVectors) {
-            for (int i = 0; i < vectorLength; i++) {
-                if (vector[i]) {
-                    featureCounts[i]++;
-                    for (int j = i + 1; j < vectorLength; j++) {
-                        if (vector[j]) {
-                            coOccurrence[i][j]++;
-                            coOccurrence[j][i]++;
-                        }
-                    }
+        // 1) Build fingerprint & counts
+        for (BitSet vec : stateVectors) {
+            long t = token++;
+            for (int i = 0; i < S; i++) {
+                if (vec.get(i)) {
+                    counts[i]++;
+                    fingerprint[i] ^= t;
                 }
             }
         }
 
-        // For each pair of features, check if they nearly always appear together.
-        // If so, mark the one with the lower frequency as redundant.
-        for (int i = 0; i < vectorLength; i++) {
-            for (int j = i + 1; j < vectorLength; j++) {
-                if (featureCounts[i] > 0 && featureCounts[j] > 0) {
-                    double coRatioI = (double) coOccurrence[i][j] / featureCounts[i];
-                    double coRatioJ = (double) coOccurrence[i][j] / featureCounts[j];
-                    if (coRatioI >= threshold && coRatioJ >= threshold) {
-                        if (featureCounts[i] <= featureCounts[j]) {
-                            ignoreList.add(i);
-                        } else {
-                            ignoreList.add(j);
-                        }
-                    }
+        // 2) Group only the features that actually occurred (counts[i] > 0)
+        Map<Long, List<Integer>> groups = new HashMap<>(S);
+        for (int i = 0; i < S; i++) {
+            if (counts[i] == 0) continue;       // **skip zero‐count features**
+            groups
+                    .computeIfAbsent(fingerprint[i], __ -> new ArrayList<>())
+                    .add(i);
+        }
+
+        // 3) Within each non‐zero group, drop duplicates whose counts match
+        Set<Integer> ignore = new HashSet<>();
+        for (List<Integer> grp : groups.values()) {
+            if (grp.size() < 2) continue;
+            Collections.sort(grp);
+            int keeper = grp.get(0);
+            for (int j = 1; j < grp.size(); j++) {
+                int idx = grp.get(j);
+                if (counts[idx] == counts[keeper]) {
+                    ignore.add(idx);
                 }
             }
         }
-        return ignoreList;
+
+        return ignore;
     }
 }
