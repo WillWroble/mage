@@ -13,44 +13,34 @@ public class FeatureMerger {
         if (M == 0) return Collections.emptySet();
 
         int S = StateEncoder.indexCount;
-        long[] fingerprint = new long[S];
-        int[]  counts      = new int[S];
-        long   token       = 1;
-
-        // 1) Build fingerprint & counts
-        for (BitSet vec : stateVectors) {
-            long t = token++;
-            for (int i = 0; i < S; i++) {
-                if (vec.get(i)) {
-                    counts[i]++;
-                    fingerprint[i] ^= t;
-                }
+        BitSet[] patterns = new BitSet[S];
+        for (int f = 0; f < S; f++) patterns[f] = new BitSet(M);
+        for (int row = 0; row < M; row++) {
+            BitSet vec = stateVectors.get(row);
+            for (int f = vec.nextSetBit(0); f >= 0; f = vec.nextSetBit(f + 1)) {
+                patterns[f].set(row);
             }
         }
 
-        // 2) Group only the features that actually occurred (counts[i] > 0)
-        Map<Long, List<Integer>> groups = new HashMap<>(S);
-        for (int i = 0; i < S; i++) {
-            if (counts[i] == 0) continue;       // **skip zero‐count features**
-            groups
-                    .computeIfAbsent(fingerprint[i], __ -> new ArrayList<>())
-                    .add(i);
-        }
+        Map<BitSet, Integer> representative = new HashMap<>(S);
+        Set<Integer> ignoreList = new HashSet<>();
 
-        // 3) Within each non‐zero group, drop duplicates whose counts match
-        Set<Integer> ignore = new HashSet<>();
-        for (List<Integer> grp : groups.values()) {
-            if (grp.size() < 2) continue;
-            Collections.sort(grp);
-            int keeper = grp.get(0);
-            for (int j = 1; j < grp.size(); j++) {
-                int idx = grp.get(j);
-                if (counts[idx] == counts[keeper]) {
-                    ignore.add(idx);
-                }
+        for (int f = 0; f < S; f++) {
+            BitSet pattern = patterns[f];
+            if (pattern.isEmpty()) {
+                // never occurred → keep it
+                continue;
+            }
+            BitSet key = (BitSet) pattern.clone();
+            Integer first = representative.get(key);
+            if (first == null) {
+                representative.put(key, f);
+            } else {
+                ignoreList.add(f);
             }
         }
 
-        return ignore;
+        return ignoreList;
     }
+
 }

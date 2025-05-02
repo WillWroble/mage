@@ -39,15 +39,14 @@ public class StateEncoder {
     private int originalVectorSize;
     private Features features;
     public static BitSet featureVector;
-    public static boolean[] reducedFeatureVector;
-    public static int[] rawToReduced;
-    public static Map<Integer, boolean[][]> pendingFeatures; //maps raw index to occurrence matrix for cohort
     private UUID opponentID;
     private UUID myPlayerID;
     public List<BitSet> macroStateVectors = new ArrayList<>();
     public List<BitSet> microStateVectors = new ArrayList<>();
 
     public List<Integer> stateScores = new ArrayList<>();
+    public static final int COMPRESSED_VECTOR_SIZE = 4000;
+
 
     public Set<Integer> ignoreList;
 
@@ -58,10 +57,6 @@ public class StateEncoder {
         originalVectorSize = 0;
         features = new Features();
         featureVector = new BitSet(30000);
-        reducedFeatureVector = new boolean[5000];
-        rawToReduced = new int[30000];
-        Arrays.fill(rawToReduced, 0);
-        pendingFeatures = new HashMap<>();
         ignoreList = new HashSet<>();
     }
     public void setAgent(UUID me) {
@@ -314,7 +309,6 @@ public class StateEncoder {
     public void processState(Game game) {
         features.stateRefresh();
         featureVector.clear();
-        Arrays.fill(reducedFeatureVector, false);
 
         Player myPlayer = game.getPlayer(myPlayerID);
 
@@ -415,11 +409,11 @@ public class StateEncoder {
         originalVectorSize = indexCount;
     }
     */
-    public boolean[] getCompressedVector(BitSet rawState) {
-        boolean[] state = new boolean[4000];
+    public BitSet getCompressedVector(BitSet rawState) {
+        BitSet state = new BitSet(4000);
         for(int k = 0, j = 0; j < indexCount && k < 4000; j++) {
             if(!ignoreList.contains(j)) {
-                state[k++] = rawState.get(j);
+                state.set(k++, rawState.get(j));
             }
         }
         return state;
@@ -427,7 +421,7 @@ public class StateEncoder {
     // Persist the persistent feature mapping
     public void persistMapping(String filename) throws IOException {
         features.globalIndexCount = indexCount;
-        features.ignoreList = ignoreList;
+        features.ignoreList = new HashSet<>(ignoreList);
         features.saveMapping(filename);
     }
 
@@ -435,6 +429,6 @@ public class StateEncoder {
     public void loadMapping(String filename) throws IOException, ClassNotFoundException {
         features = Features.loadMapping(filename);
         indexCount = features.globalIndexCount;
-        ignoreList = features.ignoreList;
+        ignoreList = new HashSet<>(features.ignoreList);
     }
 }

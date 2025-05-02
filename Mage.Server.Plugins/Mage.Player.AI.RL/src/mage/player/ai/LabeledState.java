@@ -34,11 +34,10 @@ public class LabeledState implements Serializable {
      * Persist this labeled state to the given DataOutputStream.
      * Caller must write header (record count, S, wordsPerState) before calling.
      * @param out            DataOutputStream to write to
-     * @param totalFeatures  total feature count S
      * @throws IOException   on I/O error
      */
-    public void persist(DataOutputStream out, int totalFeatures) throws IOException {
-        int wordsPerState = (totalFeatures + 63) >>> 6;  // ceil(S/64)
+    public void persist(DataOutputStream out) throws IOException {
+        int wordsPerState = (StateEncoder.COMPRESSED_VECTOR_SIZE + 63) >>> 6;  // ceil(S/64)
 
         // pack stateVector into a fixed-size long[]
         long[] raw = stateVector.toLongArray();

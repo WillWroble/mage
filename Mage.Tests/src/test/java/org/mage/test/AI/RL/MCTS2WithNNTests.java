@@ -103,7 +103,6 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         if (actionsFile.exists()) {
             try {
                 ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
-                ActionEncoder.makeInverseMap();
                 ActionEncoder.indexCount = ActionEncoder.actionMap.size();
                 System.out.println("Loaded persistent mapping from " + ACTIONS_FILE);
             } catch (IOException | ClassNotFoundException e) {
@@ -141,7 +140,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     public void reset_vectors() {
         encoder.macroStateVectors.clear();
         encoder.stateScores.clear();
-        ActionEncoder.actionVectors.clear();
+        ActionEncoder.actionIndices.clear();
     }
 
     /**
@@ -155,8 +154,8 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
             // 1) decompress your raw state and action bits (you already have this)
-            boolean[] state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
-            boolean[] action = ActionEncoder.actionVectors.get(i);
+            BitSet state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
+            int action = ActionEncoder.actionIndices.get(i);
 
             // 2) get your raw minimax score and normalize into [-1,+1]
             double rawScore = encoder.stateScores.get(i);
@@ -187,15 +186,11 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         for (LabeledState ls : labeledStates) {
             StringBuilder sb1 = new StringBuilder();
             for (int i = 0; i < 100; i++) {
-                sb1.append(ls.stateVector[i] ? "1" : "0");
+                sb1.append(ls.stateVector.get(i) ? "1" : "0");
                 //sb1.append(", ");
             }
-            StringBuilder sb2 = new StringBuilder();
-            for (int i = 0; i < 100; i++) {
-                sb2.append(ls.actionVector[i] ? "1" : "0");
-                //sb2.append(", ");
-            }
-            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), sb2.toString(), ls.resultLabel);
+
+            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), String.valueOf(ls.actionIndex), ls.resultLabel);
         }
     }
     @Test
@@ -263,18 +258,19 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     private void persistLabeledStates(String filename) {
         try (DataOutputStream out = new DataOutputStream(
                 new BufferedOutputStream(new FileOutputStream(filename)))) {
+
+            // 1) Header
             int n = labeledStates.size();
-            int S = labeledStates.get(0).stateVector.length;
-            int A = labeledStates.get(0).actionVector.length;
-            // Write header: #records, state-dim, action-dim
+            int S = StateEncoder.COMPRESSED_VECTOR_SIZE;         // total feature count
+            int wordsPerState = (S + 63) >>> 6;       // ⌈S/64⌉ longs per state
+
             out.writeInt(n);
             out.writeInt(S);
-            out.writeInt(A);
-            // Write raw data: one byte per boolean
+            out.writeInt(wordsPerState);
+
+            // 2) Body
             for (LabeledState ls : labeledStates) {
-                for (boolean b : ls.stateVector) out.writeByte(b ? 1 : 0);
-                for (boolean b : ls.actionVector) out.writeByte(b ? 1 : 0);
-                out.writeDouble(ls.resultLabel);
+                ls.persist(out);
             }
         } catch (IOException e) {
             e.printStackTrace();

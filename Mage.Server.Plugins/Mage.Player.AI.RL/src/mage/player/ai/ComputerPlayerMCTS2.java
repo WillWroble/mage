@@ -18,6 +18,7 @@ import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -78,14 +79,14 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         // 1) First, encode the state exactly as you do in processState(),
         //    but return it as a float[] of length S (with 0f/1f).
-        boolean[] bits;
+        BitSet bits;
         NeuralNetEvaluator.InferenceResult out;
         synchronized(encoderLock) {
             encoder.processState(node.getGame());
             bits = encoder.getCompressedVector(StateEncoder.featureVector);
 
-            float[] input = new float[bits.length];
-            for (int i = 0; i < bits.length; i++) input[i] = bits[i] ? 1.0f : 0.0f;
+            float[] input = new float[4000];
+            for (int i = 0; i < 4000; i++) input[i] = bits.get(i) ? 1.0f : 0.0f;
 
             // 2) Run the ONNX model
             out = nn.infer(input);

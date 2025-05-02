@@ -75,8 +75,7 @@ public class GenerateMappings extends CardTestPlayerBaseAI {
         init_seed();
         System.out.println("Setting up encoder");
         encoder = new StateEncoder();
-        //ignore = new HashSet<>();
-        //actions = new HashMap<>();
+
         // Try to load the persistent mapping from file
         File mappingFile = new File(MAPPING_FILE);
         if (mappingFile.exists()) {
@@ -130,7 +129,7 @@ public class GenerateMappings extends CardTestPlayerBaseAI {
     public void make_ignore_X_50() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 1; i++) {
+        for(int i = 0; i < 10; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -138,7 +137,7 @@ public class GenerateMappings extends CardTestPlayerBaseAI {
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
         System.out.println(encoder.macroStateVectors.size());
-        encoder.ignoreList = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
+        encoder.ignoreList.addAll(new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors)));
         //actions = new HashMap<>(ActionEncoder.actionMap);
         persistData();
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
