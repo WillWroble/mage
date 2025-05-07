@@ -38,6 +38,7 @@ import mage.game.events.GameEvent;
 import mage.game.match.Match;
 import mage.game.permanent.Permanent;
 import mage.game.stack.Spell;
+import mage.game.stack.StackAbility;
 import mage.game.stack.StackObject;
 import mage.game.tournament.Tournament;
 import mage.player.ai.simulators.CombatGroupSimulator;
@@ -68,6 +69,7 @@ public class ComputerPlayer extends PlayerImpl {
     private long lastThinkTime = 0; // msecs for last AI actions calc
 
     protected int PASSIVITY_PENALTY = 5; // Penalty value for doing nothing if some actions are available (was 5)
+    public static boolean PRINT_DECISION_FALLBACKS = false;
 
     // debug only: set TRUE to debug simulation's code/games (on false sim thread will be stopped after few secs by timeout)
     protected boolean COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS = false;
@@ -141,7 +143,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose: " + source.toString());
         if (log.isDebugEnabled()) {
             log.debug("choose: " + outcome.toString() + ':' + target.toString());
         }
@@ -532,8 +534,9 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTarget: " + source.toString());
         if (log.isDebugEnabled()) {
-            log.debug("chooseTarget: " + outcome.toString() + ':' + target.toString());
+            log.debug("chooseTarget: " + outcome.toString() + ':' + target.getTargetName() + ':' + source.toString());
         }
 
         // target - real target, make all changes and add targets to it
@@ -1073,6 +1076,7 @@ public class ComputerPlayer extends PlayerImpl {
     } //end of chooseTarget method
 
     protected Card pickTarget(UUID abilityControllerId, List<Card> cards, Outcome outcome, Target target, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("pickTarget: " + source.toString());
         Card card;
         while (!cards.isEmpty()) {
 
@@ -1097,6 +1101,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTargetAmount(Outcome outcome, TargetAmount target, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTargetAmount: " + source.toString());
         // TODO: make same code for chooseTarget (without filter and target type dependence)
         if (log.isDebugEnabled()) {
             log.debug("chooseTarget: " + outcome.toString() + ':' + target.toString());
@@ -1904,6 +1909,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseUse: " + source.toString());
         log.debug("chooseUse: " + outcome.isGood());
         // Be proactive! Always use abilities, the evaluation function will decide if it's good or not
         // Otherwise some abilities won't be used by AI like LoseTargetEffect that has "bad" outcome
@@ -1913,7 +1919,10 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        log.debug("choose 3");
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose2: " + choice.toString());
+        //log.info("choose 3");
+        // before falling back, dump the culprit
+        //System.out.println(choice.toString());
         //TODO: improve this
 
         // choose creature type
@@ -2020,6 +2029,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTarget2: " + source.toString());
         if (cards == null || cards.isEmpty()) {
             return target.isRequired(source);
         }
@@ -2051,6 +2061,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose3: " + source.toString());
         log.debug("choose 2");
         if (cards == null || cards.isEmpty()) {
             return true;
@@ -2128,13 +2139,14 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public int chooseReplacementEffect(Map<String, String> effectsMap, Map<String, MageObject> objectsMap, Game game) {
-        log.debug("chooseReplacementEffect");
+        log.info("chooseReplacementEffect");
         //TODO: implement this
         return 0;
     }
 
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseMode: " + source.toString());
         log.debug("chooseMode");
         if (modes.getMode() != null && modes.getMaxModes(game, source) == modes.getSelectedModes().size()) {
             // mode was already set by the AI
@@ -2161,6 +2173,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public TriggeredAbility chooseTriggeredAbility(List<TriggeredAbility> abilities, Game game) {
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTriggeredAbility: " + abilities.toString());
         log.debug("chooseTriggeredAbility: " + abilities.toString());
         //TODO: improve this
         if (!abilities.isEmpty()) {

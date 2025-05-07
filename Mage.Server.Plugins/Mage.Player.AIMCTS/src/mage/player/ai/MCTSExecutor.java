@@ -14,6 +14,7 @@ public class MCTSExecutor implements Callable<Boolean> {
     protected UUID playerId;
     protected int simCount;
     public boolean reachedTerminalState = false;
+    private volatile boolean stateUpdatesComplete = false;
 
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
 
@@ -36,48 +37,43 @@ public class MCTSExecutor implements Callable<Boolean> {
         this.reachedTerminalState = exec.reachedTerminalState;
         root = new MCTSNode(exec.root);
     }
+
     @Override
     public Boolean call() {
         //simCount = 0;
         MCTSNode current;
         // This loop termination is controlled externally by timeout.
-        while (true) {
-            if(simCount > 300) {
-                return true;
-            }
-            current = root;
+        long deadline = System.currentTimeMillis() + thinkTime * 1000L;
+        while (simCount <= 300 && !Thread.currentThread().isInterrupted()
+                && System.currentTimeMillis() < deadline) {
             simCount++;
-            // Selection: traverse until a leaf node is reached.
-            int testCount = 0;
-            while (!current.isLeaf()) {
-                current = current.select(this.playerId);
-                testCount++;
-                if(testCount > 1000) {
-                    System.out.println("stuck in selection");
+            synchronized (this) {
+                current = root;
+                // Selection: traverse until a leaf node is reached.
+                int testCount = 0;
+                while (!current.isLeaf()) {
+                    current = current.select(this.playerId);
+                    testCount++;
+                    if (testCount > 1000) {
+                        System.out.println("stuck in selection");
+                        break;
+                    }
                 }
+                double result;
+                if (!current.isTerminal()) {
+                    // Expansion:
+                    result = rollout(current);
+                    current.expand();
+                } else {
+                    reachedTerminalState = true;
+                    result = current.isWinner(this.playerId) ? 1 : -1;
+                }
+                // Backpropagation:
+                current.backpropagate(result);
+                this.stateUpdatesComplete = true;
             }
-            // Don't stop to eval state until stack is empty or limit reached
-//            int traverseCount = 0;
-//            while (!current.isTerminal() && traverseCount < 10
-//                    //&& (current.getNumChildren() == 1
-//                    //|| current.getGame().getTurnPhaseType() == TurnPhase.COMBAT
-//                    && !current.getGame().getStack().isEmpty()) {
-//                traverseCount++;
-//                current.expand();
-//                current = current.select(this.playerId);
-//            }
-            double result;
-            if (!current.isTerminal()) {
-                // Expansion:
-                result = rollout(current);
-                current.expand();
-            } else {
-                reachedTerminalState = true;
-                result = current.isWinner(this.playerId) ? 1 : -1;
-            }
-            // Backpropagation:
-            current.backpropagate(result);
         }
+        return true;
     }
 
     /**

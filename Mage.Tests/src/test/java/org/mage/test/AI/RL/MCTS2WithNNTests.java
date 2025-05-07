@@ -75,7 +75,9 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     public void init_seed() {
         seed = RandomUtil.nextInt();
         //seed = -1421792887;
-        seed = 233400479;
+        //seed = 233400479;
+        //seed = 1603827803;
+        seed = -99205609;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
@@ -140,7 +142,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     public void reset_vectors() {
         encoder.macroStateVectors.clear();
         encoder.stateScores.clear();
-        ActionEncoder.actionIndices.clear();
+        ActionEncoder.actionVectors.clear();
     }
 
     /**
@@ -155,14 +157,14 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         for(int i = 0; i < N; i++) {
             // 1) decompress your raw state and action bits (you already have this)
             BitSet state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
-            int action = ActionEncoder.actionIndices.get(i);
+            double[] action = ActionEncoder.actionVectors.get(i);
 
             // 2) get your raw minimax score and normalize into [-1,+1]
-            double rawScore = encoder.stateScores.get(i);
+            double normScore = encoder.stateScores.get(i);
             //double normScore = rawScore / (double)Math.abs(GameStateEvaluator2.LOSE_GAME_SCORE);
 
-            double scale = 20000.0;              // or better yet: maxAbs(stateScores)
-            double normScore = Math.tanh(rawScore/scale);
+            //double scale = 20000.0;              // or better yet: maxAbs(stateScores)
+            //double normScore = Math.tanh(rawScore/scale);
 
 
             // 3) build your discounted terminal label in [-1,+1]
@@ -190,13 +192,14 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
                 //sb1.append(", ");
             }
 
-            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), String.valueOf(ls.actionIndex), ls.resultLabel);
+            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), Arrays.toString(ls.actionVector), ls.resultLabel);
         }
     }
     @Test
     public void test_1_game() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
@@ -219,10 +222,12 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        //Collections.shuffle(labeledStates);
+        encoder.ignoreList.addAll(new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors)));
         print_labeled_states();
         persistLabeledStates(TRAIN_OUT_FILE);
         persistData();
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
     }
 
     /**
@@ -263,10 +268,12 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
             int n = labeledStates.size();
             int S = StateEncoder.COMPRESSED_VECTOR_SIZE;         // total feature count
             int wordsPerState = (S + 63) >>> 6;       // ⌈S/64⌉ longs per state
+            int A = 128;
 
             out.writeInt(n);
             out.writeInt(S);
             out.writeInt(wordsPerState);
+            out.writeInt(A);
 
             // 2) Body
             for (LabeledState ls : labeledStates) {

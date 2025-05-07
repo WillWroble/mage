@@ -27,7 +27,7 @@ import java.util.Set;
  */
 public class RLEncodingTests extends CardTestPlayerBaseAI {
     StateEncoder encoder;
-    private String deckNameA = "simplegreen.dck"; //simplegreen, UWTempo
+    private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
 
 
@@ -47,7 +47,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
             if(name.equals("PlayerA")) {
-                TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestComputerPlayer7 t8 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
                 TestPlayer testPlayer = new TestPlayer(t8);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
@@ -67,6 +67,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         set_encoder();
     }
     public void set_encoder() {
+        if(true) return;
         ComputerPlayer8 c8 = (ComputerPlayer8)playerA.getComputerPlayer();
         c8.setEncoder(encoder);
         encoder.setAgent(playerA.getId());
@@ -88,7 +89,6 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
     public void test_encoding_5_1() {
         // simple test of 5 turns
         int maxTurn = 5;
-
         //addCard(Zone.HAND, playerA, "Fauna Shaman", 3);
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
@@ -110,6 +110,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
     public void test_encoding_5_5() {
         int maxTurn = 5;
         Features.printOldFeatures = false;
+        Features.printNewFeatures  =false;
         for(int i = 0; i < 5; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);

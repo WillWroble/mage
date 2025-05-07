@@ -13,20 +13,20 @@ public class LabeledState implements Serializable {
     /** Bit-packed state vector of length S. */
     public final BitSet stateVector;
     /** Index of the chosen action (one-hot). */
-    public final int actionIndex;
+    public final double[] actionVector;
     /** Value label (e.g., -1.0 for loss, +1.0 for win). */
     public final double resultLabel;
 
     /**
      * Construct a labeled state.
      * @param stateBitset  BitSet of active features
-     * @param actionIdx    index of the chosen action
+     * @param actionVec    vec of the action distribution
      * @param label        scalar outcome label
      */
-    public LabeledState(BitSet stateBitset, int actionIdx, double label) {
+    public LabeledState(BitSet stateBitset, double[] actionVec, double label) {
         // clone to ensure immutability
         this.stateVector = (BitSet) stateBitset.clone();
-        this.actionIndex = actionIdx;
+        this.actionVector = actionVec;
         this.resultLabel = label;
     }
 
@@ -47,32 +47,11 @@ public class LabeledState implements Serializable {
             out.writeLong(w);
         }
 
-        // write action index
-        out.writeInt(actionIndex);
+        // write your action‐distribution vector instead of a single int
+        for (double p : actionVector) {
+            out.writeDouble(p);
+        }
         // write result label
         out.writeDouble(resultLabel);
-    }
-
-    /**
-     * Load a single LabeledState from the given DataInputStream.
-     * Caller must have read header (S, wordsPerState) before calling.
-     * @param in             DataInputStream to read from
-     * @param totalFeatures  total feature count S
-     * @return               a new LabeledState
-     * @throws IOException   on I/O error
-     */
-    public static LabeledState load(DataInputStream in, int totalFeatures) throws IOException {
-        int wordsPerState = (totalFeatures + 63) >>> 6;
-
-        long[] packed = new long[wordsPerState];
-        for (int i = 0; i < wordsPerState; i++) {
-            packed[i] = in.readLong();
-        }
-        BitSet state = BitSet.valueOf(packed);
-
-        int actionIdx = in.readInt();
-        double label  = in.readDouble();
-
-        return new LabeledState(state, actionIdx, label);
     }
 }

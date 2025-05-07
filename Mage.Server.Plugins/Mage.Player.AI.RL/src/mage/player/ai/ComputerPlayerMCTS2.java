@@ -5,6 +5,9 @@ import javafx.util.Pair;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
+import mage.cards.Cards;
+import mage.choices.Choice;
+import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
@@ -13,6 +16,8 @@ import mage.game.combat.CombatGroup;
 import mage.game.turn.Phase;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
+import mage.target.TargetCard;
+import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
@@ -38,10 +43,15 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final int MAX_TREE_VISITS = 200;
 
     public static boolean SHOW_THREAD_INFO = false;
+    //protected List<UUID> targets = new ArrayList<>();
+    //protected List<String> choices = new ArrayList<>();
     public NeuralNetEvaluator nn;
 
     public static String PATH_TO_NN = "null";
     private final Object encoderLock = new Object();
+    private final Object executorLock = new Object();
+
+
 
 
     public ComputerPlayerMCTS2(String name, RangeOfInfluence range, int skill) {
@@ -158,10 +168,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             );
         }
         List<MCTSExecutor> tasks = new ArrayList<>();
+        long seed = RandomUtil.nextInt();
         for (int i = 0; i < poolSize; i++) {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
+            player.dirichletSeed = seed;
             // Create an executor that overrides rollout() to use evaluateState().
             MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime) {
                 @Override
@@ -181,7 +193,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
             if (cycleCounter > MAX_MCTS_CYCLES) break;
             cycleCounter++;
-
             try {
                 List<Future<Boolean>> runningTasks = threadPoolSimulations.invokeAll(tasks, thinkTime, TimeUnit.SECONDS);
                 for (Future<Boolean> runningTask : runningTasks) {
@@ -194,7 +205,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     throw new IllegalStateException("One of the simulated games raised an error: " + e, e);
                 }
             }
+
             childVisits = getChildVisits(tasks);
+
             if (SHOW_THREAD_INFO) {
                 System.out.printf("CYCLE %d: %d threads were created\n", cycleCounter, tasks.size());
                 for (MCTSExecutor task : tasks) {
@@ -224,7 +237,53 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         MCTSNode.logHitMiss();
     }
+    double[] getActionVec() {
+        double tau = 1.0;            // your temperature hyperparam
+        int    A   = 128;
+        double[] out = new double[A];
+        double   sum = 0;
+        // 1) accumulate visits^(1/tau)
+        for (MCTSNode child : root.children) {
+            if (child.getAction() != null) {
+                int idx = ActionEncoder.getAction(child.getAction());
+                double v = child.visits;
+                // apply temperature
+                double vt = Math.pow(v, 1.0 / tau);
+                out[idx] = vt;
+                sum += vt;
+            }
+        }
 
+        // 2) normalize into a proper distribution
+        if (sum > 0) {
+            for (int i = 0; i < A; i++) {
+                out[i] = out[i] / sum;
+            }
+        }
+        return out;
+    }
+    @Override
+    protected void calculateActions(Game game, NextAction action) {
+        if (root == null) {
+            Game sim = createMCTSGame(game);
+            MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
+            player.setNextAction(action);
+            player.isRoot = true;
+            root = new MCTSNode(playerId, sim);
+        }
+        applyMCTS(game, action);
+        if (root != null) {
+            MCTSNode best = root.bestChild();
+            if(best == null) return;
+            synchronized (encoderLock) {
+                encoder.processMacroState(game);
+                encoder.stateScores.add(root.score);
+                ActionEncoder.addAction(getActionVec());
+            }
+            root = best;
+            root.emancipate();
+        }
+    }
     private static List<Integer> getChildVisits(List<MCTSExecutor> tasks) {
         List<Integer> childVisits = new ArrayList<>();
         int min = Integer.MAX_VALUE;
@@ -241,4 +300,5 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         return childVisits;
     }
+
 }

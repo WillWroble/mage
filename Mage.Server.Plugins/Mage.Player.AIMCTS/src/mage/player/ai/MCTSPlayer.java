@@ -9,14 +9,22 @@ import mage.abilities.SpellAbility;
 import mage.abilities.common.PassAbility;
 import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.GenericManaCost;
+import mage.abilities.costs.mana.ManaCost;
+import mage.abilities.costs.mana.ManaCostsImpl;
+import mage.abilities.costs.mana.VariableManaCost;
+import mage.abilities.effects.Effect;
 import mage.abilities.mana.ManaOptions;
+import mage.cards.Cards;
+import mage.constants.Outcome;
 import mage.constants.Zone;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.players.Player;
+import mage.target.TargetCard;
 import org.apache.log4j.Logger;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * AI: server side bot with monte carlo logic (experimental, the latest version)
@@ -29,9 +37,11 @@ import java.util.*;
 public class MCTSPlayer extends ComputerPlayer {
 
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
-
+    private transient ConcurrentLinkedQueue<Ability> allActions; // all possible abilities to play (copies with already selected targets)
     private NextAction nextAction;
     public boolean isRoot = false;
+    public long dirichletSeed = 0;
+
 
     public enum NextAction {
         PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS
@@ -60,29 +70,12 @@ public class MCTSPlayer extends ComputerPlayer {
             if(!aa.isManaAbility()) onlyMana = false;
         }
         if(onlyMana) playables.clear();
-        List<ActivatedAbility> out = new ArrayList<>();
-        for(ActivatedAbility aa : playables) {
-
-            out.add(aa);
-
-            Set<Mana> possiblePayments = new HashSet<>();
-            for(Mana m : availableMana) {
-                Set<Mana> paySet = ManaOptions.getPossiblePayCombinations(aa.getManaCosts().getMana(), m);
-                possiblePayments.addAll(paySet);
-            }
-            if(false) {
-                System.out.printf("payment options for ability %s\n", aa.toString());
-                for(Mana m : possiblePayments) {
-                    System.out.printf("%s, ", m.toString());
-                }
-            }
-        }
-
-        out.add(new PassAbility());
-        return out;
+        playables.add(new PassAbility());
+        return playables;
     }
 
     public List<Ability> getPlayableOptions(Game game) {
+        //if(true) return simulatePriority(game);
         List<Ability> all = new ArrayList<>();
         List<ActivatedAbility> playables = getPlayableAbilities(game);
         for (ActivatedAbility ability : playables) {

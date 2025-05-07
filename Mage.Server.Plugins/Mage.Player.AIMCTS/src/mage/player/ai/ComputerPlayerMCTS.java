@@ -97,6 +97,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         applyMCTS(game, action);
         if (root != null && root.bestChild() != null) {
+
             root = root.bestChild();
             root.emancipate();
         }

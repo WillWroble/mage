@@ -120,7 +120,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void reset_vectors() {
         encoder.macroStateVectors.clear();
         encoder.stateScores.clear();
-        ActionEncoder.actionIndices.clear();
+        ActionEncoder.actionVectors.clear();
     }
 
     /**
@@ -135,14 +135,14 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         for(int i = 0; i < N; i++) {
             // 1) decompress your raw state and action bits (you already have this)
             BitSet state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
-            int action = ActionEncoder.actionIndices.get(i);
+            double[] action = ActionEncoder.actionVectors.get(i);
 
             // 2) get your raw minimax score and normalize into [-1,+1]
-            double rawScore = encoder.stateScores.get(i);
+            double normScore = encoder.stateScores.get(i);
             //double normScore = rawScore / (double)Math.abs(GameStateEvaluator2.LOSE_GAME_SCORE);
 
-            double scale = 20000.0;              // or better yet: maxAbs(stateScores)
-            double normScore = Math.tanh(rawScore/scale);
+            //double scale = 20000.0;              // or better yet: maxAbs(stateScores)
+            //double normScore = Math.tanh(rawScore/scale);
 
 
             // 3) build your discounted terminal label in [-1,+1]
@@ -170,7 +170,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
                 //sb1.append(", ");
             }
 
-            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), String.valueOf(ls.actionIndex), ls.resultLabel);
+            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), Arrays.toString(ls.actionVector), ls.resultLabel);
         }
     }
     @Test
@@ -199,7 +199,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void make_train_ds_X_50() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 250; i++) {
+        for(int i = 0; i < 10; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -252,10 +252,12 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             int n = labeledStates.size();
             int S = StateEncoder.COMPRESSED_VECTOR_SIZE;          // total feature count
             int wordsPerState = (S + 63) >>> 6;       // ⌈S/64⌉ longs per state
+            int A = 128;
 
             out.writeInt(n);
             out.writeInt(S);
             out.writeInt(wordsPerState);
+            out.writeInt(A);    // <-- NEW: tells reader “we’ll write A doubles next”
 
             // 2) Body
             for (LabeledState ls : labeledStates) {

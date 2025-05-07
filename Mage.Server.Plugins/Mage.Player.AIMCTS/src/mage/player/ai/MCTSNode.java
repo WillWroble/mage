@@ -17,6 +17,10 @@ import mage.game.turn.Step.StepPart;
 import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
+import java.util.Random;
+import org.apache.commons.math3.distribution.GammaDistribution;
+import org.apache.commons.math3.distribution.GammaDistribution;
+import org.apache.commons.math3.random.JDKRandomGenerator;
 
 import static java.lang.Math.*;
 
@@ -30,13 +34,15 @@ public class MCTSNode {
     private static final double selectionCoefficient = Math.sqrt(2.0);
     private static final double passRatioTolerance = 0.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
+    private final Object actionEncoderLock = new Object();
+
 
     private boolean stackIsEmpty = true;
 
     public int visits = 0;
     private int wins = 0;
-    private double score = 0;
-    private MCTSNode parent;
+    public double score = 0;
+    private MCTSNode parent = null;
     public final List<MCTSNode> children = new ArrayList<>();
     private Ability action;
     private Game game;
@@ -129,43 +135,41 @@ public class MCTSNode {
         }
     }
     public MCTSNode select(UUID targetPlayerId) {
-        double bestValue = Double.NEGATIVE_INFINITY;
-        double worstValue = Double.POSITIVE_INFINITY;
-        boolean isTarget = playerId.equals(targetPlayerId);
-        MCTSNode bestChild = null;
+        // Single‐child shortcut
         if (children.size() == 1) {
             return children.get(0);
         }
-        List<MCTSNode> unvisited = new ArrayList<>();
-        for (MCTSNode node: children) {
-            double uct;
-            if (node.visits > 0) {
-                uct = (node.score / (node.visits * 1.0));
-                if (isTarget) {
-                    uct += node.prior*(selectionCoefficient * Math.sqrt((visits*1.0)) / (1+node.visits));
-                    if (uct > bestValue) {
-                        bestChild = node;
-                        bestValue = uct;
-                    }
-                }
-                else {
-                    uct -= node.prior*(selectionCoefficient * Math.sqrt((visits*1.0)) / (1+node.visits));
-                    if (uct < worstValue) {
-                        bestChild = node;
-                        worstValue = uct;
-                    }
+
+        boolean isTarget = playerId.equals(targetPlayerId);
+        double  sign     = isTarget ? +1.0 : -1.0;
+
+        MCTSNode best    = null;
+        double   bestVal = Double.NEGATIVE_INFINITY;
+
+        double sqrtN = Math.sqrt(visits);
+        double c     = selectionCoefficient;
+        synchronized (children) {
+            for (MCTSNode child : children) {
+                // value term: 0 if unvisited, else average reward
+                double q = (child.visits > 0)
+                        ? (child.score / child.visits)
+                        : 0.0;
+
+                // exploration term still blows up when visits==0
+                double u = c * child.prior * (sqrtN / (1 + child.visits));
+
+                // combined PUCT
+                double val = sign * q + u;
+
+                if (val > bestVal) {
+                    bestVal = val;
+                    best = child;
                 }
             }
-            else {
-                // ensure that a random unvisited node is played first
-                unvisited.add(node);
-            }
         }
-        if(!unvisited.isEmpty()) {
-            return unvisited.get(abs(RandomUtil.nextInt())%unvisited.size());
-        }
-        assert (bestChild != null);
-        return bestChild;
+        // best should never be null once visits>0 on the root
+        assert best != null;
+        return best;
     }
 
     public void expand() {
@@ -173,37 +177,67 @@ public class MCTSNode {
         if (player.getNextAction() == null) {
             logger.fatal("next action is null");
         }
-        children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
-        for (MCTSNode node : children) {
-            node.depth = depth + 1;
-            node.prior = 1.0;///children.size();
+        synchronized (children) {
+            children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
+            for (MCTSNode node : children) {
+                node.depth = depth + 1;
+                node.prior = 1.0;///children.size();
+            }
+            if (policy != null) {
+                // 2) find max logit for numeric stability
+                double maxLogit = Double.NEGATIVE_INFINITY;
+                for (MCTSNode node : children) {
+                    if (node.action == null) continue;
+                    int idx = ActionEncoder.getAction(node.getAction());
+                    maxLogit = Math.max(maxLogit, policy[idx]);
+                }
+
+                // 3) compute raw exps and sum
+                double sumExp = 0;
+                for (MCTSNode node : children) {
+                    if (node.action == null) continue;
+                    int idx = ActionEncoder.getAction(node.action);
+                    double raw = Math.exp(policy[idx] - maxLogit);
+                    node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
+                    sumExp += raw;
+                }
+
+                // 4) normalize in place
+                for (MCTSNode node : children) {
+                    node.prior /= sumExp;
+                }
+                long seed = player.dirichletSeed;
+                if (seed != 0) {
+                    double alpha = 0.03, eps = 0.25;
+                    int K = children.size();
+                    double[] dir = new double[K];
+                    double sum = 0;
+
+                    // 1) create a Commons-Math RNG and seed it
+                    JDKRandomGenerator rg = new JDKRandomGenerator();
+                    rg.setSeed(seed);
+
+                    // 2) pass it into the GammaDistribution
+                    GammaDistribution gd = new GammaDistribution(rg, alpha, 1.0);
+
+                    // 3) sample & mix exactly as before
+                    for (int i = 0; i < K; i++) {
+                        dir[i] = gd.sample();
+                        sum += dir[i];
+                    }
+                    for (int i = 0; i < K; i++) {
+                        dir[i] /= sum;
+                        children.get(i).prior = (1 - eps) * children.get(i).prior + eps * dir[i];
+                    }
+
+                    // 4) mark done
+                    player.dirichletSeed = 0;
+                }
+            }
+
+            if (!children.isEmpty()) game = null;
+
         }
-        if(policy != null) {
-            // 2) find max logit for numeric stability
-            double maxLogit = Double.NEGATIVE_INFINITY;
-            for (MCTSNode node : children) {
-                if(node.action == null) continue;
-                int idx = ActionEncoder.addAction(node.getAction());
-                maxLogit = Math.max(maxLogit, policy[idx]);
-            }
-
-            // 3) compute raw exps and sum
-            double sumExp = 0;
-            for (MCTSNode node : children) {
-                if(node.action == null) continue;
-                int idx = ActionEncoder.addAction(node.action);
-                double raw = Math.exp(policy[idx] - maxLogit);
-                node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
-                sumExp += raw;
-            }
-
-            // 4) normalize in place
-            for (MCTSNode node : children) {
-                node.prior /= sumExp;
-            }
-        }
-
-        if(!children.isEmpty()) game = null;
     }
 
     public int simulate(UUID playerId) {
@@ -230,7 +264,9 @@ public class MCTSNode {
     }
 
     public boolean isLeaf() {
-        return children.isEmpty();
+        synchronized (children) {
+            return children.isEmpty();
+        }
     }
 
     public MCTSNode bestChild() {
@@ -241,8 +277,11 @@ public class MCTSNode {
         boolean bestIsPass = false;
         MCTSNode bestChild = null;
         System.out.print("actions: ");
+
         for (MCTSNode node: children) {
-            if(node.action != null) System.out.printf("[%s score: %.3f count: %d] ", node.action.toString(), node.getWinRatio(), node.visits);
+            if(node.action != null) {
+                System.out.printf("[%s score: %.3f count: %d] ", node.action.toString(), node.getWinRatio(), node.visits);
+            }
             if(node.combat != null && !node.combat.getAttackers().isEmpty()) System.out.printf("[%s score: %.3f count: %d] ", node.combat.toString(), node.getWinRatio(), node.visits);
             //favour passing vs any other action except for playing land if ratio is close
             if (node.visits > bestCount) {

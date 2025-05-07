@@ -114,6 +114,11 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         }
         return false;
     }
+    double [] getActionVec(Ability a) {
+        double[] out = new double[128];
+        out[ActionEncoder.getAction(a)] = 1.0;
+        return out;
+    }
     @Override
     protected void act(Game game) {
         if (actions == null
@@ -129,11 +134,11 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         getAbilityAndSourceInfo(game, ability, true)
                 ));
                 //save action vector
-                ActionEncoder.addAction(ability);
+                ActionEncoder.addAction(getActionVec(ability));
                 //save state vector
                 encoder.processMacroState(game);
                 //add scores
-                encoder.stateScores.add(root.score);
+                encoder.stateScores.add(Math.tanh(root.score*1.0/20000));
                 if (!ability.getTargets().isEmpty()) {
                     for (Target target : ability.getTargets()) {
                         for (UUID id : target.getTargets()) {

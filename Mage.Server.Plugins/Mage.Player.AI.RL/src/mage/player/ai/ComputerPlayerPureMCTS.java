@@ -75,7 +75,7 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
     protected double evaluateState(MCTSNode node) {
         synchronized(encoderLock) {
             encoder.processMacroState(node.getGame());
-            if(node.getAction() != null)ActionEncoder.addAction(node.getAction());
+            if(node.getAction() != null)ActionEncoder.getAction(node.getAction());
         }
         return 0;
     }

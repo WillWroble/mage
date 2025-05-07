@@ -44,8 +44,9 @@ public class StateEncoder {
     public List<BitSet> macroStateVectors = new ArrayList<>();
     public List<BitSet> microStateVectors = new ArrayList<>();
 
-    public List<Integer> stateScores = new ArrayList<>();
+    public List<Double> stateScores = new ArrayList<>();
     public static final int COMPRESSED_VECTOR_SIZE = 4000;
+    public int initialSize = 4000;
 
 
     public Set<Integer> ignoreList;
@@ -411,7 +412,7 @@ public class StateEncoder {
     */
     public BitSet getCompressedVector(BitSet rawState) {
         BitSet state = new BitSet(4000);
-        for(int k = 0, j = 0; j < indexCount && k < 4000; j++) {
+        for(int k = 0, j = 0; j < indexCount && k < initialSize && k < 4000; j++) {
             if(!ignoreList.contains(j)) {
                 state.set(k++, rawState.get(j));
             }
@@ -430,5 +431,6 @@ public class StateEncoder {
         features = Features.loadMapping(filename);
         indexCount = features.globalIndexCount;
         ignoreList = new HashSet<>(features.ignoreList);
+        initialSize = indexCount - ignoreList.size();
     }
 }
