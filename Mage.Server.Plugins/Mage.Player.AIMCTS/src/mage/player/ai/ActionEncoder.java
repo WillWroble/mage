@@ -10,10 +10,10 @@ public class ActionEncoder {
     public static List<double[]> actionVectors = new ArrayList<>();
     public static Map<String, Integer> actionMap = new HashMap<>();
 
-    public static void addAction(double[] label) {
+    public static synchronized void addAction(double[] label) {
         actionVectors.add(label);
     }
-    public static int getAction(Ability sa) {
+    public static synchronized int getAction(Ability sa) {
         String name = sa.toString();
         if(actionMap.containsKey(name)) {//already contains action
             if(printActions) System.out.printf("Action: %s already maps to index %d\n", name, actionMap.get(name));

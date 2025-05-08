@@ -37,7 +37,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
     private StateEncoder encoder = null;
-    private static final int MAX_MCTS_CYCLES = 5;//number of additional cycles the search is allowed to run
+    private static final int MAX_MCTS_CYCLES = 2;//number of additional cycles the search is allowed to run
     private static final int BASE_THREAD_TIMEOUT = 3;//seconds
     private static final int MIN_TREE_VISITS = 100;
     private static final int MAX_TREE_VISITS = 200;

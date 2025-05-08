@@ -77,7 +77,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         //seed = -1421792887;
         //seed = 233400479;
         //seed = 1603827803;
-        seed = -99205609;
+        //seed = -99205609;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
@@ -151,7 +151,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     public void create_labeled_states() {
         int N = encoder.macroStateVectors.size();
         double γ = 0.99;          // discount factor
-        double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
+        double λ = 0;           // how much weight to give the minimax estimate vs. terminal
 
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {

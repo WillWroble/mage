@@ -90,8 +90,8 @@ public class StateEncoder {
             Features costFeature = f.getSubFeatures("AbilityCost");
             processCosts(c, mcs, game, costFeature, false); //dont propagate mana cost up for abilities
         }*/
-        for(Effect e : a.getAllEffects()) {
-            for(Mode m : a.getModes().getAvailableModes(a, game)) {
+        for(Mode m : a.getModes().getAvailableModes(a, game)) {
+            for(Effect e : m.getEffects()) {
                 f.addFeature(e.getText(m));
             }
         }
@@ -254,11 +254,13 @@ public class StateEncoder {
         if(sa instanceof TriggeredAbility) {
             processTriggeredAbility((TriggeredAbility) sa, game, f);
         } else {
-            processAbility(sa, game, f);
-        }
-        MageObject source = game.getObject(so.getSourceId());
-        for (Ability a : source.getAbilities().getStaticAbilities(Zone.STACK)) {
-            f.addFeature(a.toString());
+            processActivatedAbility((ActivatedAbility)sa, game, f);
+            if(sa instanceof SpellAbility) {
+                MageObject source = game.getObject(so.getSourceId());
+                for (Ability a : source.getAbilities().getStaticAbilities(Zone.STACK)) {
+                    f.addFeature(a.toString());
+                }
+            }
         }
     }
     public void processStack(SpellStack stack, Game game, Features f) {

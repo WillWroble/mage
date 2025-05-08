@@ -141,22 +141,22 @@ public class MCTSNode {
         }
 
         boolean isTarget = playerId.equals(targetPlayerId);
-        double  sign     = isTarget ? +1.0 : -1.0;
+        double sign = isTarget ? +1.0 : -1.0;
 
         MCTSNode best    = null;
-        double   bestVal = Double.NEGATIVE_INFINITY;
+        double bestVal = Double.NEGATIVE_INFINITY;
 
         double sqrtN = Math.sqrt(visits);
-        double c     = selectionCoefficient;
+        double c = selectionCoefficient;
         synchronized (children) {
             for (MCTSNode child : children) {
                 // value term: 0 if unvisited, else average reward
                 double q = (child.visits > 0)
                         ? (child.score / child.visits)
                         : 0.0;
-
+                double passBonus = child.getAction() instanceof PassAbility ? 0.05 : 0;
                 // exploration term still blows up when visits==0
-                double u = c * child.prior * (sqrtN / (1 + child.visits));
+                double u = 1 * (child.prior + 0.3 + passBonus) * (sqrtN / (1 + child.visits));
 
                 // combined PUCT
                 double val = sign * q + u;
