@@ -20,6 +20,7 @@ import mage.constants.Zone;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
 import mage.players.Player;
+import mage.target.Target;
 import mage.target.TargetCard;
 import org.apache.log4j.Logger;
 
@@ -36,15 +37,19 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class MCTSPlayer extends ComputerPlayer {
 
-    private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
-    private transient ConcurrentLinkedQueue<Ability> allActions; // all possible abilities to play (copies with already selected targets)
+
     private NextAction nextAction;
     public boolean isRoot = false;
     public long dirichletSeed = 0;
+    public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
+    public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
+
+    private int chooseTargetCount = 0;
+
 
 
     public enum NextAction {
-        PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS
+                PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET
     }
 
     public MCTSPlayer(UUID id) {
@@ -217,5 +222,40 @@ public class MCTSPlayer extends ComputerPlayer {
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         game.pause();
         nextAction = NextAction.SELECT_BLOCKERS;
+    }
+    public static void getAllPossible(Set<Set<UUID>> out, Set<UUID> possible, Target target, Ability source, Game game, UUID myID) {
+        if (target.isChosen(game)) out.add(new HashSet<>(target.getTargets()));
+        for(UUID id : possible) {
+            if (!target.canTarget(myID, id, source, game)) continue;
+            target.add(id, game);
+            if(out.contains(new HashSet<>(target.getTargets()))) {
+                target.remove(id);
+                continue;
+            }
+            Set<UUID> copy = new HashSet<>(possible);
+            copy.remove(id);
+            getAllPossible(out, copy, target, source, game, myID);
+            target.remove(id);
+        }
+    }
+    @Override
+    public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+        System.out.println("CALLING CHOOSE TARGET");
+        if(chooseTargetCount < chooseTargetAction.size()) {
+            System.out.println("is this happening");
+            for(UUID id : chooseTargetAction.get(chooseTargetCount)) {
+                if(!target.canTarget(getId(), id, source, game)) continue;
+                target.addTarget(id, source, game);
+                System.out.printf("tried target: %s ", game.getObject(id).toString());
+            }
+            System.out.println();
+            chooseTargetCount++;
+            return true;
+        }
+        Set<UUID> possible = target.possibleTargets(getId(), game);
+        getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
+        game.pause();
+        nextAction = NextAction.CHOOSE_TARGET;
+        return false;
     }
 }

@@ -39,10 +39,11 @@ public class StateEncoder {
     private int originalVectorSize;
     private Features features;
     public static BitSet featureVector;
-    private UUID opponentID;
-    private UUID myPlayerID;
+    public UUID opponentID;
+    public UUID myPlayerID;
     public List<BitSet> macroStateVectors = new ArrayList<>();
     public List<BitSet> microStateVectors = new ArrayList<>();
+    public List<Boolean> activeStates = new ArrayList<>();
 
     public List<Double> stateScores = new ArrayList<>();
     public static final int COMPRESSED_VECTOR_SIZE = 4000;
@@ -318,6 +319,7 @@ public class StateEncoder {
         //game metadata
         features.addFeature(game.getPhase().getType().name());
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
+        if(game.getPriorityPlayerId()==myPlayerID) features.addFeature("IsPriorityPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
 
@@ -360,6 +362,7 @@ public class StateEncoder {
     public void processMacroState(Game game) {
         processState(game);
         macroStateVectors.add((BitSet) featureVector.clone());
+        //activeStates.add(game.getActivePlayerId() == myPlayerID);
     }
 
     /*

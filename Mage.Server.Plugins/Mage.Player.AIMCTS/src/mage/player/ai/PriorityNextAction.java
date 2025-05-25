@@ -11,6 +11,7 @@ public class PriorityNextAction implements MCTSNodeNextAction{
 
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
+        node.macroState = game;
         List<MCTSNode> children = new ArrayList<>();
         List<Ability> abilities;
         if (!MCTSNode.USE_ACTION_CACHE)

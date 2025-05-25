@@ -57,8 +57,8 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             } else {
-                TestComputerPlayer7 t7 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
-                TestPlayer testPlayer = new TestPlayer(t7);
+                TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestPlayer testPlayer = new TestPlayer(t8);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             }
@@ -101,8 +101,8 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         labeledStates = new ArrayList<>();
     }
     public void set_encoder() {
-        ComputerPlayer8 c8 = (ComputerPlayer8)playerA.getComputerPlayer();
-        c8.setEncoder(encoder);
+        ComputerPlayer8 c8 = (ComputerPlayer8)playerA.getComputerPlayer(); c8.setEncoder(encoder);
+        c8 = (ComputerPlayer8)playerB.getComputerPlayer(); c8.setEncoder(encoder);
         encoder.setAgent(playerA.getId());
         encoder.setOpponent(playerB.getId());
     }
@@ -120,6 +120,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void reset_vectors() {
         encoder.macroStateVectors.clear();
         encoder.stateScores.clear();
+        encoder.activeStates.clear();
         ActionEncoder.actionVectors.clear();
     }
 
@@ -136,7 +137,6 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             // 1) decompress your raw state and action bits (you already have this)
             BitSet state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
             double[] action = ActionEncoder.actionVectors.get(i);
-
             // 2) get your raw minimax score and normalize into [-1,+1]
             double normScore = encoder.stateScores.get(i);
             //double normScore = rawScore / (double)Math.abs(GameStateEvaluator2.LOSE_GAME_SCORE);
@@ -196,10 +196,10 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
      * make a training set of 50 games
      */
     @Test
-    public void make_train_ds_X_50() {
+    public void make_train_ds_X_250() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 10; i++) {
+        for(int i = 0; i < 250; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -226,6 +226,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
             create_labeled_states();
+            Collections.shuffle(labeledStateBatch);
             labeledStates.addAll(labeledStateBatch.subList(0, 5));
             labeledStateBatch.clear();
             reset_game();

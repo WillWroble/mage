@@ -4,6 +4,7 @@ import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
 import mage.cards.Card;
+import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
@@ -12,13 +13,12 @@ import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
+import mage.target.Target;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -35,9 +35,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected int maxThinkTime;
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
     protected int poolSize;
-
+    public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
+    public ArrayList<Set<UUID>> chosenChooseTargetActions = new ArrayList<>();
     protected ExecutorService threadPoolSimulations = null;
-
+    public static Game macroState;
+    public static UUID macroPlayerId;
+    public static Ability lastAction;
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
         human = false;
@@ -62,6 +65,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
+        chosenChooseTargetActions.clear();
         if (game.getTurnStepType() == PhaseStep.UPKEEP) {
             if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
                 logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList(hand.getCards(game)));
@@ -94,11 +98,17 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             player.setNextAction(action);
             player.isRoot = true;
             root = new MCTSNode(playerId, sim);
+            player.chooseTargetOptions = chooseTargetOptions;
+            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
+            root.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
+
         }
         applyMCTS(game, action);
         if (root != null && root.bestChild() != null) {
-
+            macroState = root.macroState;
+            macroPlayerId = getId();
             root = root.bestChild();
+            lastAction = root.action;
             root.emancipate();
         }
     }
@@ -106,7 +116,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void getNextAction(Game game, NextAction nextAction) {
         if (root != null) {
             MCTSNode newRoot;
-            newRoot = root.getMatchingState(game.getState().getValue(game, playerId));
+            newRoot = root.getMatchingState(game.getState().getValue(game, playerId), chosenChooseTargetActions);
             if (newRoot != null) {
                 newRoot.emancipate();
             } else
@@ -156,6 +166,28 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         logger.info(sb.toString());
         MCTSNode.logHitMiss();
     }
+    @Override
+    public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+//        if(root == null || root.children.isEmpty()) {
+//            System.out.println("chooseTarget: falling back");
+//            return super.chooseTarget(outcome, target, source, game);
+//        }
+        Set<UUID> possible = target.possibleTargets(getId(), game);
+        chooseTargetOptions.clear();
+        MCTSPlayer.getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
+        getNextAction(game, NextAction.CHOOSE_TARGET);
+        Set<UUID> choice = root.chooseTargetAction.get(root.chooseTargetAction.size()-1);
+        for(UUID targetId : choice) {
+            Set<UUID> chosen = new HashSet<>();
+            if(target.canTarget(targetId, source, game)) {
+                target.addTarget(targetId, source, game);
+                chosen.add(targetId);
+                System.out.printf("Targeting %s\n", game.getObject(targetId).toString());
+            }
+            chosenChooseTargetActions.add(chosen);
+        }
+        return target.isChosen(game);
+    }
 
     protected long totalThinkTime = 0;
     protected long totalSimulations = 0;
@@ -183,6 +215,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 for (int i = 0; i < poolSize; i++) {
                     Game sim = createMCTSGame(game);
                     MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
+                    player.chooseTargetOptions = chooseTargetOptions;
+                    player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
                     player.setNextAction(action);
                     MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);
                     tasks.add(exec);
@@ -323,6 +357,18 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             } else {
                 newPlayer.getLibrary().shuffle();
             }
+            mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
+        }
+        mcts.resume();
+        return mcts;
+    }
+    public static Game createCompleteMCTSGame(Game game) {
+        Game mcts = game.createSimulationForAI();
+        for (Player copyPlayer : mcts.getState().getPlayers().values()) {
+            Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
+            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId());
+            newPlayer.restore(origPlayer);
+            newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
         }
         mcts.resume();

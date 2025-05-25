@@ -1,5 +1,7 @@
 package mage.player.ai;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 
@@ -23,6 +25,14 @@ public class MCTSExecutor implements Callable<Boolean> {
         this.thinkTime = thinkTime;
         this.simCount = 0;
         root = new MCTSNode(playerId, sim);
+        root.chooseTargetAction = new ArrayList<>(((MCTSPlayer) sim.getPlayer(playerId)).chooseTargetAction);
+    }
+    public MCTSExecutor(Game sim, UUID playerId, int thinkTime, MCTSNode givenRoot) {
+        this.playerId = playerId;
+        this.thinkTime = thinkTime;
+        this.simCount = 0;
+        root = new MCTSNode(playerId, sim);
+        if(givenRoot != null) root.chooseTargetAction = new ArrayList<>(givenRoot.chooseTargetAction);
     }
     public MCTSExecutor(UUID playerId, int thinkTime, MCTSNode givenRoot) {
         this.playerId = playerId;
@@ -84,7 +94,7 @@ public class MCTSExecutor implements Callable<Boolean> {
      * @return an integer evaluation of the node's state
      */
     protected double rollout(MCTSNode node) {
-        return node.simulate(this.playerId);//-1 or 1
+        return 0;//node.simulate(this.playerId);//-1 or 1
     }
 
     public MCTSNode getRoot() {

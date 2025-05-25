@@ -1,22 +1,10 @@
 package mage.player.ai;
 
 import ai.onnxruntime.OrtException;
-import javafx.util.Pair;
-import mage.abilities.Ability;
-import mage.abilities.ActivatedAbility;
-import mage.abilities.common.PassAbility;
-import mage.cards.Cards;
-import mage.choices.Choice;
-import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.combat.Combat;
-import mage.game.combat.CombatGroup;
-import mage.game.turn.Phase;
 import mage.player.ai.MCTSPlayer.NextAction;
-import mage.players.Player;
-import mage.target.TargetCard;
 import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
@@ -172,6 +160,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         for (int i = 0; i < poolSize; i++) {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
+            player.chooseTargetOptions = chooseTargetOptions;
+            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
             player.setNextAction(action);
             player.dirichletSeed = seed;
             // Create an executor that overrides rollout() to use evaluateState().
@@ -270,6 +260,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             player.setNextAction(action);
             player.isRoot = true;
             root = new MCTSNode(playerId, sim);
+            player.chooseTargetOptions = chooseTargetOptions;
+            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
+            root.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
         }
         applyMCTS(game, action);
         if (root != null) {
@@ -280,7 +273,10 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 encoder.stateScores.add(root.score);
                 ActionEncoder.addAction(getActionVec());
             }
+            macroState = root.macroState;
+            macroPlayerId = getId();
             root = best;
+            lastAction = root.action;
             root.emancipate();
         }
     }
@@ -300,5 +296,4 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         return childVisits;
     }
-
 }

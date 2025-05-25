@@ -34,7 +34,6 @@ public class MCTSNode {
     private static final double selectionCoefficient = Math.sqrt(2.0);
     private static final double passRatioTolerance = 0.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
-    private final Object actionEncoderLock = new Object();
 
 
     private boolean stackIsEmpty = true;
@@ -44,12 +43,15 @@ public class MCTSNode {
     public double score = 0;
     private MCTSNode parent = null;
     public final List<MCTSNode> children = new ArrayList<>();
-    private Ability action;
+    public Ability action;
+    public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
     private Game game;
-    private Combat combat;
+    public Game macroState;
+    public Combat combat;
     private final String stateValue;
     private final String fullStateValue;
-    private UUID playerId;
+    public UUID playerId;
+    public UUID macroPlayerId;
     private boolean terminal = false;
     public UUID targetPlayer;
     public int depth = 1;
@@ -65,6 +67,9 @@ public class MCTSNode {
         this.fullStateValue = game.getState().getValue(true, game);
         this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
+        this.macroState = ComputerPlayerMCTS.macroState;
+        this.macroPlayerId = ComputerPlayerMCTS.macroPlayerId;
+        this.action = ComputerPlayerMCTS.lastAction;
         setPlayer();
         nodeCount = 1;
 //        logger.info(this.stateValue);
@@ -79,6 +84,9 @@ public class MCTSNode {
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
         this.action = action;
+        this.macroState = parent.macroState;
+        this.macroPlayerId = parent.playerId;
+
         setPlayer();
         nodeCount++;
 //        logger.info(this.stateValue);
@@ -93,6 +101,9 @@ public class MCTSNode {
         this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
+        this.macroState = parent.macroState;
+        this.macroPlayerId = parent.playerId;
+
         setPlayer();
         nodeCount++;
 //        logger.info(this.stateValue);
@@ -234,9 +245,10 @@ public class MCTSNode {
                     player.dirichletSeed = 0;
                 }
             }
-
-            if (!children.isEmpty()) game = null;
-
+            if (!children.isEmpty()) {
+                game = null;
+                macroState = null;
+            }
         }
     }
 
@@ -416,13 +428,13 @@ public class MCTSNode {
      * @param state - the game state that we are looking for
      * @return the matching state or null if no match is found
      */
-    public MCTSNode getMatchingState(String state) {
+    public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
 
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
-            if (current.stateValue.equals(state))
+            if (current.stateValue.equals(state) && current.chooseTargetAction.equals(chosen))
                 return current;
             for (MCTSNode child: current.children) {
                 queue.add(child);
@@ -433,7 +445,7 @@ public class MCTSNode {
 
     public void merge(MCTSNode merge) {
         // Check that states match; if not, no merge occurs.
-        if (!stateValue.equals(merge.stateValue)) {
+        if (!stateValue.equals(merge.stateValue) || !merge.chooseTargetAction.equals(chooseTargetAction)) {
             logger.info("mismatched merge states at root");
             return;
         }
@@ -462,7 +474,7 @@ public class MCTSNode {
                 for (MCTSNode child : tempChildren) {
                     if (mergeChild.action != null && child.action != null) {
                         if (mergeChild.action.toString().equals(child.action.toString())) {
-                            if (!mergeChild.stateValue.equals(child.stateValue)) {
+                            if (!mergeChild.stateValue.equals(child.stateValue) || !merge.chooseTargetAction.equals(chooseTargetAction)) {
                                 // Record mismatch if needed; skip merge.
                             } else {
                                 // Recursively merge the matching child.
@@ -473,7 +485,7 @@ public class MCTSNode {
                         }
                     } else if (mergeChild.combat != null && child.combat != null &&
                             mergeChild.combat.getValue().equals(child.combat.getValue())) {
-                        if (!mergeChild.stateValue.equals(child.stateValue)) {
+                        if (!mergeChild.stateValue.equals(child.stateValue) || !merge.chooseTargetAction.equals(chooseTargetAction)) {
                             // Record mismatch if needed.
                         } else {
                             child.merge(mergeChild);

@@ -7,6 +7,7 @@ import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.player.ai.ComputerPlayer7;
+import mage.player.ai.ComputerPlayerMinimaxOpponent;
 import mage.target.Target;
 import mage.target.TargetCard;
 
@@ -18,7 +19,7 @@ import mage.target.TargetCard;
  * @author JayDi85
  */
 
-public final class TestComputerPlayer7 extends ComputerPlayer7 {
+public final class TestComputerPlayer7 extends ComputerPlayerMinimaxOpponent {
 
     private TestPlayer testPlayerLink;
 

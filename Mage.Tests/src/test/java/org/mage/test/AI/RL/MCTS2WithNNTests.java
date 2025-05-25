@@ -78,6 +78,9 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         //seed = 233400479;
         //seed = 1603827803;
         //seed = -99205609;
+
+        //seed = 144516733;
+        //seed = 197732112;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }

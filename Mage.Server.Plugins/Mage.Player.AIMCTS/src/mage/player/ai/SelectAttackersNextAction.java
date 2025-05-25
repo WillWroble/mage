@@ -11,6 +11,7 @@ import static mage.player.ai.MCTSNode.getAttacks;
 public class SelectAttackersNextAction implements MCTSNodeNextAction{
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
+        node.macroState = game;
         List<MCTSNode> children = new ArrayList<>();
         List<List<UUID>> attacks;
         if (!MCTSNode.USE_ACTION_CACHE)

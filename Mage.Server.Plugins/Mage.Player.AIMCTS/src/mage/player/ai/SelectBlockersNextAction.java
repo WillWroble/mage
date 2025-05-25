@@ -12,6 +12,7 @@ import static mage.player.ai.MCTSNode.getBlocks;
 public class SelectBlockersNextAction implements MCTSNodeNextAction{
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
+        node.macroState = game;
         List<MCTSNode> children = new ArrayList<>();
         List<List<List<UUID>>> blocks;
         if (!MCTSNode.USE_ACTION_CACHE)
