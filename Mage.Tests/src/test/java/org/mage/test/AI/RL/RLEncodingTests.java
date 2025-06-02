@@ -1,5 +1,6 @@
 package org.mage.test.AI.RL;
 
+import com.j256.ormlite.stmt.query.In;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -232,7 +233,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         execute();
         //save state after 5 turns
         int bookmarkedState = currentGame.bookmarkState();
-        BitSet savedVec = StateEncoder.featureVector;
+        Set<Integer> savedVec = StateEncoder.featureVector;
         reset_game();
         //simulate another 5 turns
         setStrictChooseMode(true);
@@ -241,7 +242,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         //reload state and read it
         currentGame.restoreState(bookmarkedState, "rolling_back_for_testing");
         encoder.processState(currentGame);
-        BitSet newVec = StateEncoder.featureVector;
+        Set<Integer> newVec = StateEncoder.featureVector;
         System.out.println(savedVec);
         System.out.println(newVec);
         assert (savedVec.equals(newVec));

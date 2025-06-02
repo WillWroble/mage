@@ -10,10 +10,7 @@ import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.BitSet;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -65,37 +62,54 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         return new ComputerPlayerMCTS2(this);
     }
 
-    /**
-     * Evaluate the game state for the given player.
-     * Replace this placeholder with your actual value network call.
-     *
-     * @param node     the game state to evaluate
-
-     */
     protected double evaluateState(MCTSNode node) {
-        //return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+        // 1) Get the active GLOBAL feature indices for the current state.
+        // This replaces the old way of getting a deck-local BitSet and converting it.
+        int[] activeGlobalIndices;
+        synchronized(encoderLock) { // Keep synchronization if encoder access needs it
+            encoder.processState(node.getGame()); // This should prepare the raw features
 
-        // 1) First, encode the state exactly as you do in processState(),
-        //    but return it as a float[] of length S (with 0f/1f).
-        BitSet bits;
-        NeuralNetEvaluator.InferenceResult out;
-        synchronized(encoderLock) {
-            encoder.processState(node.getGame());
-            bits = encoder.getCompressedVector(StateEncoder.featureVector);
-
-            float[] input = new float[4000];
-            for (int i = 0; i < 4000; i++) input[i] = bits.get(i) ? 1.0f : 0.0f;
-
-            // 2) Run the ONNX model
-            out = nn.infer(input);
+            // You need a method in your StateEncoder that returns the
+            // final list of active GLOBAL indices. This method would:
+            //   a. Get the raw features from the current game state.
+            //   b. Map them to global indices (using rawToReduced, assigning new ones if needed).
+            //   c. Apply the ignoreList.
+            // Let's assume such a method exists, e.g., encoder.getActiveGlobalIndices();
+            // For this example, I'll use a placeholder for how you get these.
+            // If encoder.getCompressedVector still returns a Set<Integer> of global indices:
+            Set<Integer> globalIndicesSet = encoder.getCompressedVector(StateEncoder.featureVector);
+            activeGlobalIndices = globalIndicesSet.stream().mapToInt(Integer::intValue).toArray();
+            // Or, if you have a more direct method:
+            // activeGlobalIndices = encoder.getFinalActiveGlobalIndicesArray();
         }
 
+        // 2) Prepare inputs for the ONNX model (expecting EmbeddingBag style input)
+        //    The exact format depends on how your ONNX runtime library takes tensor inputs.
+        //    Typically, for a single inference, you'd have:
+        //    - indices: A 1D array/tensor of the activeGlobalIndices.
+        //    - offsets: A 1D array/tensor like [0] indicating the start of the single sample.
+
+        //    Let's assume your nn.infer() is adapted to take these.
+        //    You might need to convert activeGlobalIndices to a long[] or specific tensor format
+        //    required by your Java ONNX runtime.
+        //    For example, if it needs long[] for indices:
+        long[] onnxIndices = new long[activeGlobalIndices.length];
+        for (int i = 0; i < activeGlobalIndices.length; i++) {
+            onnxIndices[i] = activeGlobalIndices[i];
+        }
+        long[] onnxOffsets = new long[]{0}; // For a single sample batch
+
+        NeuralNetEvaluator.InferenceResult out;
+        synchronized(encoderLock) { // If nn.infer() also needs sync with encoder or is not thread-safe
+            // 3) Run the ONNX model with the new sparse input format
+            //    The signature of nn.infer() would need to change.
+            out = nn.infer(onnxIndices);
+        }
+
+        // 4) Process outputs (this part remains the same)
         node.policy = out.policy;
-        // 3a) If you just want a value‐based rollout, return the value:
-        return (out.value);  // scale or cast to int as you like
-
+        return out.value;
     }
-
     public void setEncoder(StateEncoder enc) {
         encoder = enc;
     }

@@ -16,6 +16,8 @@ public class Features  implements Serializable {
     private static final long serialVersionUID = 1L;
     public int globalIndexCount;
     Set<Integer> ignoreList;
+    Map<Integer, Integer> rawToReduced;
+    int version;
 
     private final Map<String, Map<Integer, Features>> subFeatures;
     private final Map<String, Map<Integer, Integer>> features;
@@ -138,7 +140,7 @@ public class Features  implements Serializable {
             features.put(name, n);
             if(printNewFeatures) System.out.printf("New feature %s discovered in %s, reserving index %d for this feature\n", name, featureName, n.get(1));
         }
-        StateEncoder.featureVector.set(features.get(name).get(occurrences.get(name)),true);
+        StateEncoder.featureVector.add(features.get(name).get(occurrences.get(name)));
     }
     public void addNumericFeature(String name, int num) {
         addNumericFeature(name, num, true);
@@ -148,6 +150,7 @@ public class Features  implements Serializable {
         if(parent != null && callParent && passToParent) {
             parent.addNumericFeature(name, num);
             //keep track of numerical sum for parents
+            /*
             for(int i = 0; i < num; i++) {
                 parent.addFeature(name + "_SUM", false);
             }
@@ -158,6 +161,7 @@ public class Features  implements Serializable {
                     c.addFeature(name + "_SUM", false);
                 }
             }
+            */
         }
 
         //also adds copy to number right below this one which will recursively increment the occurrences of each lesser feature
@@ -198,7 +202,7 @@ public class Features  implements Serializable {
             if(printNewFeatures) System.out.printf("New numeric feature %s discovered with %d in %s, reserving index %d for this feature at %d\n", name,
                     num, featureName, StateEncoder.indexCount-1, num);
         }
-        StateEncoder.featureVector.set(numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num)),true);
+        StateEncoder.featureVector.add(numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num)));
     }
     public void stateRefresh() {
         categories.clear();

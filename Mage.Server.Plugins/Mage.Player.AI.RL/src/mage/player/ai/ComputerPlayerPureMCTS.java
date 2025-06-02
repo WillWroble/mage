@@ -5,6 +5,7 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.player.ai.MCTSPlayer.NextAction;
+import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
@@ -122,6 +123,8 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
         for (int i = 0; i < poolSize; i++) {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
+            player.chooseTargetOptions = chooseTargetOptions;
+            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
             player.setNextAction(action);
             // Create an executor that overrides rollout() to use evaluateState().
             MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime) {

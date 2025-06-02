@@ -26,7 +26,8 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     private String deckNameB = "simplegreen.dck";
     private List<LabeledState> labeledStates = new ArrayList<>();
     private List<LabeledState> labeledStateBatch = new ArrayList<>();
-    private StateEncoder encoder;
+    public StateEncoder encoder;
+
     //private Set<Integer> ignore;
     //private Map<String, Integer> actions;
     // File where the persistent mapping is stored
@@ -135,7 +136,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
             // 1) decompress your raw state and action bits (you already have this)
-            BitSet state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
+            Set<Integer> state = encoder.macroStateVectors.get(i);//encoder.getCompressedVector(encoder.macroStateVectors.get(i)); - compress later
             double[] action = ActionEncoder.actionVectors.get(i);
             // 2) get your raw minimax score and normalize into [-1,+1]
             double normScore = encoder.stateScores.get(i);
@@ -166,25 +167,91 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         for (LabeledState ls : labeledStates) {
             StringBuilder sb1 = new StringBuilder();
             for (int i = 0; i < 100; i++) {
-                sb1.append(ls.stateVector.get(i) ? "1" : "0");
-                //sb1.append(", ");
+                sb1.append(ls.stateVector[i]);
+                sb1.append(" ");
             }
 
             System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), Arrays.toString(ls.actionVector), ls.resultLabel);
+        }
+    }
+
+    /**
+     * can remove items from ignore list
+     * @param oldList
+     * @param newList
+     * @return
+     */
+    public Set<Integer> combine_ignore_lists(Set<Integer> oldList, Set<Integer> newList) {
+        Set<Integer> updatedIgnoreList = new HashSet<>();
+
+        int boundaryForOldFeatures = this.encoder.initialRawSize;
+
+
+        for (int i = 0; i < boundaryForOldFeatures; i++) {
+            if (oldList.contains(i) && newList.contains(i)) {
+                updatedIgnoreList.add(i);
+            }
+        }
+
+        for (Integer featureIndexInNewList : newList) {
+            if (featureIndexInNewList >= boundaryForOldFeatures) {
+                updatedIgnoreList.add(featureIndexInNewList);
+            }
+        }
+
+        return updatedIgnoreList;
+    }
+
+    /**
+     * can only grow ignore list
+     * @param oldList
+     * @param newList
+     * @return
+     */
+    public Set<Integer> union_ignore_lists(Set<Integer> oldList, Set<Integer> newList) {
+        Set<Integer> updatedIgnoreList = new HashSet<>();
+
+        int boundaryForOldFeatures = this.encoder.initialRawSize;
+
+
+        for (int i = 0; i < boundaryForOldFeatures; i++) {
+            if (oldList.contains(i)) {
+                updatedIgnoreList.add(i);
+            }
+        }
+
+        for (Integer featureIndexInNewList : newList) {
+            if (featureIndexInNewList >= boundaryForOldFeatures) {
+                updatedIgnoreList.add(featureIndexInNewList);
+            }
+        }
+
+        return updatedIgnoreList;
+    }
+
+    /**
+     * use the current encoder's compression at the end so it can use the new ignore list
+     */
+    public void compress_labeled_states() {
+        for (LabeledState ls : labeledStates) {
+            ls.compress(encoder);
         }
     }
     @Test
     public void make_ignore_X_50() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 50; i++) {
+        for(int i = 0; i < 10; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        encoder.ignoreList.addAll(new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors)));
+        //assert(!encoder.ignoreList.isEmpty());
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
         //actions = new HashMap<>(ActionEncoder.actionMap);
         persistData();
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
@@ -199,7 +266,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void make_train_ds_X_250() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 250; i++) {
+        for(int i = 0; i < 5; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -209,9 +276,16 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        compress_labeled_states();
+
         print_labeled_states();
         persistLabeledStates(TRAIN_OUT_FILE);
         persistData();
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
     }
 
     /**
@@ -232,9 +306,16 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        compress_labeled_states();
+
         print_labeled_states();
         persistLabeledStates(TEST_OUT_FILE);
         persistData();
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
     }
     @After
     public void print_vector_size() {
@@ -246,22 +327,27 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         System.out.println();
     }
     private void persistLabeledStates(String filename) {
-        try (DataOutputStream out = new DataOutputStream(
-                new BufferedOutputStream(new FileOutputStream(filename)))) {
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(filename))))) {
 
             // 1) Header
             int n = labeledStates.size();
-            int S = StateEncoder.COMPRESSED_VECTOR_SIZE;          // total feature count
-            int wordsPerState = (S + 63) >>> 6;       // ⌈S/64⌉ longs per state
+
+            // 'S' now represents the TOTAL size of your global feature vocabulary.
+            // The constant should be updated to reflect this.
+            int S = StateEncoder.GLOBAL_FEATURE_COUNT;
+
+            // 'A' is still the size of the policy vector.
             int A = 128;
 
+            // The new, simpler header:
             out.writeInt(n);
-            out.writeInt(S);
-            out.writeInt(wordsPerState);
-            out.writeInt(A);    // <-- NEW: tells reader “we’ll write A doubles next”
+            out.writeInt(S); // Tells PyTorch num_embeddings for the EmbeddingBag
+            out.writeInt(A); // Tells PyTorch the size of the policy vector
 
             // 2) Body
             for (LabeledState ls : labeledStates) {
+                // This now calls your MODIFIED LabeledState.persist() method,
+                // which writes a variable-length list of indices.
                 ls.persist(out);
             }
         } catch (IOException e) {

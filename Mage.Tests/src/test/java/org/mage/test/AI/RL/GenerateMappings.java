@@ -22,10 +22,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
-public class GenerateMappings extends CardTestPlayerBaseAI {
+public class GenerateMappings extends MinimaxVectorExtractionTests {
     private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
-    private StateEncoder encoder;
+    //private StateEncoder encoder;
     private int seed;
     //private Set<Integer> ignore;
     //private Map<String, Integer> actions;
@@ -121,6 +121,18 @@ public class GenerateMappings extends CardTestPlayerBaseAI {
         set_encoder();
 
     }
+    @Test
+    public void print_current_ignore_list() {
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.print("RAW TO REDUCED MAPPING: ");
+        for(int i : encoder.rawToReduced.keySet()) {
+            if(i < encoder.rawToReduced.get(i)) System.out.println("-here-");
+            System.out.printf("[%d => %d]", i, encoder.rawToReduced.get(i));
+        }
+        System.out.println();
+        System.out.println(encoder.ignoreList.toString());
+    }
     /**
      * uses saved list of actions and states to make a labeled vector batch for training
      */
@@ -129,15 +141,16 @@ public class GenerateMappings extends CardTestPlayerBaseAI {
     public void make_ignore_X_50() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 10; i++) {
+        for(int i = 0; i < 50; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        System.out.println(encoder.macroStateVectors.size());
-        encoder.ignoreList.addAll(new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors)));
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
         //actions = new HashMap<>(ActionEncoder.actionMap);
         persistData();
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());

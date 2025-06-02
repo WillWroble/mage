@@ -24,12 +24,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
-public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
+public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
     private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
     private List<LabeledState> labeledStates = new ArrayList<>();
     private List<LabeledState> labeledStateBatch = new ArrayList<>();
-    private StateEncoder encoder;
+    //private StateEncoder encoder;
     //private Set<Integer> ignore;
     //private Map<String, Integer> actions;
     // File where the persistent mapping is stored
@@ -48,7 +48,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
 
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
-        ComputerPlayerMCTS2.PATH_TO_NN = "C:\\Users\\WillWroble\\Documents\\GitHub\\MageZero\\exports\\UWTempo\\UWTempo2.onnx";
+        ComputerPlayerMCTS2.PATH_TO_NN = "C:\\Users\\WillWroble\\Documents\\GitHub\\MageZero\\exports\\UWTempo\\ver2\\Model.onnx";
 
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
         playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\" + deckNameA);
@@ -81,6 +81,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
 
         //seed = 144516733;
         //seed = 197732112;
+        seed = -781685651;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
@@ -159,7 +160,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
             // 1) decompress your raw state and action bits (you already have this)
-            BitSet state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
+            Set<Integer> state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
             double[] action = ActionEncoder.actionVectors.get(i);
 
             // 2) get your raw minimax score and normalize into [-1,+1]
@@ -191,7 +192,7 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         for (LabeledState ls : labeledStates) {
             StringBuilder sb1 = new StringBuilder();
             for (int i = 0; i < 100; i++) {
-                sb1.append(ls.stateVector.get(i) ? "1" : "0");
+                sb1.append(ls.stateVector[i]);
                 //sb1.append(", ");
             }
 
@@ -208,6 +209,11 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
         execute();
 
     }
+    @Test
+    public void print_current_ignore_list() {
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+    }
     /**
      * make a training set of 50 games
      */
@@ -215,7 +221,8 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
     public void make_train_ds_X_50() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 50; i++) {
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        for(int i = 0; i < 5; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -225,7 +232,11 @@ public class MCTS2WithNNTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        encoder.ignoreList.addAll(new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors)));
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        compress_labeled_states();
+
         print_labeled_states();
         persistLabeledStates(TRAIN_OUT_FILE);
         persistData();

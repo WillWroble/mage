@@ -38,17 +38,20 @@ public class StateEncoder {
     public static int reducedIndexCount;
     private int originalVectorSize;
     private Features features;
-    public static BitSet featureVector;
+    public static Set<Integer> featureVector = new HashSet<>();
     public UUID opponentID;
     public UUID myPlayerID;
-    public List<BitSet> macroStateVectors = new ArrayList<>();
-    public List<BitSet> microStateVectors = new ArrayList<>();
+    public List<Set<Integer>> macroStateVectors = new ArrayList<>();
+    public List<Set<Integer>> microStateVectors = new ArrayList<>();
+    public Map<Integer, Integer> rawToReduced = new HashMap<>();
     public List<Boolean> activeStates = new ArrayList<>();
 
     public List<Double> stateScores = new ArrayList<>();
     public static final int COMPRESSED_VECTOR_SIZE = 4000;
-    public int initialSize = 4000;
-
+    public static final int GLOBAL_FEATURE_COUNT = 100000;
+    public int initialSize = 0;
+    public int initialRawSize = 0;//original max index
+    public int mappingVersion = 0;
 
     public Set<Integer> ignoreList;
 
@@ -58,7 +61,6 @@ public class StateEncoder {
         reducedIndexCount = 1; //pending features map to zero
         originalVectorSize = 0;
         features = new Features();
-        featureVector = new BitSet(30000);
         ignoreList = new HashSet<>();
     }
     public void setAgent(UUID me) {
@@ -184,7 +186,8 @@ public class StateEncoder {
         }
         if(p.isCreature(game)) {
             if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
-            if(p.canBlock(opponentID, game)) f.addFeature("CanBlock"); //use p.canBlock()
+            if(p.canBlock(opponentID, game)) f.addFeature("CanBlock");
+            f.addNumericFeature("Damage", p.getDamage());
         }
     }
     public void processCardInGraveyard(Card c, Game game, Features f) {
@@ -351,17 +354,20 @@ public class StateEncoder {
         //lastly do opponent
         processOpponentState(game);
 
+        //mapping version
+        features.addNumericFeature("Mapping Version", mappingVersion);
+
         //update reduced vector
         //updateReducedVector();
         //stateVectors.add(Arrays.copyOf(featureVector, 30000));
     }
     public void processMicroState(Game game) {
         processState(game);
-        microStateVectors.add((BitSet) featureVector.clone());
+        microStateVectors.add(new HashSet<>(featureVector));
     }
     public void processMacroState(Game game) {
         processState(game);
-        macroStateVectors.add((BitSet) featureVector.clone());
+        macroStateVectors.add(new HashSet<>(featureVector));
         //activeStates.add(game.getActivePlayerId() == myPlayerID);
     }
 
@@ -414,20 +420,45 @@ public class StateEncoder {
         //lastly update original size
         originalVectorSize = indexCount;
     }
-    */
-    public BitSet getCompressedVector(BitSet rawState) {
-        BitSet state = new BitSet(4000);
-        for(int k = 0, j = 0; j < indexCount && k < initialSize && k < 4000; j++) {
-            if(!ignoreList.contains(j)) {
-                state.set(k++, rawState.get(j));
+    /**
+     * Takes an array of raw indices, filters out those present in the ignoreList,
+     * and returns a new array of the remaining indices.
+     *
+     * @param rawIndices The input array of feature indices.
+     * @return A new int[] containing only the indices not in the ignoreList.
+     */
+    public int[] getCompressedVectorArray(int[] rawIndices) {
+        Set<Integer> filteredIndicesSet = new HashSet<>();
+
+        for (int index : rawIndices) {
+            if (!this.ignoreList.contains(index)) { // Assuming ignoreList is a member
+                filteredIndicesSet.add(index);
             }
         }
-        return state;
+
+        // Convert the Set<Integer> to an int[]
+
+        return filteredIndicesSet.stream()
+                .mapToInt(Integer::intValue)
+                .toArray();
     }
+    public Set<Integer> getCompressedVector(Set<Integer> rawIndices) {
+        Set<Integer> filteredIndicesSet = new HashSet<>();
+
+        for (int index : rawIndices) {
+            if (!this.ignoreList.contains(index)) { // Assuming ignoreList is a member
+                filteredIndicesSet.add(index);
+            }
+        }
+        return filteredIndicesSet;
+    }
+
     // Persist the persistent feature mapping
     public void persistMapping(String filename) throws IOException {
         features.globalIndexCount = indexCount;
         features.ignoreList = new HashSet<>(ignoreList);
+        features.rawToReduced = new HashMap<>(rawToReduced);
+        features.version = mappingVersion;
         features.saveMapping(filename);
     }
 
@@ -436,6 +467,9 @@ public class StateEncoder {
         features = Features.loadMapping(filename);
         indexCount = features.globalIndexCount;
         ignoreList = new HashSet<>(features.ignoreList);
+        rawToReduced = new HashMap<>(features.rawToReduced);
+        mappingVersion = features.version+1;
         initialSize = indexCount - ignoreList.size();
+        initialRawSize = indexCount;
     }
 }

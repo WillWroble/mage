@@ -240,6 +240,7 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+        if(false) return super.chooseTarget(outcome, target, source, game);
         System.out.println("CALLING CHOOSE TARGET");
         if(chooseTargetCount < chooseTargetAction.size()) {
             System.out.println("is this happening");

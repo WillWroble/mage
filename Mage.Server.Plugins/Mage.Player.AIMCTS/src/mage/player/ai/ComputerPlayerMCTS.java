@@ -88,6 +88,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return false;
         logLife(game);
         logger.info(game.getTurn().getValue(game.getTurnNum())+"choose action:" + root.getAction() + " success ratio: " + root.getWinRatio());
+        macroState = createCompleteMCTSGame(game);
+        macroPlayerId = getId();
         return true;
     }
 
@@ -105,8 +107,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         applyMCTS(game, action);
         if (root != null && root.bestChild() != null) {
-            macroState = root.macroState;
-            macroPlayerId = getId();
             root = root.bestChild();
             lastAction = root.action;
             root.emancipate();
@@ -152,6 +152,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             if (i < simulatedCombat.getGroups().size()) {
                 CombatGroup currentGroup = currentGroups.get(i);
                 CombatGroup simulatedGroup = simulatedCombat.getGroups().get(i);
+                if(currentGroup.getAttackers().isEmpty()) {
+                    System.out.println("Attacker not found - skipping");
+                    continue;
+                }
                 sb.append(game.getPermanent(currentGroup.getAttackers().get(0)).getName()).append(" with: ");
                 for (UUID blockerId : simulatedGroup.getBlockers()) {
                     // blockers can be added automaticly by requirement effects, so we must add only missing blockers
@@ -168,6 +172,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+        if(false) return super.chooseTarget(outcome, target, source, game);
 //        if(root == null || root.children.isEmpty()) {
 //            System.out.println("chooseTarget: falling back");
 //            return super.chooseTarget(outcome, target, source, game);
