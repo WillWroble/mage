@@ -431,6 +431,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
      */
     protected Integer addActionsTimed() {
         // run new game simulation in parallel thread
+        //assert (threadPoolSimulations != null);
         FutureTask<Integer> task = new FutureTask<>(() -> addActions(root, maxDepth, Integer.MIN_VALUE, Integer.MAX_VALUE));
         threadPoolSimulations.execute(task);
         try {

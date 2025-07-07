@@ -70,7 +70,8 @@ public interface Player extends MageItem, Copyable<Player> {
     enum PayLifeCostLevel {
         allAbilities, nonSpellnonActivatedAbilities, onlyManaAbilities, none
     }
-
+    Ability getLastActivated();
+    void setLastActivated(Ability a);
     /**
      * Current player is real life player (human). Try to use in GUI and network engine only.
      * <p>

@@ -93,6 +93,10 @@ import java.util.stream.Collectors;
  * If it's a temporary/auto-generated data then mark that field as transient and comment in copy constructor.
  */
 public abstract class GameImpl implements Game {
+    //shallow game history for AI
+    private Game lastPriority = this;
+    private UUID lastPriorityPlayerId;
+    public Ability lastPriorityAction;
 
     private static final int ROLLBACK_TURNS_MAX = 4;
     private static final String UNIT_TESTS_ERROR_TEXT = "Error in unit tests";
@@ -182,6 +186,8 @@ public abstract class GameImpl implements Game {
     }
 
     protected GameImpl(final GameImpl game) {
+        this.lastPriorityAction = game.lastPriorityAction;
+        this.lastPriorityPlayerId = game.lastPriorityPlayerId;
         //this.customData = game.customData; // temporary data, no need on game copy
         //this.losingPlayer = game.losingPlayer; // temporary data, no need on game copy
         this.aiGame = game.aiGame;
@@ -247,6 +253,48 @@ public abstract class GameImpl implements Game {
          */
     }
 
+    /**
+     * @return the game object from right before the last priority
+     */
+    @Override
+    public Game getLastPriority() {
+        return lastPriority;
+    }
+
+    /**
+     * @return the id of the player who last had priority
+     */
+    @Override
+    public UUID getLastPriorityPlayerId() {
+        return lastPriorityPlayerId;
+    }
+
+    /**
+     * @return the action made during the last priority
+     */
+    @Override
+    public Ability getLastPriorityAction() {
+        return lastPriorityAction;
+    }
+    /**
+     * @return the action made during the last priority
+     */
+    @Override
+    public void setLastPriority(Game game) {
+        lastPriority = game;
+    }
+//    @Override
+//    public void setMacroState(Game game) {
+//        macroState = game;
+//    }
+//    @Override
+//    public void setMacroPlayerId(UUID id) {
+//        macroPlayerId = id;
+//    }
+//    @Override
+//    public void setLastAction(Ability ability) {
+//        lastAction = ability;
+//    }
     @Override
     public boolean isSimulation() {
         return simulation;
@@ -255,6 +303,7 @@ public abstract class GameImpl implements Game {
     @Override
     public Game createSimulationForAI() {
         Game res = this.copy();
+        ((GameImpl) res).lastPriority = lastPriority;
         ((GameImpl) res).simulation = true;
         ((GameImpl) res).aiGame = true;
         return res;
@@ -948,7 +997,14 @@ public abstract class GameImpl implements Game {
         }
         return savedStates.size();
     }
-
+    // In mage.game.GameImpl.java
+    @Override
+    public void addCard(UUID cardId, Card card) {
+        // This public method allows our reconstructor to populate the master card map.
+        if (cardId != null && card != null) {
+            this.gameCards.put(cardId, card);
+        }
+    }
     /**
      * Warning, for inner usage only, use player.restoreState as much as possible instead
      *
@@ -1713,8 +1769,11 @@ public abstract class GameImpl implements Game {
                                 if (isPaused() || checkIfGameIsOver()) {
                                     return;
                                 }
+                                lastPriority = this.copy();
+                                lastPriorityPlayerId = player.getId();
                                 // resetPassed should be called if player performs any action
                                 if (player.priority(this)) {
+                                    assert (player.getLastActivated()!= null);
                                     if (executingRollback()) {
                                         return;
                                     }

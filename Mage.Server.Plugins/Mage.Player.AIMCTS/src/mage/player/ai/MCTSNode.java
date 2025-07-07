@@ -12,6 +12,7 @@ import mage.abilities.PlayLandAbility;
 import mage.abilities.common.PassAbility;
 import mage.cards.Card;
 import mage.game.Game;
+import mage.game.GameState;
 import mage.game.combat.Combat;
 import mage.game.turn.Step.StepPart;
 import mage.players.Player;
@@ -45,13 +46,13 @@ public class MCTSNode {
     public final List<MCTSNode> children = new ArrayList<>();
     public Ability action;
     public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
-    private Game game;
-    public Game macroState;
+    public List<Set<UUID>> chooseTriggeredAction = new ArrayList<>();
+    private Game game;//only contains shared game
+
     public Combat combat;
     private final String stateValue;
     private final String fullStateValue;
     public UUID playerId;
-    public UUID macroPlayerId;
     private boolean terminal = false;
     public UUID targetPlayer;
     public int depth = 1;
@@ -67,9 +68,10 @@ public class MCTSNode {
         this.fullStateValue = game.getState().getValue(true, game);
         this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
-        this.macroState = ComputerPlayerMCTS.macroState;
-        this.macroPlayerId = ComputerPlayerMCTS.macroPlayerId;
-        this.action = ComputerPlayerMCTS.lastAction;
+        this.action = game.getPlayer(game.getLastPriorityPlayerId()).getLastActivated();
+        if(this.action == null) {
+            logger.error("action in node is null\n");
+        }
         setPlayer();
         nodeCount = 1;
 //        logger.info(this.stateValue);
@@ -84,8 +86,6 @@ public class MCTSNode {
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
         this.action = action;
-        this.macroState = parent.macroState;
-        this.macroPlayerId = parent.playerId;
 
         setPlayer();
         nodeCount++;
@@ -95,19 +95,19 @@ public class MCTSNode {
     protected MCTSNode(MCTSNode parent, Game game, Combat combat) {
         this.targetPlayer = parent.targetPlayer;
         this.game = game;
+        //this.gameState = game.getState().copy();
         this.combat = combat;
         this.stateValue = game.getState().getValue(game, targetPlayer);
         this.fullStateValue = game.getState().getValue(true, game);
         this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
-        this.macroState = parent.macroState;
-        this.macroPlayerId = parent.playerId;
 
         setPlayer();
         nodeCount++;
 //        logger.info(this.stateValue);
     }
+    //dont use
     protected MCTSNode(MCTSNode node) {
         combat = null; action = null; game = null;
         if(node.combat != null) combat = node.combat.copy();
@@ -135,15 +135,29 @@ public class MCTSNode {
 
     }
     private void setPlayer() {
-        if (game.getStep().getStepPart() == StepPart.PRIORITY) {
-            playerId = game.getPriorityPlayerId();
-        } else {
-            if (game.getTurnStepType() == PhaseStep.DECLARE_BLOCKERS) {
-                playerId = game.getCombat().getDefenders().iterator().next();
-            } else {
-                playerId = game.getActivePlayerId();
+        //System.out.println("this happening");
+        for (Player p : game.getPlayers().values()) {
+            MCTSPlayer mctsP = (MCTSPlayer) p;
+            if(mctsP.lastToAct) {
+                playerId = p.getId();
+                return;
             }
         }
+        if(game.checkIfGameIsOver()) {
+            logger.info("TERMINAL STATE\n");
+            return;
+        }
+        System.out.println("this should not happen");
+        assert (false);
+//        if (game.getStep().getStepPart() == StepPart.PRIORITY) {
+//            playerId = game.getPriorityPlayerId();
+//        } else {
+//            if (game.getTurnStepType() == PhaseStep.DECLARE_BLOCKERS) {
+//                playerId = game.getCombat().getDefenders().iterator().next();
+//            } else {
+//                playerId = game.getActivePlayerId();
+//            }
+//        }
     }
     public MCTSNode select(UUID targetPlayerId) {
         // Single‐child shortcut
@@ -247,7 +261,6 @@ public class MCTSNode {
             }
             if (!children.isEmpty()) {
                 game = null;
-                macroState = null;
             }
         }
     }
@@ -429,6 +442,7 @@ public class MCTSNode {
      * @return the matching state or null if no match is found
      */
     public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen) {
+        if(true) return null;
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
 
@@ -436,6 +450,7 @@ public class MCTSNode {
             MCTSNode current = queue.remove();
             if (current.stateValue.equals(state) && current.chooseTargetAction.equals(chosen))
                 return current;
+            //System.out.printf("MISMATCH: %s\n %s\n",current.stateValue, state);
             for (MCTSNode child: current.children) {
                 queue.add(child);
             }
@@ -474,7 +489,7 @@ public class MCTSNode {
                 for (MCTSNode child : tempChildren) {
                     if (mergeChild.action != null && child.action != null) {
                         if (mergeChild.action.toString().equals(child.action.toString())) {
-                            if (!mergeChild.stateValue.equals(child.stateValue) || !merge.chooseTargetAction.equals(chooseTargetAction)) {
+                            if (!mergeChild.stateValue.equals(child.stateValue) || !mergeChild.chooseTargetAction.equals(child.chooseTargetAction)) {
                                 // Record mismatch if needed; skip merge.
                             } else {
                                 // Recursively merge the matching child.
@@ -485,8 +500,9 @@ public class MCTSNode {
                         }
                     } else if (mergeChild.combat != null && child.combat != null &&
                             mergeChild.combat.getValue().equals(child.combat.getValue())) {
-                        if (!mergeChild.stateValue.equals(child.stateValue) || !merge.chooseTargetAction.equals(chooseTargetAction)) {
+                        if (!mergeChild.stateValue.equals(child.stateValue) || !mergeChild.chooseTargetAction.equals(child.chooseTargetAction)) {
                             // Record mismatch if needed.
+
                         } else {
                             child.merge(mergeChild);
                             merged = true;
@@ -625,32 +641,10 @@ public class MCTSNode {
         if(children.isEmpty()) return 0;
         return visits/children.size();
     }
-    public int maxVisits() {
-        int max = -1;
-        for(MCTSNode n : children) {
-            if(n.visits > max) {
-                max = n.visits;
-            }
-        }
-        return max;
-    }
-    public int diffVisits() {
-        int max = -1;
-        int max2 = -1;//second highest
-        for(MCTSNode n : children) {
-            if(n.visits > max) {
-                max2 = max;
-                max = n.visits;
-            } else if(n.visits > max2) {
-                max2 = n.visits;
-            }
-        }
-        return max-max2;
-    }
     public Game getGame() {
+        //game.getState().restore(gameState);
         return game;
     }
-
     public static void logHitMiss() {
         if (USE_ACTION_CACHE) {
             StringBuilder sb = new StringBuilder();

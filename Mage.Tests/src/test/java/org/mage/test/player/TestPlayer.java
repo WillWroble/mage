@@ -169,6 +169,15 @@ public class TestPlayer implements Player {
         this.strictChooseMode = testPlayer.strictChooseMode;
     }
 
+    @Override
+    public Ability getLastActivated() {
+        return computerPlayer.getLastActivated();
+    }
+    @Override
+    public void setLastActivated(Ability a) {
+        computerPlayer.setLastActivated(a);
+    }
+
     public void addChoice(String choice) {
         // prepare face down
         // how-to fix:

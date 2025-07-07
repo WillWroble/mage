@@ -7,7 +7,7 @@ import java.util.*;
 
 /**
  *this hierarchical structure represents the mapping of every possible relevant feature encountered from a game state to
- * an index on a 200000 dimension binary vector. the reduced form of this vector (4000) will be used as input for both a policy and
+ * an index on a 200000 dimension binary vector. the reduced form of this vector (~6000) will be used as input for both a policy and
  * value neural network. To see how game features are mapped look at StateEncoder.java this data structure only handles and stores the
  * mappings
  * @author willwroble
@@ -75,7 +75,7 @@ public class Features  implements Serializable {
         return getSubFeatures(name, true);
     }
     public Features getSubFeatures(String name, boolean passToParent) {
-        //first add as a normal binary feature
+        //added as normal binary feature
         addFeature(name);
 
         int n = occurrences.get(name);
@@ -149,19 +149,6 @@ public class Features  implements Serializable {
         //usually add feature to parent/categories
         if(parent != null && callParent && passToParent) {
             parent.addNumericFeature(name, num);
-            //keep track of numerical sum for parents
-            /*
-            for(int i = 0; i < num; i++) {
-                parent.addFeature(name + "_SUM", false);
-            }
-            for(Features c : categories) {
-                c.addFeature(name);
-                //keep track of numerical sum for categories
-                for(int i = 0; i < num; i++) {
-                    c.addFeature(name + "_SUM", false);
-                }
-            }
-            */
         }
 
         //also adds copy to number right below this one which will recursively increment the occurrences of each lesser feature

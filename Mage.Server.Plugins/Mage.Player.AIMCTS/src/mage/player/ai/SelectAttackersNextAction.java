@@ -4,6 +4,7 @@ import mage.game.Game;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static mage.player.ai.MCTSNode.getAttacks;
@@ -11,7 +12,6 @@ import static mage.player.ai.MCTSNode.getAttacks;
 public class SelectAttackersNextAction implements MCTSNodeNextAction{
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
-        node.macroState = game;
         List<MCTSNode> children = new ArrayList<>();
         List<List<UUID>> attacks;
         if (!MCTSNode.USE_ACTION_CACHE)
@@ -30,5 +30,14 @@ public class SelectAttackersNextAction implements MCTSNodeNextAction{
         }
 
         return children;
+    }
+
+    @Override
+    public void applyAction(MCTSNode node, MCTSPlayer player, Game game) {
+        UUID defenderId = game.getOpponents(player.getId()).iterator().next();
+        Set<UUID> attack = node.combat.getAttackers();
+        for (UUID attackerId: attack) {
+            player.declareAttacker(attackerId, defenderId, game, false);
+        }
     }
 }

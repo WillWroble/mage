@@ -36,7 +36,6 @@ import java.util.*;
 public class StateEncoder {
     public static int indexCount;
     public static int reducedIndexCount;
-    private int originalVectorSize;
     private Features features;
     public static Set<Integer> featureVector = new HashSet<>();
     public UUID opponentID;
@@ -47,9 +46,6 @@ public class StateEncoder {
     public List<Boolean> activeStates = new ArrayList<>();
 
     public List<Double> stateScores = new ArrayList<>();
-    public static final int COMPRESSED_VECTOR_SIZE = 4000;
-    public static final int GLOBAL_FEATURE_COUNT = 100000;
-    public int initialSize = 0;
     public int initialRawSize = 0;//original max index
     public int mappingVersion = 0;
 
@@ -58,8 +54,7 @@ public class StateEncoder {
     public StateEncoder() {
         //using statics for convenience for now
         indexCount = 0;
-        reducedIndexCount = 1; //pending features map to zero
-        originalVectorSize = 0;
+        reducedIndexCount = 1;
         features = new Features();
         ignoreList = new HashSet<>();
     }
@@ -300,8 +295,14 @@ public class StateEncoder {
 
         //now do hand (cards are face down so only keep count of number of cards
         // TODO: keep track of face up cards and exile
-        Cards hand = myPlayer.getHand();
-        features.addNumericFeature("OpponentCardsInHand", hand.size());
+        if(opponentID==game.getPriorityPlayerId()) { //invert perspective
+            Cards hand = myPlayer.getHand();
+            Features handFeatures = features.getSubFeatures("Hand");
+            processHand(hand, game, handFeatures);
+        } else {
+            Cards hand = myPlayer.getHand();
+            features.addNumericFeature("OpponentCardsInHand", hand.size());
+        }
 
     }
     public void processManaPool(ManaPool mp, Game game,  Features f) {
@@ -313,7 +314,35 @@ public class StateEncoder {
         f.addNumericFeature("ColorlessMana", mp.getColorless());
         //TODO: deal with conditional mana
     }
-    public void processState(Game game) {
+    public void processPhase(Game game) {
+        switch (game.getTurnStepType()) {
+            case UPKEEP:
+                features.addFeature("Upkeep");
+            case DRAW:
+                features.addFeature("Draw");
+            case PRECOMBAT_MAIN:
+                features.addFeature("PreCombatMain");
+            case BEGIN_COMBAT:
+                features.addFeature("BeginCombat");
+            case DECLARE_ATTACKERS:
+                features.addFeature("DeclareAttackers");
+            case DECLARE_BLOCKERS:
+                features.addFeature("DeclareBlockers");
+            case FIRST_COMBAT_DAMAGE:
+                features.addFeature("FirstCombatDamage");
+            case COMBAT_DAMAGE:
+                features.addFeature("CombatDamage");
+            case END_COMBAT:
+                features.addFeature("EndCombat");
+            case POSTCOMBAT_MAIN:
+                features.addFeature("PostCombatMain");
+            case END_TURN:
+                features.addFeature("EndTurn");
+            case CLEANUP:
+               features.addFeature("Cleanup");
+        }
+    }
+    public synchronized void processState(Game game) {
         features.stateRefresh();
         featureVector.clear();
 
@@ -323,6 +352,8 @@ public class StateEncoder {
         features.addFeature(game.getPhase().getType().name());
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
         if(game.getPriorityPlayerId()==myPlayerID) features.addFeature("IsPriorityPlayer");
+        //TODO: *IMPORTANT* ADD PHASE INFO
+        processPhase(game);
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
 
@@ -345,10 +376,14 @@ public class StateEncoder {
         processGraveyard(gy, game, gyFeatures);
 
         //now do hand
-        Cards hand = myPlayer.getHand();
-        Features handFeatures = features.getSubFeatures("Hand");
-        processHand(hand, game, handFeatures);
-
+        if(opponentID==game.getPriorityPlayerId()) { //invert perspective
+            Cards hand = myPlayer.getHand();
+            features.addNumericFeature("OpponentCardsInHand", hand.size());
+        } else {
+            Cards hand = myPlayer.getHand();
+            Features handFeatures = features.getSubFeatures("Hand");
+            processHand(hand, game, handFeatures);
+        }
         //TODO: add exile
 
         //lastly do opponent
@@ -369,56 +404,6 @@ public class StateEncoder {
         processState(game);
         macroStateVectors.add(new HashSet<>(featureVector));
         //activeStates.add(game.getActivePlayerId() == myPlayerID);
-    }
-
-    /*
-    public void updateReducedVector() {
-        //map normal features
-        for(int i = 0; i < originalVectorSize; i++) {
-            if(!featureVector[i]) continue;
-            int reducedIndex = rawToReduced[i]; //pending features map to zero
-            reducedFeatureVector[reducedIndex] = true;
-        }
-        //update matrix for each pending feature
-        for (int f : pendingFeatures.keySet()) {
-            boolean[][] m = pendingFeatures.get(f);
-            boolean allIndependent = true;
-            for(int i = 1; i < m.length; i++) {
-                if(rawToReduced[i+f] != 0) continue;//only care to check un finalized features
-                boolean isIndependent = true;
-                for(int j = 0; j < m.length; j++) {
-                    m[i][j] = (featureVector[i+f] != featureVector[j+f]) || m[i][j]; //don't change if true
-                    if(rawToReduced[j+f] != 0 && !m[i][j]) {//compared to feature is finalized and they aren't independent
-                        isIndependent = false;
-                    }
-                }
-                if(isIndependent) {
-                    //finalize feature if independent (and hasn't been finalized)
-                    System.out.printf("pending feature at raw index %d has been finalized at reduced index %d\n", i+f, reducedIndexCount);
-                    rawToReduced[i+f] = reducedIndexCount;
-                    reducedFeatureVector[reducedIndexCount++] = featureVector[i+f]; //can be added silently (feature itself didn't fire)
-                } else {
-                    allIndependent = false;
-                }
-            }
-            if(allIndependent) {
-                pendingFeatures.remove(f);
-                System.out.printf("entire pending batch from %d has been successfully finalized\n", f);
-            }
-        }
-        //matrix for batch of new features
-        int batchSize = indexCount - originalVectorSize;
-        boolean[][] occurrenceMatrix = new boolean[batchSize][batchSize]; //maps if 2 features occurred independently for each pair
-        if(batchSize > 0) {
-            //add first new feature to reduced vector
-            System.out.printf("new reduced feature at raw index %d has been finalized at reduced index %d representing a batch of %d new features\n", originalVectorSize, reducedIndexCount, batchSize);
-            rawToReduced[originalVectorSize] = reducedIndexCount;
-            reducedFeatureVector[reducedIndexCount++] = true;
-            pendingFeatures.put(originalVectorSize, occurrenceMatrix); //pending features are stored in by their first feature in batch
-
-        }
-        //lastly update original size
-        originalVectorSize = indexCount;
     }
     /**
      * Takes an array of raw indices, filters out those present in the ignoreList,
@@ -452,7 +437,11 @@ public class StateEncoder {
         }
         return filteredIndicesSet;
     }
+    public synchronized int[] getFinalActiveGlobalIndicesArray() {
+        Set<Integer> out1 = getCompressedVector(featureVector);
+        return out1.stream().mapToInt(Integer::intValue).toArray();
 
+    }
     // Persist the persistent feature mapping
     public void persistMapping(String filename) throws IOException {
         features.globalIndexCount = indexCount;
@@ -469,7 +458,6 @@ public class StateEncoder {
         ignoreList = new HashSet<>(features.ignoreList);
         rawToReduced = new HashMap<>(features.rawToReduced);
         mappingVersion = features.version+1;
-        initialSize = indexCount - ignoreList.size();
         initialRawSize = indexCount;
     }
 }

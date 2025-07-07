@@ -143,7 +143,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose: ");
         if (log.isDebugEnabled()) {
             log.debug("choose: " + outcome.toString() + ':' + target.toString());
         }
@@ -534,9 +534,9 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTarget: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTarget: " + (source==null ? "null" : source.toString()));
         if (log.isDebugEnabled()) {
-            log.debug("chooseTarget: " + outcome.toString() + ':' + target.getTargetName() + ':' + source.toString());
+            log.debug("chooseTarget: " + outcome.toString() + ':' + target.getTargetName() + ':' + (source==null ? "null" : source.toString()));
         }
 
         // target - real target, make all changes and add targets to it
@@ -2156,15 +2156,18 @@ public class ComputerPlayer extends PlayerImpl {
         // spell modes simulated by AI, see addModeOptions
         // trigger modes chooses here
         // TODO: add AI support to select best modes, current code uses first valid mode
+        List<Mode> allModes = modes.getAvailableModes(source, game);
+        //Collections.shuffle(allModes);
         AvailableMode:
-        for (Mode mode : modes.getAvailableModes(source, game)) {
+        for (Mode mode : allModes) {
             for (UUID selectedModeId : modes.getSelectedModes()) {
                 Mode selectedMode = modes.get(selectedModeId);
                 if (selectedMode.getId().equals(mode.getId())) {
                     continue AvailableMode;
                 }
             }
-            if (mode.getTargets().canChoose(source.getControllerId(), source, game)) { // and where targets are available
+            if (mode.getTargets().canChoose(source.getControllerId(), source, game)) {
+                // and where targets are available
                 return mode;
             }
         }

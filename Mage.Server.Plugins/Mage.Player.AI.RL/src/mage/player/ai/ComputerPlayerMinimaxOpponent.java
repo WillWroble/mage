@@ -129,9 +129,9 @@ public class ComputerPlayerMinimaxOpponent extends ComputerPlayer7{
                         }
                     }
                 }
-                ComputerPlayerMCTS.macroState = ComputerPlayerMCTS.createCompleteMCTSGame(game);
-                ComputerPlayerMCTS.macroPlayerId = getId();
-                ComputerPlayerMCTS.lastAction = ability.copy();
+                //ComputerPlayerMCTS.macroState = ComputerPlayerMCTS.createCompleteMCTSGame(game);
+                //ComputerPlayerMCTS.macroPlayerId = getId();
+                //ComputerPlayerMCTS.lastAction = ability.copy();
                 this.activateAbility((ActivatedAbility) ability, game);
                 if (ability.isUsesStack()) {
                     usedStack = true;

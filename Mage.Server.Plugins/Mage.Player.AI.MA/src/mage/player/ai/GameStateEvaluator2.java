@@ -154,6 +154,12 @@ public final class GameStateEvaluator2 {
                         + ":" + GameStateEvaluator2.evaluatePermanent(p, game, true))
                 .collect(Collectors.joining("; "));
         sb.append("-> Permanents: [").append(ownPermanentsInfo).append("]");
+        // graveyard
+        sb.setLength(0);
+        String ownGraveInfo = player.getGraveyard().stream()
+                .map(id -> game.getObject(id).getName())
+                .collect(Collectors.joining("; "));
+        sb.append("-> Graveyard: [").append(ownGraveInfo).append("]");
         logger.info(sb.toString());
     }
     public static int evaluatePermanent(Permanent permanent, Game game, boolean useCombatPermanentScore) {

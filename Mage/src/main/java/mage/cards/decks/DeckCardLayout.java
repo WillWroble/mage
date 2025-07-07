@@ -2,13 +2,14 @@ package mage.cards.decks;
 
 import mage.util.Copyable;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Created by stravant@gmail.com on 2016-10-03.
  */
-public class DeckCardLayout implements Copyable<DeckCardLayout> {
+public class DeckCardLayout implements Copyable<DeckCardLayout>, Serializable {
 
     private final List<List<List<DeckCardInfo>>> cards;
     private final String settings;

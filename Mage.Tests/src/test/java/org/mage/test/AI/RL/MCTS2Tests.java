@@ -38,8 +38,8 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\" + deckNameA);
-        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\" + deckNameB);
+        playerA = createPlayer(game, "PlayerA", "C:\\Users\\owner\\Documents\\" + deckNameA);
+        playerB = createPlayer(game, "PlayerB", "C:\\Users\\owner\\Documents\\" + deckNameB);
         return game;
     }
     @Override

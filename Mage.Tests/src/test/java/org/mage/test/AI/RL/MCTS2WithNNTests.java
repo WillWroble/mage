@@ -1,60 +1,26 @@
 package org.mage.test.AI.RL;
 
-import ai.onnxruntime.OrtException;
-import mage.constants.MultiplayerAttackOption;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
-import mage.game.Game;
-import mage.game.GameException;
-import mage.game.TwoPlayerDuel;
-import mage.game.mulligan.MulliganType;
+import mage.constants.Zone;
 import mage.player.ai.*;
 import mage.util.RandomUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mage.test.player.TestComputerPlayer7;
-import org.mage.test.player.TestComputerPlayer8;
-import org.mage.test.player.TestComputerPlayerMonteCarlo2;
-import org.mage.test.player.TestPlayer;
-import org.mage.test.serverside.base.CardTestPlayerBaseAI;
+import org.mage.test.player.*;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 
 public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
-    private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
-    private String deckNameB = "simplegreen.dck";
-    private List<LabeledState> labeledStates = new ArrayList<>();
-    private List<LabeledState> labeledStateBatch = new ArrayList<>();
-    //private StateEncoder encoder;
-    //private Set<Integer> ignore;
-    //private Map<String, Integer> actions;
-    // File where the persistent mapping is stored
-    private static final String MAPPING_FILE = "features_mapping.ser";
-    private static final String ACTIONS_FILE = "actions_mapping.ser";
-    private static final String TRAIN_OUT_FILE = "training.bin";
-    private static final String TEST_OUT_FILE = "testing.bin";
-    private int seed;
 
+    public static final String REPLAY_BUFFER_FILE = "replay_buffer.ser";
+    public static final int REPLAY_BUFFER_CAPACITY = 10000; // e.g., holds states from ~200-300 games
+    public ReplayBuffer replayBuffer;
+    public int wins = 0;
+    public int total = 0;
 
-
-    @Override
-    public List<String> getFullSimulatedPlayers() {
-        return Arrays.asList("PlayerA", "PlayerB");
-    }
-
-    @Override
-    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
-        ComputerPlayerMCTS2.PATH_TO_NN = "C:\\Users\\WillWroble\\Documents\\GitHub\\MageZero\\exports\\UWTempo\\ver2\\Model.onnx";
-
-        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\" + deckNameA);
-        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\" + deckNameB);
-        return game;
-    }
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
@@ -64,26 +30,13 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             } else {
-                TestComputerPlayer7 t7 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
-                TestPlayer testPlayer = new TestPlayer(t7);
+                TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestPlayer testPlayer = new TestPlayer(t8);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             }
         }
         return super.createPlayer(name, rangeOfInfluence);
-    }
-    public void init_seed() {
-        seed = RandomUtil.nextInt();
-        //seed = -1421792887;
-        //seed = 233400479;
-        //seed = 1603827803;
-        //seed = -99205609;
-
-        //seed = 144516733;
-        //seed = 197732112;
-        seed = -781685651;
-        System.out.printf("USING SEED: %d\n", seed);
-        RandomUtil.setSeed(seed);
     }
     @Before
     public void init_encoder() {
@@ -117,102 +70,138 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         } else {
             System.out.println("No persistent mapping found. Starting fresh.");
         }
+        //also set up buffer
+        File bufferFile = new File(REPLAY_BUFFER_FILE);
+        if (bufferFile.exists()) {
+            try {
+                replayBuffer = (ReplayBuffer) loadObject(REPLAY_BUFFER_FILE);
+                System.out.printf("Loaded Replay Buffer with %d states from %s%n", replayBuffer.size(), REPLAY_BUFFER_FILE);
+            } catch (IOException | ClassNotFoundException e) {
+                System.out.println("Failed to load Replay Buffer. Starting with a fresh one.");
+                replayBuffer = new ReplayBuffer(REPLAY_BUFFER_CAPACITY);
+            }
+        } else {
+            System.out.println("No Replay Buffer found. Starting fresh.");
+            replayBuffer = new ReplayBuffer(REPLAY_BUFFER_CAPACITY);
+        }
 
         set_encoder();
         labeledStates = new ArrayList<>();
     }
+    @Override
+    public void init_seed() {
+        seed = RandomUtil.nextInt();
+        //seed = -1421792887;
+        //seed = 233400479;
+        //seed = 1603827803;
+        //seed = -99205609;
+
+        //seed = 144516733;
+        //seed = 197732112;
+        //seed = -781685651;
+        //seed = 2036403658;
+        //seed = -1702733670;
+        //seed = 1617973009;
+        //seed = 1735298645;
+        //seed = -1943293127;
+        seed = -1018550371;
+        System.out.printf("USING SEED: %d\n", seed);
+        RandomUtil.setSeed(seed);
+    }
+    @Override
     public void set_encoder() {
         ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2) playerA.getComputerPlayer();
+        mcts2.clearTree();
+        MCTSNode.clearCaches();
+        ComputerPlayer8 c8 = (ComputerPlayer8)playerB.getComputerPlayer();
+        c8.setEncoder(encoder);
         mcts2.setEncoder(encoder);
+        mcts2.setBuffer(replayBuffer);
+        mcts2.initNN("models/Model1.onnx");
         encoder.setAgent(playerA.getId());
         encoder.setOpponent(playerB.getId());
     }
-    public void reset_game() {
-        try {
-            ((ComputerPlayerMCTS2)playerA.getComputerPlayer()).nn.close();
-        } catch (OrtException oe) {
-            oe.printStackTrace();
-        }
-        try {
-            reset();
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (GameException e) {
-            throw new RuntimeException(e);
-        }
-        set_encoder();
-
-    }
-    public void reset_vectors() {
-        encoder.macroStateVectors.clear();
-        encoder.stateScores.clear();
-        ActionEncoder.actionVectors.clear();
-    }
-
-    /**
-     * uses saved list of actions and states to make a labeled vector batch for training
-     */
+    @Override
     public void create_labeled_states() {
+        total++;
+        if(playerA.hasWon()) wins++;
         int N = encoder.macroStateVectors.size();
         double γ = 0.99;          // discount factor
-        double λ = 0;           // how much weight to give the minimax estimate vs. terminal
 
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
-            // 1) decompress your raw state and action bits (you already have this)
-            Set<Integer> state = encoder.getCompressedVector(encoder.macroStateVectors.get(i));
+            Set<Integer> state = encoder.macroStateVectors.get(i);
             double[] action = ActionEncoder.actionVectors.get(i);
 
-            // 2) get your raw minimax score and normalize into [-1,+1]
-            double normScore = encoder.stateScores.get(i);
-            //double normScore = rawScore / (double)Math.abs(GameStateEvaluator2.LOSE_GAME_SCORE);
-
-            //double scale = 20000.0;              // or better yet: maxAbs(stateScores)
-            //double normScore = Math.tanh(rawScore/scale);
-
-
-            // 3) build your discounted terminal label in [-1,+1]
             boolean win = playerA.hasWon();
             double terminal = win ? +1.0 : -1.0;
             double discount = Math.pow(γ, N - i - 1);
 
-            // 4) blend them
-            double blended = λ * normScore + (1.0 - λ) * terminal * discount;
+            double score = terminal * discount;
 
-            // 5) store a single LabeledState with that double label
-            labeledStateBatch.add(new LabeledState(state, action, blended));
+            labeledStateBatch.add(new LabeledState(state, action, score));
         }
-
-        // shuffle before writing out / persisting
-        //Collections.shuffle(labeledStateBatch);
-
         reset_vectors();
     }
-    public void print_labeled_states() {
-        for (LabeledState ls : labeledStates) {
-            StringBuilder sb1 = new StringBuilder();
-            for (int i = 0; i < 100; i++) {
-                sb1.append(ls.stateVector[i]);
-                //sb1.append(", ");
-            }
-
-            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), Arrays.toString(ls.actionVector), ls.resultLabel);
+    public void loadGame() {
+        if (replayBuffer.size() == 0) {
+            System.out.println("Replay buffer is empty, skipping state load.");
+            reset_game();
+            return;
         }
+        currentGame = replayBuffer.sample(1).get(0).copy();
+        TestPlayer newPlayerA = (TestPlayer) currentGame.getPlayer(playerA.getId());
+        TestPlayer newPlayerB = (TestPlayer) currentGame.getPlayer(playerB.getId());
+        newPlayerA.setMatchPlayer(playerA.getMatchPlayer());
+        newPlayerB.setMatchPlayer(playerB.getMatchPlayer());
+
+        //ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2) newPlayerA.getComputerPlayer();
+        //mcts2.root = null;
+        //ComputerPlayerMCTS.macroState = ComputerPlayerMCTS.createCompleteMCTSGame(currentGame);
+
+        playerA.restore(newPlayerA);
+        playerB.restore(newPlayerB);
+        currentGame.getState().getPlayers().put(playerA.getId(), playerA);
+        currentGame.getState().getPlayers().put(playerB.getId(), playerB);
+        currentGame.setGameOptions(gameOptions);
+        set_encoder();
     }
     @Test
     public void test_1_game() {
+        int maxTurn = 50;
+        Features.printOldFeatures = false;
+        addCard(Zone.HAND, playerA, "Sheltered by ghosts");
+        //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        setStrictChooseMode(false);
+        setStopAt(maxTurn, PhaseStep.END_TURN);
+        execute();
+    }
+    @Test
+    public void test_save_1_game_to_buffer() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
-
+        save_buffer();
     }
     @Test
-    public void print_current_ignore_list() {
+    public void test_1_game_from_buffer() {
+        loadGame();
+        int maxTurn = 50;
+        Features.printOldFeatures = false;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        setStrictChooseMode(true);
+        setStopAt(maxTurn, PhaseStep.END_TURN);
+        currentGame.resume();
+    }
+    @Test
+    public void print_data() {
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("REPLAY BUFFER SIZE: %d\n", replayBuffer.size());
     }
     /**
      * make a training set of 50 games
@@ -222,7 +211,10 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         int maxTurn = 50;
         Features.printOldFeatures = false;
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
         for(int i = 0; i < 5; i++) {
+            addCard(Zone.HAND, playerA, "Sheltered by ghosts", 1);
+            removeAllCardsFromHand(playerB);
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -240,10 +232,40 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         print_labeled_states();
         persistLabeledStates(TRAIN_OUT_FILE);
         persistData();
+        save_buffer();
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("WINRATE: %f\n", wins*1.0/total);
     }
+    @Test
+    public void make_train_ds_50_from_buffer() {
+        int maxTurn = 50;
+        Features.printOldFeatures = false;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        for(int i = 0; i < 5; i++) {
+            loadGame();
+            setStrictChooseMode(true);
+            setStopAt(maxTurn, PhaseStep.END_TURN);
+            currentGame.resume();
+            create_labeled_states();
+            labeledStates.addAll(labeledStateBatch);
+            labeledStateBatch.clear();
+            reset_game();
+            System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+        }
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        compress_labeled_states();
 
+        print_labeled_states();
+        //persistLabeledStates(TRAIN_OUT_FILE);
+        //persistData();
+        //save_buffer();
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("WINRATE: %f\n", wins*1.0/total);
+    }
     /**
      * make a testing/validation set of 5 random states from each of 50 games
      */
@@ -265,63 +287,22 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         persistLabeledStates(TEST_OUT_FILE);
         persistData();
     }
+    public void save_buffer() {
+        try {
+            saveObject(replayBuffer, REPLAY_BUFFER_FILE);
+            System.out.printf("Persisted replay buffer to %s%n", REPLAY_BUFFER_FILE);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
     @After
     public void print_vector_size() {
         System.out.printf("FINAL (unreduced) VECTOR SIZE: %d\n", StateEncoder.indexCount);
         System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
+        System.out.printf("REPLAY BUFFER SIZE: %d\n", replayBuffer.size());
         for(String s : ActionEncoder.actionMap.keySet()) {
             System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
         }
         System.out.println();
-    }
-    private void persistLabeledStates(String filename) {
-        try (DataOutputStream out = new DataOutputStream(
-                new BufferedOutputStream(new FileOutputStream(filename)))) {
-
-            // 1) Header
-            int n = labeledStates.size();
-            int S = StateEncoder.COMPRESSED_VECTOR_SIZE;         // total feature count
-            int wordsPerState = (S + 63) >>> 6;       // ⌈S/64⌉ longs per state
-            int A = 128;
-
-            out.writeInt(n);
-            out.writeInt(S);
-            out.writeInt(wordsPerState);
-            out.writeInt(A);
-
-            // 2) Body
-            for (LabeledState ls : labeledStates) {
-                ls.persist(out);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void persistData() {
-        try {
-            encoder.persistMapping(MAPPING_FILE);
-            System.out.printf("Persisted feature mapping to %s\n", MAPPING_FILE);
-            //saveObject(ignore, IGNORE_FILE);
-            //System.out.printf("Persisted ignore list to %s\n", IGNORE_FILE);
-            saveObject(new HashMap<>(ActionEncoder.actionMap), ACTIONS_FILE);
-            System.out.printf("Persisted action mapping to %s\n", ACTIONS_FILE);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Method to save a Serializable object to a file
-    public static void saveObject(Object obj, String fileName) throws IOException {
-        try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(Paths.get(fileName)))) {
-            out.writeObject(obj);
-        }
-    }
-
-    // Method to load a Serializable object from a file
-    public static Object loadObject(String fileName) throws IOException, ClassNotFoundException {
-        try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            return in.readObject();
-        }
     }
 }

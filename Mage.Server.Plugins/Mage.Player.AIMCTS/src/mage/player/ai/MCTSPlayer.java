@@ -6,6 +6,7 @@ import mage.Mana;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.SpellAbility;
+import mage.abilities.TriggeredAbility;
 import mage.abilities.common.PassAbility;
 import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.GenericManaCost;
@@ -24,6 +25,7 @@ import mage.target.Target;
 import mage.target.TargetCard;
 import org.apache.log4j.Logger;
 
+import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -37,19 +39,20 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class MCTSPlayer extends ComputerPlayer {
 
-
+    public boolean lastToAct =  false;
     private NextAction nextAction;
-    public boolean isRoot = false;
     public long dirichletSeed = 0;
     public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
     public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
+    public Set<Set<UUID>> chooseTriggeredOptions = new HashSet<>();
+    public List<Set<UUID>> chooseTriggeredAction = new ArrayList<>();
 
     private int chooseTargetCount = 0;
 
 
 
     public enum NextAction {
-                PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET
+                PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, CHOOSE_TRIGGERED_ABILITY
     }
 
     public MCTSPlayer(UUID id) {
@@ -64,6 +67,11 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public MCTSPlayer copy() {
         return new MCTSPlayer(this);
+    }
+
+    public void copyDialogues(MCTSPlayer player) {
+        this.chooseTargetAction = new ArrayList<>(player.chooseTargetAction);
+        this.chooseTriggeredAction = new ArrayList<>(player.chooseTriggeredAction);
     }
 
     protected List<ActivatedAbility> getPlayableAbilities(Game game) {
@@ -208,6 +216,7 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public boolean priority(Game game) {
         game.pause();
+        lastToAct = true;
         nextAction = NextAction.PRIORITY;
         return false;
     }
@@ -215,12 +224,14 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         game.pause();
+        lastToAct = true;
         nextAction = NextAction.SELECT_ATTACKERS;
     }
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         game.pause();
+        lastToAct = true;
         nextAction = NextAction.SELECT_BLOCKERS;
     }
     public static void getAllPossible(Set<Set<UUID>> out, Set<UUID> possible, Target target, Ability source, Game game, UUID myID) {
@@ -240,10 +251,9 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        if(false) return super.chooseTarget(outcome, target, source, game);
-        System.out.println("CALLING CHOOSE TARGET");
+        //System.out.println("chooseTarget: " + source.toString());
+        System.out.println("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
         if(chooseTargetCount < chooseTargetAction.size()) {
-            System.out.println("is this happening");
             for(UUID id : chooseTargetAction.get(chooseTargetCount)) {
                 if(!target.canTarget(getId(), id, source, game)) continue;
                 target.addTarget(id, source, game);
@@ -256,7 +266,19 @@ public class MCTSPlayer extends ComputerPlayer {
         Set<UUID> possible = target.possibleTargets(getId(), game);
         getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
         game.pause();
+        lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;
-        return false;
+        return super.chooseTarget(outcome, target, source, game);
+    }
+    @Override
+    public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
+        //reroute to chooseTarget
+        if(true) {
+            //reroute to mcts simulator
+            return chooseTarget(outcome, target, source, game);
+        } else {
+            //reroute to default
+            return super.choose(outcome, target, source, game, options);
+        }
     }
 }

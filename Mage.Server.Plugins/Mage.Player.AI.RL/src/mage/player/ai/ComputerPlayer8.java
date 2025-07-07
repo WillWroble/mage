@@ -11,7 +11,8 @@ import mage.target.Target;
 import java.util.UUID;
 
 public class ComputerPlayer8 extends ComputerPlayer7{
-    private StateEncoder encoder;
+    //public static boolean saveMinimaxScore = true;
+    private transient StateEncoder encoder;
     public ComputerPlayer8(ComputerPlayer7 player) {
         super(player);
     }

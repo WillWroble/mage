@@ -23,29 +23,8 @@ import java.nio.file.Paths;
 import java.util.*;
 
 public class GenerateMappings extends MinimaxVectorExtractionTests {
-    private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
-    private String deckNameB = "simplegreen.dck";
-    //private StateEncoder encoder;
-    private int seed;
-    //private Set<Integer> ignore;
-    //private Map<String, Integer> actions;
-    // File where the persistent mapping is stored
-    private static final String MAPPING_FILE = "features_mapping.ser";
-    private static final String ACTIONS_FILE = "actions_mapping.ser";
 
 
-    @Override
-    public List<String> getFullSimulatedPlayers() {
-        return Arrays.asList("PlayerA", "PlayerB");
-    }
-
-    @Override
-    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
-        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\" + deckNameA);
-        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\" + deckNameB);
-        return game;
-    }
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
@@ -63,6 +42,7 @@ public class GenerateMappings extends MinimaxVectorExtractionTests {
         }
         return super.createPlayer(name, rangeOfInfluence);
     }
+    @Override
     public void init_seed() {
         seed = RandomUtil.nextInt();
         //seed = -1421792887;
@@ -70,56 +50,12 @@ public class GenerateMappings extends MinimaxVectorExtractionTests {
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
-    @Before
-    public void init_encoder() {
-        init_seed();
-        System.out.println("Setting up encoder");
-        encoder = new StateEncoder();
-
-        // Try to load the persistent mapping from file
-        File mappingFile = new File(MAPPING_FILE);
-        if (mappingFile.exists()) {
-            try {
-                encoder.loadMapping(MAPPING_FILE);
-                System.out.println("Loaded persistent mapping from " + MAPPING_FILE);
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Failed to load mapping. Starting with a fresh mapping.");
-            }
-        } else {
-            System.out.println("No persistent mapping found. Starting fresh.");
-        }
-        //try to load persistent action mappings from file
-        File actionsFile = new File(ACTIONS_FILE);
-        if (actionsFile.exists()) {
-            try {
-                ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
-                ActionEncoder.indexCount = ActionEncoder.actionMap.size();
-                System.out.println("Loaded persistent mapping from " + ACTIONS_FILE);
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Failed to load mapping. Starting with a fresh mapping.");
-            }
-        } else {
-            System.out.println("No persistent mapping found. Starting fresh.");
-        }
-
-        set_encoder();
-    }
+    @Override
     public void set_encoder() {
         ComputerPlayerPureMCTS pmc = (ComputerPlayerPureMCTS)playerA.getComputerPlayer();
         pmc.setEncoder(encoder);
         encoder.setAgent(playerA.getId());
         encoder.setOpponent(playerB.getId());
-    }
-    public void reset_game() {
-        try {
-            reset();
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (GameException e) {
-            throw new RuntimeException(e);
-        }
-        set_encoder();
-
     }
     @Test
     public void print_current_ignore_list() {
@@ -169,31 +105,5 @@ public class GenerateMappings extends MinimaxVectorExtractionTests {
             System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
         }
         System.out.println();
-    }
-    public void persistData() {
-        try {
-            encoder.persistMapping(MAPPING_FILE);
-            System.out.printf("Persisted feature mapping to %s\n", MAPPING_FILE);
-            //saveObject(ignore, IGNORE_FILE);
-            //System.out.printf("Persisted ignore list to %s\n", IGNORE_FILE);
-            saveObject(new HashMap<>(ActionEncoder.actionMap), ACTIONS_FILE);
-            System.out.printf("Persisted action mapping to %s\n", ACTIONS_FILE);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Method to save a Serializable object to a file
-    public static void saveObject(Object obj, String fileName) throws IOException {
-        try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(Paths.get(fileName)))) {
-            out.writeObject(obj);
-        }
-    }
-
-    // Method to load a Serializable object from a file
-    public static Object loadObject(String fileName) throws IOException, ClassNotFoundException {
-        try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(Paths.get(fileName)))) {
-            return in.readObject();
-        }
     }
 }

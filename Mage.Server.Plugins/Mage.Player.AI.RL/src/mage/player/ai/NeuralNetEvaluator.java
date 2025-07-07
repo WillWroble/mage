@@ -108,7 +108,9 @@ public class NeuralNetEvaluator implements AutoCloseable {
                 throw new RuntimeException("Missing '" + onnxValueOutputName + "' output from ONNX model");
             }
             OnnxTensor valueTensor = (OnnxTensor) optV.get();
-            float value = ((float[][]) valueTensor.getValue())[0][0]; // Assumes value output shape [1, 1]
+            float[] valueArray = (float[]) valueTensor.getValue();
+            // Access the first (and only) element of the 1D array.
+            float value = valueArray[0];
 
             return new InferenceResult(policy, value);
         } catch (OrtException e) {

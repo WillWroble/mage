@@ -83,6 +83,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     static final Map<PhaseStep, Step.StepPart> SILENT_PHASES_STEPS = ImmutableMap.<PhaseStep, Step.StepPart>builder().
             put(PhaseStep.DECLARE_ATTACKERS, Step.StepPart.PRE).build();
 
+    private Ability lastActivated;
     /**
      * Used to cancel waiting requests send to the player
      */
@@ -200,7 +201,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     protected final List<List<Mana>> availableTriggeredManaList = new ArrayList<>();
 
     protected PlayerImpl(String name, RangeOfInfluence range) {
-        this(UUID.randomUUID());
+        this(UUID.nameUUIDFromBytes(name.getBytes()));
         this.name = name;
         this.range = range;
         hand = new CardsImpl();
@@ -218,6 +219,9 @@ public abstract class PlayerImpl implements Player, Serializable {
     }
 
     protected PlayerImpl(final PlayerImpl player) {
+
+        this.lastActivated = player.lastActivated;
+
         this.abort = player.abort;
         this.playerId = player.playerId;
 
@@ -301,7 +305,12 @@ public abstract class PlayerImpl implements Player, Serializable {
         this.phyrexianColors = player.getPhyrexianColors() != null ? player.phyrexianColors.copy() : null;
         this.designations = CardUtil.deepCopyObject(player.designations);
     }
-
+    public Ability getLastActivated() {
+        return lastActivated;
+    }
+    public void setLastActivated(Ability a) {
+        lastActivated = a;
+    }
     /**
      * Restore on rollback
      *
@@ -312,7 +321,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         if (!(player instanceof PlayerImpl)) {
             throw new IllegalArgumentException("Wrong code usage: can't restore from player class " + player.getClass().getName());
         }
-
+        this.lastActivated = player.getLastActivated();
         this.name = player.getName();
         this.human = player.isHuman();
         this.life = player.getLife();
@@ -1597,8 +1606,11 @@ public abstract class PlayerImpl implements Player, Serializable {
     @Override
     public boolean activateAbility(ActivatedAbility ability, Game game) {
         if (ability == null) {
+            logger.error("activating null ability");
             return false;
         }
+        //logger.info("last activated: " + (lastActivated == null ? "null" : this.lastActivated.toString()));
+        lastActivated = ability.copy();
         boolean result;
         if (ability instanceof PassAbility) {
             pass(game);

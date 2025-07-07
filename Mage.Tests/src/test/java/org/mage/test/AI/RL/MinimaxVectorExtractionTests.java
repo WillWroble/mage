@@ -8,6 +8,7 @@ import mage.game.GameException;
 import mage.game.TwoPlayerDuel;
 import mage.game.mulligan.MulliganType;
 import mage.player.ai.*;
+import mage.util.RandomUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -24,17 +25,18 @@ import java.util.*;
 public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
-    private List<LabeledState> labeledStates = new ArrayList<>();
-    private List<LabeledState> labeledStateBatch = new ArrayList<>();
+    public List<LabeledState> labeledStates = new ArrayList<>();
+    public List<LabeledState> labeledStateBatch = new ArrayList<>();
     public StateEncoder encoder;
+    public int seed;
 
     //private Set<Integer> ignore;
     //private Map<String, Integer> actions;
     // File where the persistent mapping is stored
-    private static final String MAPPING_FILE = "features_mapping.ser";
-    private static final String ACTIONS_FILE = "actions_mapping.ser";
-    private static final String TRAIN_OUT_FILE = "training.bin";
-    private static final String TEST_OUT_FILE = "testing.bin";
+    public static final String MAPPING_FILE = "features_mapping.ser";
+    public static final String ACTIONS_FILE = "actions_mapping.ser";
+    public static final String TRAIN_OUT_FILE = "training.bin";
+    public static final String TEST_OUT_FILE = "testing.bin";
 
 
     @Override
@@ -45,8 +47,8 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", "C:\\Users\\WillWroble\\Documents\\" + deckNameA);
-        playerB = createPlayer(game, "PlayerB", "C:\\Users\\WillWroble\\Documents\\" + deckNameB);
+        playerA = createPlayer(game, "PlayerA",  deckNameA);
+        playerB = createPlayer(game, "PlayerB",  deckNameB);
         return game;
     }
     @Override
@@ -66,8 +68,14 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         }
         return super.createPlayer(name, rangeOfInfluence);
     }
+    public void init_seed() {
+        seed = RandomUtil.nextInt();
+        System.out.printf("USING SEED: %d\n", seed);
+        RandomUtil.setSeed(seed);
+    }
     @Before
     public void init_encoder() {
+        init_seed();
         System.out.println("Setting up encoder");
         encoder = new StateEncoder();
         //ignore = new HashSet<>();
@@ -203,39 +211,17 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     }
 
     /**
-     * can only grow ignore list
-     * @param oldList
-     * @param newList
-     * @return
-     */
-    public Set<Integer> union_ignore_lists(Set<Integer> oldList, Set<Integer> newList) {
-        Set<Integer> updatedIgnoreList = new HashSet<>();
-
-        int boundaryForOldFeatures = this.encoder.initialRawSize;
-
-
-        for (int i = 0; i < boundaryForOldFeatures; i++) {
-            if (oldList.contains(i)) {
-                updatedIgnoreList.add(i);
-            }
-        }
-
-        for (Integer featureIndexInNewList : newList) {
-            if (featureIndexInNewList >= boundaryForOldFeatures) {
-                updatedIgnoreList.add(featureIndexInNewList);
-            }
-        }
-
-        return updatedIgnoreList;
-    }
-
-    /**
      * use the current encoder's compression at the end so it can use the new ignore list
      */
     public void compress_labeled_states() {
         for (LabeledState ls : labeledStates) {
             ls.compress(encoder);
         }
+    }
+    @Test
+    public void print_current_ignore_list() {
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
     }
     @Test
     public void make_ignore_X_50() {
@@ -266,7 +252,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void make_train_ds_X_250() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 5; i++) {
+        for(int i = 0; i < 250; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -319,14 +305,14 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     }
     @After
     public void print_vector_size() {
-        System.out.printf("FINAL (unreduced) VECTOR SIZE: %d\n", StateEncoder.indexCount);
+        System.out.printf("RAW VECTOR SIZE: %d\n", StateEncoder.indexCount);
         System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
         for(String s : ActionEncoder.actionMap.keySet()) {
             System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
         }
         System.out.println();
     }
-    private void persistLabeledStates(String filename) {
+    public void persistLabeledStates(String filename) {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(Paths.get(filename))))) {
 
             // 1) Header
@@ -334,7 +320,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
 
             // 'S' now represents the TOTAL size of your global feature vocabulary.
             // The constant should be updated to reflect this.
-            int S = StateEncoder.GLOBAL_FEATURE_COUNT;
+            int S = StateEncoder.indexCount;
 
             // 'A' is still the size of the policy vector.
             int A = 128;

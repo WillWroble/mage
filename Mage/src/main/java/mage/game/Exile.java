@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
  */
 public class Exile implements Serializable, Copyable<Exile> {
 
-    private static final UUID PERMANENT = UUID.randomUUID();
+    private final UUID PERMANENT = UUID.nameUUIDFromBytes("Permanent".getBytes());
 
     private final Map<UUID, ExileZone> exileZones = new HashMap<>();
 

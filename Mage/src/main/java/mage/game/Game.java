@@ -46,6 +46,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public interface Game extends MageItem, Serializable, Copyable<Game> {
+//    void setMacroState(Game game);
+//    void setMacroPlayerId(UUID id);
+//    void setLastAction(Ability ability);
+    Game getLastPriority();
+    UUID getLastPriorityPlayerId();
+    Ability getLastPriorityAction();
+
+    void setLastPriority(Game game);
 
     MatchType getGameType();
 
@@ -639,6 +647,9 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     void rollbackTurns(int turnsToRollback);
 
     boolean executingRollback();
+
+    void addCard(UUID cardId, Card card);
+
 
     /**
      * Add counters to permanent before ETB. Use it before put real permanent to battlefield.

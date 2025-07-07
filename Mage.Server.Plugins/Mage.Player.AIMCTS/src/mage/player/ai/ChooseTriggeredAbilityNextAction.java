@@ -1,31 +1,32 @@
 package mage.player.ai;
 
-import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.game.Game;
-import mage.target.Target;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
-public class ChooseTargetNextAction implements MCTSNodeNextAction {
+public class ChooseTriggeredAbilityNextAction implements MCTSNodeNextAction {
 
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
         List<MCTSNode> children = new ArrayList<>();
-        System.out.println("expanding choose target");
         // Get targets for the current ability
-        for (Set<UUID> targets: player.chooseTargetOptions) {
+        for (Set<UUID> targets: player.chooseTriggeredOptions) {
             //create node to add option to
             Game sim = game.getLastPriority().createSimulationForAI();
             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
             MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
-            simPlayer2.copyDialogues(player); //copy previous micro decisions
-            simPlayer2.chooseTargetAction.add(targets);
+            simPlayer2.copyDialogues(player);
+            simPlayer2.chooseTriggeredAction.add(targets);
             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);
             sim.resume();
             MCTSNode newNode = new MCTSNode(node, sim, node.getAction().copy());
-            newNode.chooseTargetAction = new ArrayList<>(node.chooseTargetAction);
-            newNode.chooseTargetAction.add(targets);
+            newNode.combat = node.combat;
+            newNode.chooseTriggeredAction = new ArrayList<>(node.chooseTriggeredAction);
+            newNode.chooseTriggeredAction.add(targets);
             children.add(newNode);
         }
         return children;
