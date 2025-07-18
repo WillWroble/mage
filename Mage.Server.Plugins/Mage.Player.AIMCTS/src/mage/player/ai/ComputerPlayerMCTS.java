@@ -35,9 +35,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public transient MCTSNode root;
     protected int maxThinkTime;
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
-    public int poolSize = 8;
-    public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
-    public ArrayList<Set<UUID>> chosenChooseTargetActions = new ArrayList<>();
+    public int poolSize = 2;
+    //public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
+    //public ArrayList<Set<UUID>> chosenChooseTargetActions = new ArrayList<>();
     protected transient ExecutorService threadPoolSimulations = null;
     //public static Game macroState;
     //public static UUID macroPlayerId;
@@ -66,7 +66,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
-        chosenChooseTargetActions.clear();
+        chooseTargetAction.clear();
         if (game.getTurnStepType() == PhaseStep.UPKEEP) {
             if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
                 logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList(hand.getCards(game)));
@@ -98,9 +98,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
             root = new MCTSNode(playerId, sim);
-            player.chooseTargetOptions = chooseTargetOptions;
-            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
-            root.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
+            root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
 
         }
         applyMCTS(game, action);
@@ -113,7 +111,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void getNextAction(Game game, NextAction nextAction) {
         if (root != null) {
             MCTSNode newRoot;
-            newRoot = root.getMatchingState(game.getState().getValue(game, playerId), chosenChooseTargetActions);
+            newRoot = root.getMatchingState(game.getState().getValue(game, playerId), chooseTargetAction);
             if (newRoot != null) {
                 newRoot.emancipate();
             } else
@@ -182,7 +180,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 chosen.add(targetId);
                 System.out.printf("Targeting %s\n", game.getObject(targetId).toString());
             }
-            chosenChooseTargetActions.add(chosen);
+            chooseTargetAction.add(chosen);
         }
         return target.isChosen(game);
     }
@@ -223,8 +221,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 for (int i = 0; i < poolSize; i++) {
                     Game sim = createMCTSGame(game);
                     MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-                    player.chooseTargetOptions = chooseTargetOptions;
-                    player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
                     player.setNextAction(action);
                     MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);
                     tasks.add(exec);
@@ -345,36 +341,26 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
      * @return a new game object with simulated players
      */
     protected Game createMCTSGame(Game game) {
+        return createMCTSGame(game, true);
+    }
+    protected Game createMCTSGame(Game game, boolean firstCall) {
         Game mcts = game.createSimulationForAI();
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
             Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
             MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId());
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
-            //dont shuffle
-//            if (!newPlayer.getId().equals(playerId)) {
-//                int handSize = newPlayer.getHand().size();
-//                newPlayer.getLibrary().addAll(newPlayer.getHand().getCards(mcts), mcts);
-//                newPlayer.getHand().clear();
-//                newPlayer.getLibrary().shuffle();
-//                for (int i = 0; i < handSize; i++) {
-//                    Card card = newPlayer.getLibrary().drawFromTop(mcts);
-//                    assert (newPlayer.getLibrary().size() != 0);
-//                    assert (card != null);
-//                    card.setZone(Zone.HAND, mcts);
-//                    newPlayer.getHand().add(card);
-//                }
-//            } else {
-//                newPlayer.getLibrary().shuffle();
-//            }
+            //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
         }
-        mcts.setLastPriority(createCompleteMCTSGame(game.getLastPriority()));
+        if(firstCall) {
+            mcts.setLastPriority(createMCTSGame(game.getLastPriority(), false));
+            assert (mcts.getLastPriority().getPlayer(playerId) instanceof MCTSPlayer);
+        }
         mcts.resume();
-        assert (mcts.getLastPriority().getPlayer(playerId) instanceof MCTSPlayer);
         return mcts;
     }
-    public static Game shuffleUnknowns(Game mcts, UUID playerId) {
+    public static void shuffleUnknowns(Game mcts, UUID playerId) {
         for (Player newPlayer : mcts.getState().getPlayers().values()) {
             if (!newPlayer.getId().equals(playerId)) {
                 int handSize = newPlayer.getHand().size();
@@ -392,27 +378,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 newPlayer.getLibrary().shuffle();
             }
         }
-        return mcts;
     }
-
-    /**
-     * makes deterministic complete copy of game with mcts players
-     * @param game
-     * @return
-     */
-    public static Game createCompleteMCTSGame(Game game) {
-        Game mcts = game.createSimulationForAI();
-        for (Player copyPlayer : mcts.getState().getPlayers().values()) {
-            Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
-            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId());
-            newPlayer.restore(origPlayer);
-            newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
-            mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
-        }
-        mcts.resume();
-        return mcts;
-    }
-
     protected void displayMemory() {
         long heapSize = Runtime.getRuntime().totalMemory();
         long heapMaxSize = Runtime.getRuntime().maxMemory();

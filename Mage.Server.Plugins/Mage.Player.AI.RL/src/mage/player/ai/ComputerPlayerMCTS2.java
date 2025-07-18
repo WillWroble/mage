@@ -153,8 +153,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         for (int i = 0; i < poolSize; i++) {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-            player.chooseTargetOptions = chooseTargetOptions;
-            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
             player.setNextAction(action);
             player.dirichletSeed = seed;
             // Create an executor that overrides rollout() to use evaluateState().
@@ -254,9 +252,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
             root = new MCTSNode(playerId, sim);
-            player.chooseTargetOptions = chooseTargetOptions;
-            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
-            root.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
+            root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
         }
         applyMCTS(game, action);
         if (root != null) {
@@ -265,12 +261,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
             encoder.processMacroState(game);
             ActionEncoder.addAction(getActionVec());
+            encoder.stateScores.add(root.getWinRatio());
             Game copiedState = game.copy();
-            buffer.add(copiedState);
+            if(buffer != null)
+                buffer.add(copiedState);
 
-            //macroState = root.macroState;
             root = best;
-            //game.setLastAction(root.action);
             root.emancipate();
         }
     }

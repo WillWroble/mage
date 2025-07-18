@@ -46,7 +46,6 @@ public class MCTSNode {
     public final List<MCTSNode> children = new ArrayList<>();
     public Ability action;
     public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
-    public List<Set<UUID>> chooseTriggeredAction = new ArrayList<>();
     private Game game;//only contains shared game
 
     public Combat combat;
@@ -208,7 +207,7 @@ public class MCTSNode {
                 node.depth = depth + 1;
                 node.prior = 1.0;///children.size();
             }
-            if (policy != null) {
+            if (policy != null && player.getNextAction() != MCTSPlayer.NextAction.CHOOSE_TARGET) {
                 // 2) find max logit for numeric stability
                 double maxLogit = Double.NEGATIVE_INFINITY;
                 for (MCTSNode node : children) {
@@ -233,7 +232,7 @@ public class MCTSNode {
                 }
                 long seed = player.dirichletSeed;
                 if (seed != 0) {
-                    double alpha = 0.03, eps = 0.25;
+                    double alpha = 0.03, eps = 0;//no noise for now
                     int K = children.size();
                     double[] dir = new double[K];
                     double sum = 0;
@@ -442,7 +441,6 @@ public class MCTSNode {
      * @return the matching state or null if no match is found
      */
     public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen) {
-        if(true) return null;
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
 

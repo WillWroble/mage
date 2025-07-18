@@ -123,8 +123,6 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
         for (int i = 0; i < poolSize; i++) {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-            player.chooseTargetOptions = chooseTargetOptions;
-            player.chooseTargetAction = new ArrayList<>(chosenChooseTargetActions);
             player.setNextAction(action);
             // Create an executor that overrides rollout() to use evaluateState().
             MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime) {

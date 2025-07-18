@@ -13,13 +13,17 @@ import org.mage.test.player.*;
 import java.io.*;
 import java.util.*;
 
+import static org.apache.commons.lang3.ObjectUtils.min;
+
 public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
 
     public static final String REPLAY_BUFFER_FILE = "replay_buffer.ser";
-    public static final int REPLAY_BUFFER_CAPACITY = 10000; // e.g., holds states from ~200-300 games
+    public static final String PATH_TO_MODEL = "models/Model1.onnx";
+    public static final int REPLAY_BUFFER_CAPACITY = 10000; // e.g., holds states from ~50 games
     public ReplayBuffer replayBuffer;
     public int wins = 0;
     public int total = 0;
+    private final boolean useReplayBuffer = false;
 
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
@@ -71,20 +75,21 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
             System.out.println("No persistent mapping found. Starting fresh.");
         }
         //also set up buffer
-        File bufferFile = new File(REPLAY_BUFFER_FILE);
-        if (bufferFile.exists()) {
-            try {
-                replayBuffer = (ReplayBuffer) loadObject(REPLAY_BUFFER_FILE);
-                System.out.printf("Loaded Replay Buffer with %d states from %s%n", replayBuffer.size(), REPLAY_BUFFER_FILE);
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Failed to load Replay Buffer. Starting with a fresh one.");
+        if(useReplayBuffer) {
+            File bufferFile = new File(REPLAY_BUFFER_FILE);
+            if (bufferFile.exists()) {
+                try {
+                    replayBuffer = (ReplayBuffer) loadObject(REPLAY_BUFFER_FILE);
+                    System.out.printf("Loaded Replay Buffer with %d states from %s%n", replayBuffer.size(), REPLAY_BUFFER_FILE);
+                } catch (IOException | ClassNotFoundException e) {
+                    System.out.println("Failed to load Replay Buffer. Starting with a fresh one.");
+                    replayBuffer = new ReplayBuffer(REPLAY_BUFFER_CAPACITY);
+                }
+            } else {
+                System.out.println("No Replay Buffer found. Starting fresh.");
                 replayBuffer = new ReplayBuffer(REPLAY_BUFFER_CAPACITY);
             }
-        } else {
-            System.out.println("No Replay Buffer found. Starting fresh.");
-            replayBuffer = new ReplayBuffer(REPLAY_BUFFER_CAPACITY);
         }
-
         set_encoder();
         labeledStates = new ArrayList<>();
     }
@@ -104,7 +109,9 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         //seed = 1617973009;
         //seed = 1735298645;
         //seed = -1943293127;
-        seed = -1018550371;
+        //-seed = -1018550371;
+        //seed = 67231982;
+        //seed = 1205983369;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
@@ -117,7 +124,7 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         c8.setEncoder(encoder);
         mcts2.setEncoder(encoder);
         mcts2.setBuffer(replayBuffer);
-        mcts2.initNN("models/Model1.onnx");
+        mcts2.initNN(PATH_TO_MODEL);
         encoder.setAgent(playerA.getId());
         encoder.setOpponent(playerB.getId());
     }
@@ -127,19 +134,21 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         if(playerA.hasWon()) wins++;
         int N = encoder.macroStateVectors.size();
         double γ = 0.99;          // discount factor
+        double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
 
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
             Set<Integer> state = encoder.macroStateVectors.get(i);
             double[] action = ActionEncoder.actionVectors.get(i);
+            double normScore = encoder.stateScores.get(i);
 
             boolean win = playerA.hasWon();
             double terminal = win ? +1.0 : -1.0;
             double discount = Math.pow(γ, N - i - 1);
 
-            double score = terminal * discount;
+            double blended = λ * normScore + (1.0 - λ) * terminal * discount;
 
-            labeledStateBatch.add(new LabeledState(state, action, score));
+            labeledStateBatch.add(new LabeledState(state, action, blended));
         }
         reset_vectors();
     }
@@ -211,13 +220,41 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         int maxTurn = 50;
         Features.printOldFeatures = false;
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
-        ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
-        for(int i = 0; i < 5; i++) {
-            addCard(Zone.HAND, playerA, "Sheltered by ghosts", 1);
-            removeAllCardsFromHand(playerB);
-            setStrictChooseMode(true);
+        //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = true;
+        //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
+        for(int i = 0; i < 250; i++) {
+            setStrictChooseMode(false);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
+            create_labeled_states();
+            labeledStates.addAll(labeledStateBatch);
+            labeledStateBatch.clear();
+            reset_game();
+            System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+        }
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        compress_labeled_states();
+
+        print_labeled_states();
+        persistLabeledStates(TRAIN_OUT_FILE);
+        persistData();
+        //save_buffer();
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("WINRATE: %f\n", wins*1.0/total);
+    }
+    @Test
+    public void make_train_ds_50_from_buffer() {
+        int maxTurn = 50;
+        Features.printOldFeatures = false;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        for(int i = 0; i < 50; i++) {
+            loadGame();
+            setStrictChooseMode(false);
+            setStopAt(maxTurn, PhaseStep.END_TURN);
+            currentGame.resume();
             create_labeled_states();
             labeledStates.addAll(labeledStateBatch);
             labeledStateBatch.clear();
@@ -237,18 +274,22 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
         System.out.printf("WINRATE: %f\n", wins*1.0/total);
     }
+    /**
+     * make a testing/validation set of 20 random states from each of 20 games
+     */
     @Test
-    public void make_train_ds_50_from_buffer() {
+    public void make_test_ds_X_20() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
-        for(int i = 0; i < 5; i++) {
-            loadGame();
-            setStrictChooseMode(true);
+        //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
+        for(int i = 0; i < 20; i++) {
+            setStrictChooseMode(false);
             setStopAt(maxTurn, PhaseStep.END_TURN);
-            currentGame.resume();
+            execute();
             create_labeled_states();
-            labeledStates.addAll(labeledStateBatch);
+            Collections.shuffle(labeledStateBatch);
+            labeledStates.addAll(labeledStateBatch.subList(0, min(20, labeledStateBatch.size())));
             labeledStateBatch.clear();
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
@@ -259,33 +300,44 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
         compress_labeled_states();
 
         print_labeled_states();
-        //persistLabeledStates(TRAIN_OUT_FILE);
-        //persistData();
-        //save_buffer();
+        persistLabeledStates(TEST_OUT_FILE);
+        persistData();
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
         System.out.printf("WINRATE: %f\n", wins*1.0/total);
     }
     /**
-     * make a testing/validation set of 5 random states from each of 50 games
+     * make a testing/validation set of 5 random states from each of 50 games (using replay buffer)
      */
     @Test
-    public void make_test_ds_X_50() {
+    public void make_test_ds_from_buffer_X_50() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
         for(int i = 0; i < 50; i++) {
-            setStrictChooseMode(true);
+            loadGame();
+            setStrictChooseMode(false);
             setStopAt(maxTurn, PhaseStep.END_TURN);
-            execute();
+            currentGame.resume();
             create_labeled_states();
-            labeledStates.addAll(labeledStateBatch.subList(0, 5));
+            Collections.shuffle(labeledStateBatch);
+            labeledStates.addAll(labeledStateBatch.subList(0, min(5, labeledStateBatch.size())));
             labeledStateBatch.clear();
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        compress_labeled_states();
+
         print_labeled_states();
         persistLabeledStates(TEST_OUT_FILE);
         persistData();
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("WINRATE: %f\n", wins*1.0/total);
     }
     public void save_buffer() {
         try {
@@ -299,7 +351,7 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
     public void print_vector_size() {
         System.out.printf("FINAL (unreduced) VECTOR SIZE: %d\n", StateEncoder.indexCount);
         System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
-        System.out.printf("REPLAY BUFFER SIZE: %d\n", replayBuffer.size());
+        if(replayBuffer != null) System.out.printf("REPLAY BUFFER SIZE: %d\n", replayBuffer.size());
         for(String s : ActionEncoder.actionMap.keySet()) {
             System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
         }

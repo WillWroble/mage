@@ -143,32 +143,18 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
 
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
-            // 1) decompress your raw state and action bits (you already have this)
-            Set<Integer> state = encoder.macroStateVectors.get(i);//encoder.getCompressedVector(encoder.macroStateVectors.get(i)); - compress later
+            Set<Integer> state = encoder.macroStateVectors.get(i);
             double[] action = ActionEncoder.actionVectors.get(i);
-            // 2) get your raw minimax score and normalize into [-1,+1]
             double normScore = encoder.stateScores.get(i);
-            //double normScore = rawScore / (double)Math.abs(GameStateEvaluator2.LOSE_GAME_SCORE);
 
-            //double scale = 20000.0;              // or better yet: maxAbs(stateScores)
-            //double normScore = Math.tanh(rawScore/scale);
-
-
-            // 3) build your discounted terminal label in [-1,+1]
             boolean win = playerA.hasWon();
             double terminal = win ? +1.0 : -1.0;
             double discount = Math.pow(γ, N - i - 1);
 
-            // 4) blend them
             double blended = λ * normScore + (1.0 - λ) * terminal * discount;
 
-            // 5) store a single LabeledState with that double label
             labeledStateBatch.add(new LabeledState(state, action, blended));
         }
-
-        // shuffle before writing out / persisting
-        //Collections.shuffle(labeledStateBatch);
-
         reset_vectors();
     }
     public void print_labeled_states() {
@@ -180,6 +166,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             }
 
             System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), Arrays.toString(ls.actionVector), ls.resultLabel);
+
         }
     }
 

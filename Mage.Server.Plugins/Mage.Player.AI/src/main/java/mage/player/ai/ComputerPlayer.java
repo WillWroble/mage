@@ -65,6 +65,9 @@ import java.util.Map.Entry;
  */
 public class ComputerPlayer extends PlayerImpl {
 
+    public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
+    public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
+
     private static final Logger log = Logger.getLogger(ComputerPlayer.class);
     private long lastThinkTime = 0; // msecs for last AI actions calc
 
@@ -120,6 +123,8 @@ public class ComputerPlayer extends PlayerImpl {
 
     public ComputerPlayer(final ComputerPlayer player) {
         super(player);
+        chooseTargetOptions = new HashSet<>(player.chooseTargetOptions);
+        chooseTargetAction = new ArrayList<>(player.chooseTargetAction);
     }
 
     @Override
@@ -3068,6 +3073,9 @@ public class ComputerPlayer extends PlayerImpl {
 
         // restore used in AI simulations
         // all human players converted to computer and analyse
+        ComputerPlayer cPlayer = (ComputerPlayer)player;
+        chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
+        chooseTargetAction = new ArrayList<>(cPlayer.chooseTargetAction);
         this.human = false;
     }
 

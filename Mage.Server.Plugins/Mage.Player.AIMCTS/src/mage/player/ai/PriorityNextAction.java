@@ -23,7 +23,7 @@ public class PriorityNextAction implements MCTSNodeNextAction{
             MCTSPlayer simPlayer = (MCTSPlayer) sim.getPlayer(player.getId());
             boolean success = simPlayer.activateAbility((ActivatedAbility)ability.copy(), sim);
             if(!success) {
-                System.out.println("PRIORITY FAILSAFE TRIGGERED: " + ability.toString());
+                if(MCTSPlayer.PRINT_CHOOSE_DIALOGUES) System.out.println("PRIORITY FAILSAFE TRIGGERED: " + ability.toString());
                 continue;//failsafe
             }
             sim.resume();

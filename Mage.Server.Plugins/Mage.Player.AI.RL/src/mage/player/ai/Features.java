@@ -25,11 +25,13 @@ public class Features  implements Serializable {
     private final Map<String, Integer> occurrences;
     private final Map<String, TreeMap<Integer, Integer>> numericOccurrences;
     private final Map<String, Features> categoriesForChildren; //isn't reset between states, represents all possible categories for children
-    public Set<Features> categories; //resets every state represents temporary category features fall under
+    private final Set<Features> categories; //resets every state represents temporary category features fall under
     public boolean passToParent = true;
 
-    public String featureName;
-    public Features parent;
+    private StateEncoder encoder;
+
+    private String featureName;
+    private Features parent;
     public static boolean printOldFeatures = true;
     public static boolean printNewFeatures = true;
     public Features() {
@@ -48,8 +50,12 @@ public class Features  implements Serializable {
         this();
         parent = p;
         featureName = name;
+        encoder = p.encoder;
     }
 
+    public void setEncoder(StateEncoder encoder) {
+        this.encoder = encoder;
+    }
 
     public Features getCategory(String name) {
 

@@ -12,14 +12,14 @@ public class ChooseTargetNextAction implements MCTSNodeNextAction {
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
         List<MCTSNode> children = new ArrayList<>();
-        System.out.println("expanding choose target");
+        if(MCTSPlayer.PRINT_CHOOSE_DIALOGUES) System.out.println("expanding choose target");
         // Get targets for the current ability
         for (Set<UUID> targets: player.chooseTargetOptions) {
             //create node to add option to
             Game sim = game.getLastPriority().createSimulationForAI();
             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
             MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
-            simPlayer2.copyDialogues(player); //copy previous micro decisions
+            //simPlayer2.copyDialogues(player); //copy previous micro decisions
             simPlayer2.chooseTargetAction.add(targets);
             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);
             sim.resume();

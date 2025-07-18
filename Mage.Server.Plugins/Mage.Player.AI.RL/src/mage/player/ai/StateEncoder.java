@@ -155,6 +155,7 @@ public class StateEncoder {
         //process attachments
         for (UUID id : p.getAttachments()) {
             Permanent attachment = game.getPermanent(id);
+            if(attachment == null) continue;
             //modify name to not count auras/equipment twice
             f.passToParent = false; //don't pass pooled attachment features up, or they will be counted twice
             Features attachmentFeatures = f.getSubFeatures(attachment.getName());
