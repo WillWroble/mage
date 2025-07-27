@@ -19,6 +19,7 @@ public class LabeledState implements Serializable {
     /** Value label (e.g., -1.0 for loss, +1.0 for win). */
     public final double resultLabel;
 
+
     /**
      * Construct a labeled state.
      * @param stateIndices  indices of active features
@@ -36,6 +37,10 @@ public class LabeledState implements Serializable {
     public void compress(StateEncoder encoder) {
         stateVector = encoder.getCompressedVectorArray(stateVector);
     }
+    public void compress(Set<Integer> ignoreList) {
+        stateVector = FeatureMerger.getCompressedVectorArray(ignoreList, stateVector);
+    }
+
     /**
      * Persist this labeled state to the given DataOutputStream.
      * Caller must write header (record count, S, wordsPerState) before calling.
@@ -43,14 +48,36 @@ public class LabeledState implements Serializable {
      * @throws IOException   on I/O error
      */
     public void persist(DataOutputStream out) throws IOException {
-        // Convert the BitSet to an array of active indices
-
+//        for (int j : stateVector) {
+//            if (j >= maxIndex) return; //dont persist a state with unfinalized features
+//        }
         // 1) Write the NUMBER of active indices first.
         out.writeInt(stateVector.length);
 
         // 2) Write only the active indices themselves.
         for (int index : stateVector) {
             out.writeInt(index);
+        }
+        // --- The rest of the method remains the same ---
+        // 3) Write your action-distribution vector
+        for (double p : actionVector) {
+            out.writeDouble(p);
+        }
+        // 4) Write result label
+        out.writeDouble(resultLabel);
+    }
+    public void persist(DataOutputStream out, int mIndex) throws IOException {
+        // Convert the BitSet to an array of active indices
+        int count = 0;
+        for(int index : stateVector) {
+            if(index < mIndex) count++;
+        }
+        // 1) Write the NUMBER of active indices first.
+        out.writeInt(count);
+
+        // 2) Write only the active indices themselves.
+        for (int index : stateVector) {
+            if(index < mIndex) out.writeInt(index);
         }
         // --- The rest of the method remains the same ---
         // 3) Write your action-distribution vector

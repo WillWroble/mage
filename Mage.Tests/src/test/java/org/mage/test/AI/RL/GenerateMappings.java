@@ -62,10 +62,6 @@ public class GenerateMappings extends MinimaxVectorExtractionTests {
         System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
         System.out.print("RAW TO REDUCED MAPPING: ");
-        for(int i : encoder.rawToReduced.keySet()) {
-            if(i < encoder.rawToReduced.get(i)) System.out.println("-here-");
-            System.out.printf("[%d => %d]", i, encoder.rawToReduced.get(i));
-        }
         System.out.println();
         System.out.println(encoder.ignoreList.toString());
     }

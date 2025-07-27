@@ -58,7 +58,7 @@ class AnyColorPermanentTypesManaEffect extends ManaEffect {
 
     public AnyColorPermanentTypesManaEffect(TargetController targetController, FilterPermanent permanentTypes) {
         super();
-        filter = permanentTypes;
+        filter = permanentTypes.copy();
         filter.add(targetController.getControllerPredicate());
         staticText = "Add one mana of any color" +
                 " among " + permanentTypes.getMessage() + " " +

@@ -65,7 +65,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         int[] activeGlobalIndices;
 
-        encoder.processState(node.getGame());
+        encoder.processState(node.getGame(), getId());
         activeGlobalIndices = encoder.getFinalActiveGlobalIndicesArray();
 
 
@@ -259,8 +259,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             MCTSNode best = root.bestChild();
             if(best == null) return;
 
-            encoder.processMacroState(game);
-            ActionEncoder.addAction(getActionVec());
+            encoder.processMacroState(game, getId());
+            encoder.addAction(getActionVec());
             encoder.stateScores.add(root.getWinRatio());
             Game copiedState = game.copy();
             if(buffer != null)

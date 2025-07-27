@@ -1,5 +1,7 @@
 package mage.player.ai;
 
+import com.j256.ormlite.stmt.query.In;
+
 import java.util.*;
 
 public class FeatureMerger {
@@ -112,5 +114,77 @@ public class FeatureMerger {
             }
         }
         return ignoreList;
+    }
+    /**
+     * Computes an ignore list for features using LabeledState objects.
+     * Assumes LabeledState.activeGlobalIndices is an int[] of active global feature indices.
+     * @param endIndex max index to use
+     * @param labeledStates List of LabeledState objects.
+     * @return A Set of feature indices to ignore.
+     */
+    public static Set<Integer> computeIgnoreListFromLS(List<LabeledState> labeledStates, int startIndex, int endIndex) {
+        int M = labeledStates.size();
+        if (M == 0) {
+            return Collections.emptySet();
+        }
+
+        BitSet[] patterns = new BitSet[endIndex];
+        for (int f = startIndex; f < endIndex; f++) {
+            patterns[f] = new BitSet(M);
+        }
+
+        for (int row = 0; row < M; row++) {
+            // Assuming LabeledState now has a field like 'activeGlobalIndices' of type int[]
+            int[] activeIndices = labeledStates.get(row).stateVector;
+            for (int activeFeatureIndex : activeIndices) {
+                if (activeFeatureIndex >= startIndex && activeFeatureIndex < endIndex) {
+                    patterns[activeFeatureIndex].set(row);
+                } else {
+                    // Log or handle out-of-bounds index
+                }
+            }
+        }
+
+        // The rest of the logic is identical to computeIgnoreList
+        Map<BitSet, Integer> representative = new HashMap<>(endIndex);
+        Set<Integer> ignoreList = new HashSet<>();
+
+        for (int f = startIndex; f < endIndex; f++) {
+            BitSet pattern = patterns[f];
+            if (pattern.isEmpty()) {
+                ignoreList.add(f);
+                continue;
+            }
+            BitSet key = (BitSet) pattern.clone();
+            Integer first = representative.get(key);
+            if (first == null) {
+                representative.put(key, f);
+            } else {
+                ignoreList.add(f);
+            }
+        }
+        return ignoreList;
+    }
+    /**
+     * Compresses a raw feature vector by removing any indices present in the ignore set.
+     * @param ignore The Set of feature indices to remove.
+     * @param stateVector The uncompressed array of feature indices.
+     * @return A new, compressed array of feature indices.
+     */
+    public static int[] getCompressedVectorArray(Set<Integer> ignore, int[] stateVector) {
+        // Use a List to dynamically store the features that are kept.
+        List<Integer> compressedList = new ArrayList<>();
+        for (int featureIndex : stateVector) {
+            if (!ignore.contains(featureIndex)) {
+                compressedList.add(featureIndex);
+            }
+        }
+
+        // Convert the List to a primitive int array for final storage.
+        int[] out = new int[compressedList.size()];
+        for (int i = 0; i < compressedList.size(); i++) {
+            out[i] = compressedList.get(i);
+        }
+        return out;
     }
 }

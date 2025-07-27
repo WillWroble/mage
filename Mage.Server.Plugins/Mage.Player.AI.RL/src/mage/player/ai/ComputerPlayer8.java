@@ -135,13 +135,12 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         getAbilityAndSourceInfo(game, ability, true)
                 ));
                 //save action vector
-                ActionEncoder.addAction(getActionVec(ability));
+                encoder.addAction(getActionVec(ability));
                 //save state vector
-                encoder.processMacroState(game);
+                encoder.processMacroState(game, getId());
                 //add scores
-                double perspectiveFactor = getId() == encoder.myPlayerID ? 1.0 : -1.0;
+                double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
                 encoder.stateScores.add(perspectiveFactor*Math.tanh(root.score*1.0/20000));
-                //encoder.activeStates.add(getId() == encoder.myPlayerID);
                 if (!ability.getTargets().isEmpty()) {
                     for (Target target : ability.getTargets()) {
                         for (UUID id : target.getTargets()) {

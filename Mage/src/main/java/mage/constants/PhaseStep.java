@@ -47,11 +47,11 @@ public enum PhaseStep {
     public int getIndex() {
         return index;
     }
-
-    @Override
-    public String toString() {
-        return text;
-    }
+//
+//    @Override
+//    public String toString() {
+//        return text;
+//    }
 
     public static PhaseStep fromString(String needText) {
         return Arrays.stream(values())

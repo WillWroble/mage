@@ -1,6 +1,5 @@
 package org.mage.test.AI.RL;
 
-import com.j256.ormlite.stmt.query.In;
 import mage.constants.MultiplayerAttackOption;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -18,19 +17,22 @@ import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.Arrays;
-import java.util.BitSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+
+import static org.mage.test.AI.RL.MinimaxVectorExtractionTests.MAPPING_FILE;
 
 /**
  * @author WillWroble
  */
 public class RLEncodingTests extends CardTestPlayerBaseAI {
     StateEncoder encoder;
-    private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
-    private String deckNameB = "simplegreen.dck";
-
+    private String deckNameB = "UWTempo.dck"; //simplegreen, UWTempo
+    private String deckNameA = "simplegreen.dck";
+    Features old_features;
 
     @Override
     public List<String> getFullSimulatedPlayers() {
@@ -48,7 +50,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (getFullSimulatedPlayers().contains(name)) {
             if(name.equals("PlayerA")) {
-                TestComputerPlayer7 t8 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
                 TestPlayer testPlayer = new TestPlayer(t8);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
@@ -68,11 +70,24 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         set_encoder();
     }
     public void set_encoder() {
-        if(true) return;
+        //if(true) return;
         ComputerPlayer8 c8 = (ComputerPlayer8)playerA.getComputerPlayer();
         c8.setEncoder(encoder);
         encoder.setAgent(playerA.getId());
         encoder.setOpponent(playerB.getId());
+        //if(true) return;
+        try {
+            old_features = Features.loadMapping(MAPPING_FILE);
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("failed to load persistent mappings.", e);
+        }
+        if(true) return;
+        try {
+            encoder.loadMapping(MAPPING_FILE);
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException("failed to load persistent mappings.", e);
+        }
+
     }
     public void reset_game() {
         try {
@@ -88,6 +103,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
     //5 turns across 1 game
     @Test
     public void test_encoding_5_1() {
+        Features.printOldFeatures = false;
         // simple test of 5 turns
         int maxTurn = 5;
         //addCard(Zone.HAND, playerA, "Fauna Shaman", 3);
@@ -95,6 +111,24 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         setStopAt(maxTurn, PhaseStep.END_TURN);
         execute();
 
+//        try {
+//            encoder.getFeatures().saveMapping(MAPPING_FILE);
+//            System.out.printf("Persisted feature mapping (and ignore list) to %s%n", MAPPING_FILE);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+        //if(true) return;
+        logger.info(old_features.localIndexCount);
+        logger.info(encoder.getFeatures().localIndexCount);
+        old_features.merge(encoder.getFeatures());
+        logger.info(old_features.localIndexCount);
+
+        try {
+            old_features.saveMapping(MAPPING_FILE);
+            System.out.printf("Persisted feature mapping (and ignore list) to %s%n", MAPPING_FILE);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
     //20 turns across 1 game
     @Test
@@ -224,29 +258,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         execute();
         System.out.println(ignore);
     }
-    @Test
-    public void test_state_consistency() {
-        int maxTurn = 10;
-        //removeAllCardsFromHand(playerA);
-        setStrictChooseMode(true);
-        setStopAt(maxTurn, PhaseStep.END_TURN);
-        execute();
-        //save state after 5 turns
-        int bookmarkedState = currentGame.bookmarkState();
-        Set<Integer> savedVec = StateEncoder.featureVector;
-        reset_game();
-        //simulate another 5 turns
-        setStrictChooseMode(true);
-        setStopAt(maxTurn, PhaseStep.END_TURN);
-        execute();
-        //reload state and read it
-        currentGame.restoreState(bookmarkedState, "rolling_back_for_testing");
-        encoder.processState(currentGame);
-        Set<Integer> newVec = StateEncoder.featureVector;
-        System.out.println(savedVec);
-        System.out.println(newVec);
-        assert (savedVec.equals(newVec));
-    }
+
     @After
     public void print_vector_size() {
         System.out.printf("FINAL (unreduced) VECTOR SIZE: %d\n", StateEncoder.indexCount);

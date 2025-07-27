@@ -22,6 +22,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
+import static java.lang.Integer.min;
+
 public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     private String deckNameA = "UWTempo.dck"; //simplegreen, UWTempo
     private String deckNameB = "simplegreen.dck";
@@ -60,8 +62,8 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             } else {
-                TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
-                TestPlayer testPlayer = new TestPlayer(t8);
+                TestComputerPlayer7 t7 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
+                TestPlayer testPlayer = new TestPlayer(t7);
                 testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
                 return testPlayer;
             }
@@ -70,6 +72,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     }
     public void init_seed() {
         seed = RandomUtil.nextInt();
+        //seed = 38451593;
         System.out.printf("USING SEED: %d\n", seed);
         RandomUtil.setSeed(seed);
     }
@@ -111,7 +114,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     }
     public void set_encoder() {
         ComputerPlayer8 c8 = (ComputerPlayer8)playerA.getComputerPlayer(); c8.setEncoder(encoder);
-        c8 = (ComputerPlayer8)playerB.getComputerPlayer(); c8.setEncoder(encoder);
+        //c8 = (ComputerPlayer8)playerB.getComputerPlayer(); c8.setEncoder(encoder);
         encoder.setAgent(playerA.getId());
         encoder.setOpponent(playerB.getId());
     }
@@ -129,8 +132,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void reset_vectors() {
         encoder.macroStateVectors.clear();
         encoder.stateScores.clear();
-        encoder.activeStates.clear();
-        ActionEncoder.actionVectors.clear();
+        encoder.actionVectors.clear();
     }
 
     /**
@@ -144,7 +146,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
             Set<Integer> state = encoder.macroStateVectors.get(i);
-            double[] action = ActionEncoder.actionVectors.get(i);
+            double[] action = encoder.actionVectors.get(i);
             double normScore = encoder.stateScores.get(i);
 
             boolean win = playerA.hasWon();
@@ -160,7 +162,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void print_labeled_states() {
         for (LabeledState ls : labeledStates) {
             StringBuilder sb1 = new StringBuilder();
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < min(100, ls.stateVector.length); i++) {
                 sb1.append(ls.stateVector[i]);
                 sb1.append(" ");
             }
@@ -202,13 +204,13 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
      */
     public void compress_labeled_states() {
         for (LabeledState ls : labeledStates) {
-            ls.compress(encoder);
+            ls.compress(encoder.getFeatures().ignoreList);
         }
     }
     @Test
     public void print_current_ignore_list() {
-        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
-        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.getFeatures().ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", encoder.getFeatures().localIndexCount.get() - encoder.getFeatures().ignoreList.size());
     }
     @Test
     public void make_ignore_X_50() {
@@ -221,15 +223,15 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        //assert(!encoder.ignoreList.isEmpty());
+        //assert(!encoder.getFeatures().ignoreList.isEmpty());
         Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
-        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
-        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        Set<Integer> oldIgnore = new HashSet<>(encoder.getFeatures().ignoreList);
+        encoder.getFeatures().ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
         //actions = new HashMap<>(ActionEncoder.actionMap);
         persistData();
-        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
-        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
-        //encoder.ignoreList = new HashSet<>(ignore);
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.getFeatures().ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", encoder.getFeatures().localIndexCount.get() - encoder.getFeatures().ignoreList.size());
+        //encoder.getFeatures().ignoreList = new HashSet<>(ignore);
 
     }
     /**
@@ -239,7 +241,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
     public void make_train_ds_X_250() {
         int maxTurn = 50;
         Features.printOldFeatures = false;
-        for(int i = 0; i < 250; i++) {
+        for(int i = 0; i < 50; i++) {
             setStrictChooseMode(true);
             setStopAt(maxTurn, PhaseStep.END_TURN);
             execute();
@@ -249,16 +251,15 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
-        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
-        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+        //Set<Integer> oldIgnore = new HashSet<>(encoder.getFeatures().ignoreList);
+        encoder.getFeatures().ignoreList = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates, 0, encoder.getFeatures().localIndexCount.get()));
         compress_labeled_states();
 
         print_labeled_states();
         persistLabeledStates(TRAIN_OUT_FILE);
         persistData();
-        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
-        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.getFeatures().ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", encoder.getFeatures().localIndexCount.get() - encoder.getFeatures().ignoreList.size());
     }
 
     /**
@@ -279,20 +280,20 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
-        Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
-        encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+//        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(labeledStates));
+//        Set<Integer> oldIgnore = new HashSet<>(encoder.getFeatures().ignoreList);
+//        encoder.getFeatures().ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
         compress_labeled_states();
 
         print_labeled_states();
         persistLabeledStates(TEST_OUT_FILE);
         persistData();
-        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.ignoreList.size());
-        System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - encoder.ignoreList.size());
+        System.out.printf("IGNORE LIST SIZE: %d\n", encoder.getFeatures().ignoreList.size());
+        System.out.printf("REDUCED VECTOR SIZE: %d\n", encoder.getFeatures().localIndexCount.get() - encoder.getFeatures().ignoreList.size());
     }
     @After
     public void print_vector_size() {
-        System.out.printf("RAW VECTOR SIZE: %d\n", StateEncoder.indexCount);
+        System.out.printf("RAW VECTOR SIZE: %d\n", encoder.getFeatures().localIndexCount.get());
         System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
         for(String s : ActionEncoder.actionMap.keySet()) {
             System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
@@ -307,7 +308,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
 
             // 'S' now represents the TOTAL size of your global feature vocabulary.
             // The constant should be updated to reflect this.
-            int S = StateEncoder.indexCount;
+            int S = encoder.getFeatures().localIndexCount.get();
 
             // 'A' is still the size of the policy vector.
             int A = 128;

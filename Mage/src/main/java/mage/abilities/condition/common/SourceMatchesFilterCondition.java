@@ -31,7 +31,8 @@ public class SourceMatchesFilterCondition implements Condition {
     @Override
     public boolean apply(Game game, Ability source) {
         Permanent permanent = source.getSourcePermanentOrLKI(game);
-        return filter.match(permanent, permanent == null ? source.getControllerId() : permanent.getControllerId(), source, game);
+        if(permanent == null) System.out.println("Permanent not found");
+        return filter.match(permanent, permanent.getControllerId(), source, game);
     }
 
     @Override

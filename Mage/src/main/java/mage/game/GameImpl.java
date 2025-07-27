@@ -1515,13 +1515,13 @@ public abstract class GameImpl implements Game {
             // This is not a real emblem. Just a fake source for the
             // inherent trigger ability related to Rad counters
             // Faking a source just to display something on the stack ability.
-            state.addHelperEmblem(new RadiationEmblem(), playerId);
+            //state.addHelperEmblem(new RadiationEmblem(), playerId);
         }
 
         // global card hints for better UX
         for (UUID playerId : state.getPlayerList(startingPlayerId)) {
-            state.addHelperEmblem(new XmageHelperEmblem().withCardHint("storm counter", StormAbility.getHint()), playerId);
-            state.addHelperEmblem(new XmageHelperEmblem().withCardHint("day or night", DayNightHint.instance), playerId);
+            //state.addHelperEmblem(new XmageHelperEmblem().withCardHint("storm counter", StormAbility.getHint()), playerId);
+            //state.addHelperEmblem(new XmageHelperEmblem().withCardHint("day or night", DayNightHint.instance), playerId);
         }
     }
 
