@@ -29,7 +29,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
+    private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 1000;
     private static final int NUM_GAMES_TO_SIMULATE_TEST = 50;
     private static final int MAX_GAME_TURNS = 50;
     private static final int MAX_CONCURRENT_GAMES = 8;
@@ -37,7 +37,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "UWTempo.dck";
     private static final String DECK_B = "simplegreen.dck";
-    private static final String MCTS_MODEL_PATH = "models/Model2.onnx";
+    private static final String MCTS_MODEL_PATH = "models/Model1.onnx";
     private static final int MCTS_ROLLOUT_THREADS = 2;
 
     // ================================== FILE PATHS ==================================
@@ -213,8 +213,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         System.out.println("Initial Index Count: " + initialRawSize);
         System.out.println("Final Index Count: " + finalFeatures.localIndexCount.get());
         Set<Integer> oldIgnoreList = new HashSet<>(finalFeatures.ignoreList);
-        Set<Integer> newIgnoreListA = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, 0, previousRawSize));
-        Set<Integer> newIgnoreListB = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, previousRawSize, initialRawSize));
+        Set<Integer> newIgnoreListA = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, 0, initialRawSize));
+        Set<Integer> newIgnoreListB = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, initialRawSize, finalFeatures.localIndexCount.get()));
         System.out.println("Computed " + newIgnoreListB.size() + " features to ignore from this batch.");
         //intersect
         newIgnoreListA.retainAll(oldIgnoreList);
@@ -227,6 +227,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         for (LabeledState ls : allStates) {
             ls.compress(finalFeatures.ignoreList);
         }
+        System.out.println("Final unique feature count: " + LabeledState.getUniqueFeaturesFromBatch(allStates));
         System.out.println("Final Compressed Feature Vector Size: " + (finalFeatures.localIndexCount.get() - finalFeatures.ignoreList.size()));
         persistLabeledStates(trainingStates, ParallelDataGenerator.TRAIN_OUT_FILE);
         persistLabeledStates(testingStates, ParallelDataGenerator.TEST_OUT_FILE);
@@ -276,13 +277,15 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             // Start the game simulation. This is a blocking call that will run the game to completion.
             game.start(playerA.getId());
 
-            // The rest of the logic is safe as it uses the local player objects.
             boolean playerAWon = playerA.hasWon();
-            //merge to the final features
-            finalFeatures.merge(threadEncoder.getFeatures());
-            synchronized (finalFeatures) {
-                assert (finalFeatures.localIndexCount.get() >= threadEncoder.getFeatures().localIndexCount.get());
+            List<Set<Integer>> newStateVectors = new ArrayList<>();
+            for (int i = 0; i < threadEncoder.macroStateVectors.size(); i++) {
+                newStateVectors.add(new HashSet<>());
             }
+            //merge to the final features
+            finalFeatures.merge(threadEncoder.getFeatures(), newStateVectors);
+            //update generated dataset with remapped one
+            threadEncoder.macroStateVectors = newStateVectors;
             return new GameResult(generateLabeledStatesForGame(threadEncoder, playerAWon), playerAWon);
         } catch (Exception e) {
             System.err.println("Caught an internal AI/Game exception in a worker thread. Ignoring this game. Cause: " + e.getMessage());
@@ -359,7 +362,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             out.writeInt(128); // Assuming policy vector size is constant
 
             for (LabeledState ls : states) {
-                ls.persist(out, finalFeatures.localIndexCount.get());
+                ls.persist(out);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -419,8 +422,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             testPlayer.setAIPlayer(true);
             return testPlayer;
         } else {
-            TestComputerPlayer7 t7 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(t7);
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestPlayer testPlayer = new TestPlayer(t8);
             testPlayer.setAIPlayer(true);
             return testPlayer;
         }

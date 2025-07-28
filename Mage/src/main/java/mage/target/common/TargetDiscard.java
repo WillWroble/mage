@@ -48,7 +48,7 @@ public class TargetDiscard extends TargetCard {
     public boolean canTarget(UUID id, Ability source, Game game) {
         Card card = game.getPlayer(playerId).getHand().get(id, game);
         if(source == null) System.out.println("Source is null");
-        return filter.match(card, source == null ? null : source.getControllerId(), game);
+        return filter.match(card, source == null ? playerId : source.getControllerId(), game);
     }
 
     @Override

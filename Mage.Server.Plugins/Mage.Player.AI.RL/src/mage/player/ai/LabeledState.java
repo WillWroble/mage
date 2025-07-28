@@ -3,6 +3,7 @@ package mage.player.ai;
 import java.io.*;
 import java.util.BitSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -48,9 +49,6 @@ public class LabeledState implements Serializable {
      * @throws IOException   on I/O error
      */
     public void persist(DataOutputStream out) throws IOException {
-//        for (int j : stateVector) {
-//            if (j >= maxIndex) return; //dont persist a state with unfinalized features
-//        }
         // 1) Write the NUMBER of active indices first.
         out.writeInt(stateVector.length);
 
@@ -86,5 +84,14 @@ public class LabeledState implements Serializable {
         }
         // 4) Write result label
         out.writeDouble(resultLabel);
+    }
+    public static int getUniqueFeaturesFromBatch(List<LabeledState> all) {
+        Set<Integer> uniqueFeatures = new HashSet<>();
+        for(LabeledState labeledState : all) {
+            for(int i : labeledState.stateVector) {
+                uniqueFeatures.add(i);
+            }
+        }
+        return uniqueFeatures.size();
     }
 }

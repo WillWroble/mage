@@ -79,7 +79,6 @@ public class Features implements Serializable {
             categoriesForChildren.get(n).setEncoder(encoder);
         }
     }
-
     public Features getCategory(String name) {
         if(name.isEmpty()) return null;
         if (categoriesForChildren.containsKey(name)) { //already contains category
@@ -197,13 +196,13 @@ public class Features implements Serializable {
         if (parent != null && callParent && passToParent) {
             parent.addNumericFeature(name, num);
             for(int i = 0; i < num; i++) {
-                parent.addFeature(name + "_SUM", false);
+                //parent.addFeature(name + "_SUM", false);
             }
             for(Features c : categories) {
                 c.addFeature(name);
                 //keep track of numerical sum for categories
                 for(int i = 0; i < num; i++) {
-                    c.addFeature(name + "_SUM", false);
+                    //c.addFeature(name + "_SUM", false);
                 }
             }
         }
@@ -269,13 +268,27 @@ public class Features implements Serializable {
     }
 
     /**
+     * copies the index of a feature to a new index between lists of state vectors
+     * @param copyTo
+     * @param copyFrom
+     * @param indexTo
+     * @param indexFrom
+     */
+    private void copyIndex(List<Set<Integer>> copyTo, List<Set<Integer>> copyFrom, int indexTo, int indexFrom) {
+        for(int i = 0; i < copyFrom.size(); i++) {
+            if(copyFrom.get(i).contains(indexFrom)) {
+                copyTo.get(i).add(indexTo);
+            }
+        }
+    }
+    /**
      * always discard f after merging
      *
      * @param f object to merge with
      */
-    public synchronized void merge(Features f) {
+    public synchronized void merge(Features f, List<Set<Integer>> newStateVectors) {
         if (this == f) return;
-
+        List<Set<Integer>> oldStateVectors = f.encoder.macroStateVectors;
         // Normal features
         for (String n : f.features.keySet()) {
             Map<Integer, Integer> thisOccurrenceMap = this.features.computeIfAbsent(n, k -> new HashMap<>());
@@ -284,6 +297,7 @@ public class Features implements Serializable {
                 if (!thisOccurrenceMap.containsKey(i)) {
                     thisOccurrenceMap.put(i, this.localIndexCount.getAndIncrement());
                 }
+                copyIndex(newStateVectors, oldStateVectors, thisOccurrenceMap.get(i), f.features.get(n).get(i));
             }
         }
 
@@ -298,6 +312,7 @@ public class Features implements Serializable {
                     if (!thisOccurrenceMap.containsKey(i)) {
                         thisOccurrenceMap.put(i, this.localIndexCount.getAndIncrement());
                     }
+                    copyIndex(newStateVectors, oldStateVectors, thisOccurrenceMap.get(i), f.numericFeatures.get(n).get(num).get(i));
                 }
             }
         }
@@ -306,7 +321,7 @@ public class Features implements Serializable {
             Map<Integer, Features> thisSubMap = this.subFeatures.computeIfAbsent(n, k -> new HashMap<>());
             for (int i : f.subFeatures.get(n).keySet()) {
                 Features thisSubFeature = thisSubMap.computeIfAbsent(i, k -> new Features(this, n + "_" + i));
-                thisSubFeature.merge(f.subFeatures.get(n).get(i));
+                thisSubFeature.merge(f.subFeatures.get(n).get(i), newStateVectors);
             }
         }
         //category labels
@@ -314,7 +329,7 @@ public class Features implements Serializable {
             if (!this.categoriesForChildren.containsKey(n)) {
                 this.categoriesForChildren.put(n, this.getCategory(n));
             }
-            this.categoriesForChildren.get(n).merge(f.categoriesForChildren.get(n));
+            this.categoriesForChildren.get(n).merge(f.categoriesForChildren.get(n), newStateVectors);
         }
     }
     /**

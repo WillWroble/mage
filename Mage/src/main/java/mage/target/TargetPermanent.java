@@ -52,7 +52,7 @@ public class TargetPermanent extends TargetObject {
     @Override
     public boolean canTarget(UUID id, Ability source, Game game) {
         if(source == null) System.out.println("Source is null");
-        return canTarget(source==null ? null : source.getControllerId(), id, source, game);
+        return canTarget(source==null ? id : source.getControllerId(), id, source, game);
     }
 
     @Override

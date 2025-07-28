@@ -18,10 +18,7 @@ import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static org.mage.test.AI.RL.MinimaxVectorExtractionTests.MAPPING_FILE;
 
@@ -120,7 +117,11 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         //if(true) return;
         logger.info(old_features.localIndexCount);
         logger.info(encoder.getFeatures().localIndexCount);
-        old_features.merge(encoder.getFeatures());
+        List<Set<Integer>> newStateVectors = new ArrayList<>();
+        for (int i = 0; i < encoder.macroStateVectors.size(); i++) {
+            newStateVectors.add(new HashSet<>());
+        }
+        old_features.merge(encoder.getFeatures(), newStateVectors);
         logger.info(old_features.localIndexCount);
 
         try {
