@@ -31,6 +31,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final int THINK_MAX_RATIO = 140; //was 80
     protected static final double THINK_TIME_MULTIPLIER = 1.0;
     protected static final boolean USE_MULTIPLE_THREADS = true;
+    public static boolean NO_NOISE = false;
 
     public transient MCTSNode root;
     protected int maxThinkTime;
@@ -88,7 +89,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (ability instanceof PassAbility)
             return false;
         logLife(game);
-        logger.info(game.getTurn().getValue(game.getTurnNum())+"choose action:" + root.getAction() + " success ratio: " + root.getWinRatio());
+        logger.info(game.getTurn().getValue(game.getTurnNum())+"choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
         return true;
     }
 
@@ -148,7 +149,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 CombatGroup currentGroup = currentGroups.get(i);
                 CombatGroup simulatedGroup = simulatedCombat.getGroups().get(i);
                 if(currentGroup.getAttackers().isEmpty()) {
-                    System.out.println("Attacker not found - skipping");
+                    logger.info("Attacker not found - skipping");
                     continue;
                 }
                 sb.append(game.getPermanent(currentGroup.getAttackers().get(0)).getName()).append(" with: ");
@@ -167,7 +168,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        System.out.println("base choose target");
+        logger.info("base choose target");
         Set<UUID> possible = target.possibleTargets(getId(), game);
         chooseTargetOptions.clear();
         MCTSPlayer.getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
@@ -191,7 +192,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return chooseTarget(outcome, target, source, game);
         } else {
             //reroute to default
-            System.out.println("falling back to default choose target");
+            logger.info("falling back to default choose target");
             return super.choose(outcome, target, source, game, options);
         }
     }
@@ -278,7 +279,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                         result = current.simulate(this.playerId);
                         simCount++;
                     } else {
-                        //System.out.println("Terminal State Reached!");
+                        //logger.info("Terminal State Reached!");
                         result = current.isWinner(this.playerId) ? 100000000 : -100000000;
                     }
                     // Backpropagation

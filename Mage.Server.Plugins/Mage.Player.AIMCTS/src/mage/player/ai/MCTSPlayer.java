@@ -42,10 +42,7 @@ public class MCTSPlayer extends ComputerPlayer {
     public boolean lastToAct =  false;
     private NextAction nextAction;
     public long dirichletSeed = 0;
-    //public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
-    //public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
-    //public Set<Set<UUID>> chooseTriggeredOptions = new HashSet<>();
-    //public List<Set<UUID>> chooseTriggeredAction = new ArrayList<>();
+    private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
 
     private int chooseTargetCount = 0;
     public static boolean PRINT_CHOOSE_DIALOGUES = false;
@@ -256,15 +253,15 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        //System.out.println("chooseTarget: " + source.toString());
-        if(PRINT_CHOOSE_DIALOGUES) System.out.println("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
+        //logger.info("chooseTarget: " + source.toString());
+        if(PRINT_CHOOSE_DIALOGUES) logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
         if(chooseTargetCount < chooseTargetAction.size()) {
             for(UUID id : chooseTargetAction.get(chooseTargetCount)) {
                 if(!target.canTarget(getId(), id, source, game)) continue;
                 target.addTarget(id, source, game);
                 if(PRINT_CHOOSE_DIALOGUES) System.out.printf("tried target: %s ", game.getObject(id).toString());
             }
-            if(PRINT_CHOOSE_DIALOGUES) System.out.println();
+            if(PRINT_CHOOSE_DIALOGUES) logger.info("");
             chooseTargetCount++;
             return true;
         }

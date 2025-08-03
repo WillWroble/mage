@@ -4,22 +4,15 @@ package mage.player.ai;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import mage.MageInt;
-import mage.constants.PhaseStep;
 import mage.constants.Zone;
 import mage.abilities.Ability;
-import mage.abilities.PlayLandAbility;
 import mage.abilities.common.PassAbility;
 import mage.cards.Card;
 import mage.game.Game;
-import mage.game.GameState;
 import mage.game.combat.Combat;
-import mage.game.turn.Step.StepPart;
 import mage.players.Player;
-import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 import java.util.Random;
-import org.apache.commons.math3.distribution.GammaDistribution;
 import org.apache.commons.math3.distribution.GammaDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
 
@@ -42,6 +35,7 @@ public class MCTSNode {
     public int visits = 0;
     private int wins = 0;
     public double score = 0;
+    public double initialScore;//initial score given from value network
     private MCTSNode parent = null;
     public final List<MCTSNode> children = new ArrayList<>();
     public Ability action;
@@ -176,11 +170,11 @@ public class MCTSNode {
             for (MCTSNode child : children) {
                 // value term: 0 if unvisited, else average reward
                 double q = (child.visits > 0)
-                        ? (child.score / child.visits)
+                        ? (child.getScoreRatio())
                         : 0.0;
                 double passBonus = child.getAction() instanceof PassAbility ? 0.05 : 0;
                 // exploration term still blows up when visits==0
-                double u = 1 * (child.prior + 0.3 + passBonus) * (sqrtN / (1 + child.visits));
+                double u = 1 * (child.prior) * (sqrtN / (1 + child.visits));
 
                 // combined PUCT
                 double val = sign * q + u;
@@ -207,8 +201,11 @@ public class MCTSNode {
                 node.depth = depth + 1;
                 node.prior = 1.0;///children.size();
             }
-            if (policy != null && player.getNextAction() != MCTSPlayer.NextAction.CHOOSE_TARGET) {
-                // 2) find max logit for numeric stability
+            if (policy != null && player.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {
+
+                double priorTemperature = 1.5; // This controls 'spikeyness' of prior distribution; higher means less spikey
+
+                //find max logit for numeric stability
                 double maxLogit = Double.NEGATIVE_INFINITY;
                 for (MCTSNode node : children) {
                     if (node.action == null) continue;
@@ -216,12 +213,12 @@ public class MCTSNode {
                     maxLogit = Math.max(maxLogit, policy[idx]);
                 }
 
-                // 3) compute raw exps and sum
+                //compute raw exps and sum
                 double sumExp = 0;
                 for (MCTSNode node : children) {
                     if (node.action == null) continue;
                     int idx = ActionEncoder.getAction(node.action);
-                    double raw = Math.exp(policy[idx] - maxLogit);
+                    double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
                     node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
                     sumExp += raw;
                 }
@@ -232,7 +229,9 @@ public class MCTSNode {
                 }
                 long seed = player.dirichletSeed;
                 if (seed != 0) {
-                    double alpha = 0.03, eps = 0;//no noise for now
+                    double alpha = 0.03;
+                    double eps = 0.15;//0.15 noise for now
+                    if(ComputerPlayerMCTS.NO_NOISE) eps = 0;
                     int K = children.size();
                     double[] dir = new double[K];
                     double sum = 0;
@@ -294,45 +293,66 @@ public class MCTSNode {
     }
 
     public MCTSNode bestChild() {
+
         if (children.size() == 1)
             return children.get(0);
-        double bestCount = -1;
-        double bestRatio = 0;
-        boolean bestIsPass = false;
-        MCTSNode bestChild = null;
         System.out.print("actions: ");
 
         for (MCTSNode node: children) {
             if(node.action != null) {
-                System.out.printf("[%s score: %.3f count: %d] ", node.action.toString(), node.getWinRatio(), node.visits);
+                System.out.printf("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits);
             }
-            if(node.combat != null && !node.combat.getAttackers().isEmpty()) System.out.printf("[%s score: %.3f count: %d] ", node.combat.toString(), node.getWinRatio(), node.visits);
-            //favour passing vs any other action except for playing land if ratio is close
-            if (node.visits > bestCount) {
-//                if (bestIsPass) {
-//                    double ratio = node.score/(node.visits * 1.0);
-//                    if (ratio < bestRatio + passRatioTolerance)
-//                        continue;
-//                }
-                bestChild = node;
-                bestCount = node.visits;
-                bestRatio = node.score/(node.visits * 1.0);
-                bestIsPass = false;
-            }
-//            else if (node.action instanceof PassAbility && node.visits > 10 && !(bestChild.action instanceof PlayLandAbility)) {
-//                //favour passing vs any other action if ratio is close
-//                double ratio = node.score/(node.visits * 1.0);
-//                if (ratio > bestRatio - passRatioTolerance) {
-//                    logger.info("choosing pass over " + bestChild.getAction());
-//                    bestChild = node;
-//                    bestCount = node.visits;
-//                    bestRatio = ratio;
-//                    bestIsPass = true;
-//                }
-//            }
+            if(node.combat != null && !node.combat.getAttackers().isEmpty()) System.out.printf("[%s score: %.3f count: %d] ", node.combat.toString(), node.getScoreRatio(), node.visits);
         }
         if(!children.isEmpty()) System.out.println();
-        return bestChild;
+
+        //derive temp from value
+        double temperature = 0.5*(1-abs(this.initialScore));
+
+        if (ComputerPlayerMCTS.NO_NOISE || temperature < 0.01) {
+            MCTSNode best = null;
+            double bestCount = -1;
+            for (MCTSNode node : children) {
+                if (node.visits > bestCount) {
+                    best = node;
+                    bestCount = node.visits;
+                }
+            }
+            return best;
+        }
+
+        List<Double> logProbs = new ArrayList<>();
+        double maxLogProb = Double.NEGATIVE_INFINITY;
+        for (MCTSNode node : children) {
+            double logProb = Math.log(node.visits) / temperature;
+            logProbs.add(logProb);
+            if (logProb > maxLogProb) {
+                maxLogProb = logProb;
+            }
+        }
+
+        List<Double> probabilities = new ArrayList<>();
+        double distributionSum = 0.0;
+        for (double logProb : logProbs) {
+            double probability = Math.exp(logProb - maxLogProb);
+            probabilities.add(probability);
+            distributionSum += probability;
+        }
+
+        for (int i = 0; i < probabilities.size(); i++) {
+            probabilities.set(i, probabilities.get(i) / distributionSum);
+        }
+
+        double randomValue = new Random().nextDouble();
+        double cumulativeProbability = 0.0;
+        for (int i = 0; i < children.size(); i++) {
+            cumulativeProbability += probabilities.get(i);
+            if (randomValue <= cumulativeProbability) {
+                return children.get(i);
+            }
+        }
+
+        return null;
     }
 
     public void emancipate() {
@@ -366,10 +386,10 @@ public class MCTSNode {
         return stateValue;
     }
 
-    public double getWinRatio() {
+    public double getScoreRatio() {
         if (visits > 0)
-            return (score*1.0)/(visits * 1.0);
-        return -666;
+            return (score)/(visits * 1.0);
+        return -1;
     }
 
     public int getVisits() {
@@ -468,6 +488,7 @@ public class MCTSNode {
             this.visits += merge.visits;
             this.wins += merge.wins;
             this.score += merge.score;
+            this.initialScore = merge.initialScore;
         }
 
         // Make a snapshot of the merge node's children.

@@ -1,10 +1,8 @@
 package mage.player.ai;
 
-import ai.onnxruntime.OrtException;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.GameState;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
@@ -221,7 +219,7 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
 
             encoder.processMacroState(game, getId());
             encoder.addAction(getActionVec());
-            encoder.stateScores.add(root.getWinRatio());
+            encoder.stateScores.add(root.getScoreRatio());
 
             root = best;
             root.emancipate();

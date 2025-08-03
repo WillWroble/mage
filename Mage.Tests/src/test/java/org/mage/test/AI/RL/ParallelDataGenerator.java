@@ -29,15 +29,16 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 1000;
+    private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
     private static final int NUM_GAMES_TO_SIMULATE_TEST = 50;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 8;
+    private static final int MAX_CONCURRENT_GAMES = 4;
+    private static final boolean DONT_USE_NOISE = false;
 
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "UWTempo.dck";
     private static final String DECK_B = "simplegreen.dck";
-    private static final String MCTS_MODEL_PATH = "models/Model1.onnx";
+    private static final String MCTS_MODEL_PATH = "models/Model3.onnx";
     private static final int MCTS_ROLLOUT_THREADS = 2;
 
     // ================================== FILE PATHS ==================================
@@ -112,6 +113,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             System.err.println("failed to load persistent mappings.");
         }
         Features.printOldFeatures = false;
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        ComputerPlayerMCTS.NO_NOISE =
+                DONT_USE_NOISE;
         //Features.printNewFeatures = false;
 
         System.out.println("\n=========================================");

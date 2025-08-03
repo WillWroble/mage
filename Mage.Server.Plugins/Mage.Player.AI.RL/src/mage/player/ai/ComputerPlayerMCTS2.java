@@ -4,7 +4,6 @@ import ai.onnxruntime.OrtException;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.GameState;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
@@ -62,21 +61,20 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      * @return The value of the game state as predicted by the neural network's value head.
      */
     protected double evaluateState(MCTSNode node) {
-
         int[] activeGlobalIndices;
-
-        encoder.processState(node.getGame(), getId());
-        activeGlobalIndices = encoder.getFinalActiveGlobalIndicesArray();
-
+        synchronized (encoder) {
+            encoder.processState(node.getGame(), getId());
+            activeGlobalIndices = FeatureMerger.getCompressedVectorArray(encoder.getFeatures().ignoreList, encoder.featureVector.stream().mapToInt(Integer::intValue).toArray());
+        }
 
         long[] onnxIndices = new long[activeGlobalIndices.length];
 
         for (int i = 0; i < activeGlobalIndices.length; i++) {
             onnxIndices[i] = activeGlobalIndices[i];
         }
-
         NeuralNetEvaluator.InferenceResult out = nn.infer(onnxIndices);
         node.policy = out.policy;
+        node.initialScore = out.value;
 
         return out.value;
     }
@@ -138,7 +136,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
 
         if (this.threadPoolSimulations == null) {
-            System.out.println(poolSize);
+            logger.info(poolSize);
             this.threadPoolSimulations = new ThreadPoolExecutor(
                     poolSize,
                     poolSize,
@@ -261,7 +259,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
             encoder.processMacroState(game, getId());
             encoder.addAction(getActionVec());
-            encoder.stateScores.add(root.getWinRatio());
+            encoder.stateScores.add(root.getScoreRatio());
             Game copiedState = game.copy();
             if(buffer != null)
                 buffer.add(copiedState);
