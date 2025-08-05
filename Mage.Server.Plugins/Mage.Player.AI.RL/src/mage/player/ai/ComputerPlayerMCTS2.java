@@ -131,7 +131,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     protected void applyMCTS(final Game game, final NextAction action) {
         int initialVisits = root.getAverageVisits();
         //if(initialVisits > MAX_TREE_VISITS) return;//just keep using tree
-        if(SHOW_THREAD_INFO) System.out.printf("STARTING ROOT VISITS: %d\n", initialVisits);
+        if(SHOW_THREAD_INFO) logger.info(String.format("STARTING ROOT VISITS: %d", initialVisits));
         int thinkTime = BASE_THREAD_TIMEOUT;
 
 
@@ -191,13 +191,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             childVisits = getChildVisits(tasks);
 
             if (SHOW_THREAD_INFO) {
-                System.out.printf("CYCLE %d: %d threads were created\n", cycleCounter, tasks.size());
+                logger.info(String.format("CYCLE %d: %d threads were created", cycleCounter, tasks.size()));
+                StringBuilder sb = new StringBuilder();
                 for (MCTSExecutor task : tasks) {
                     if (task.reachedTerminalState && SHOW_THREAD_INFO)
-                        System.out.print("-task reached a terminal state-");
-                    if (SHOW_THREAD_INFO) System.out.printf("%d ", task.simCount);
+                        sb.append("-task reached a terminal state-");
+                    if (SHOW_THREAD_INFO) sb.append(String.format("%d ", task.simCount));
                 }
-                System.out.printf("\nCOMPOSITE CHILDREN: %s\n", childVisits.toString());
+                logger.info(sb.toString());
+                logger.info("");
+                logger.info(String.format("COMPOSITE CHILDREN: %s", childVisits.toString()));
             }
             fullTime += thinkTime;
         }

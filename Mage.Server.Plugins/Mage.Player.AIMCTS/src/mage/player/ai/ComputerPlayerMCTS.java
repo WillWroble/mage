@@ -1,5 +1,6 @@
 package mage.player.ai;
 
+import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
@@ -9,6 +10,7 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
 import mage.game.Game;
+import mage.game.GameState;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
@@ -21,6 +23,7 @@ import org.apache.log4j.Logger;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * @author BetaSteward_at_googlemail.com
@@ -32,6 +35,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final double THINK_TIME_MULTIPLIER = 1.0;
     protected static final boolean USE_MULTIPLE_THREADS = true;
     public static boolean NO_NOISE = false;
+    public static boolean NO_POLICY = false;
 
     public transient MCTSNode root;
     protected int maxThinkTime;
@@ -89,7 +93,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (ability instanceof PassAbility)
             return false;
         logLife(game);
-        logger.info(game.getTurn().getValue(game.getTurnNum())+"choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
+        printBattlefieldScore(game, playerId);
+        if(root.getAction().getTargets().isEmpty()) {
+            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
+        } else {
+            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getObject(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
+        }
         return true;
     }
 
@@ -179,7 +188,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             if(target.canTarget(targetId, source, game)) {
                 target.addTarget(targetId, source, game);
                 chosen.add(targetId);
-                System.out.printf("Targeting %s\n", game.getObject(targetId).toString());
+                logger.info(String.format("Targeting %s", game.getObject(targetId).toString()));
             }
             chooseTargetAction.add(chosen);
         }
@@ -396,6 +405,31 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         for (Player player : game.getPlayers().values()) {
             sb.append("[player ").append(player.getName()).append(':').append(player.getLife()).append(']');
         }
+        logger.info(sb.toString());
+    }
+    protected void printBattlefieldScore(Game game, UUID playerId) {
+        // hand
+        Player player = game.getPlayer(playerId);
+        logger.info("[" + game.getPlayer(playerId).getName() + "]" +
+                ", life = " + player.getLife());
+        String cardsInfo = player.getHand().getCards(game).stream()
+                .map(MageObject::getName)
+                .collect(Collectors.joining("; "));
+        StringBuilder sb = new StringBuilder("-> Hand: [")
+                .append(cardsInfo)
+                .append("]");
+        logger.info(sb.toString());
+
+        // battlefield
+        sb.setLength(0);
+        String ownPermanentsInfo = game.getBattlefield().getAllPermanents().stream()
+                .filter(p -> p.isOwnedBy(player.getId()))
+                .map(p -> p.getName()
+                        + (p.isTapped() ? ",tapped" : "")
+                        + (p.isAttacking() ? ",attacking" : "")
+                        + (p.getBlocking() > 0 ? ",blocking" : ""))
+                .collect(Collectors.joining("; "));
+        sb.append("-> Permanents: [").append(ownPermanentsInfo).append("]");
         logger.info(sb.toString());
     }
     public void clearTree() {

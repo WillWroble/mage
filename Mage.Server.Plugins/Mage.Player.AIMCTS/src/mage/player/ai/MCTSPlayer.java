@@ -256,12 +256,17 @@ public class MCTSPlayer extends ComputerPlayer {
         //logger.info("chooseTarget: " + source.toString());
         if(PRINT_CHOOSE_DIALOGUES) logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
         if(chooseTargetCount < chooseTargetAction.size()) {
+            StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
             for(UUID id : chooseTargetAction.get(chooseTargetCount)) {
                 if(!target.canTarget(getId(), id, source, game)) continue;
                 target.addTarget(id, source, game);
-                if(PRINT_CHOOSE_DIALOGUES) System.out.printf("tried target: %s ", game.getObject(id).toString());
+                if (sb != null) {
+                    sb.append(String.format("tried target: %s ", game.getObject(id).toString()));
+                }
             }
-            if(PRINT_CHOOSE_DIALOGUES) logger.info("");
+            if (sb != null) {
+                logger.info(sb.toString());
+            }
             chooseTargetCount++;
             return true;
         }

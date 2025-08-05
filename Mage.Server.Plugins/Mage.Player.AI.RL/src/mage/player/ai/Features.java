@@ -1,5 +1,7 @@
 package mage.player.ai;
 
+import org.apache.log4j.Logger;
+
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -16,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Features implements Serializable {
     private static final long serialVersionUID = 2L; // Version updated for the structural change
+    private static final Logger logger = Logger.getLogger(Features.class);
     public AtomicInteger localIndexCount; // a mutable, thread-safe counter
     public int previousLocalIndexCount = 0;
     public Set<Integer> ignoreList;
@@ -168,12 +171,12 @@ public class Features implements Serializable {
             occurrences.put(name, count);
             if (features.get(name).containsKey(count)) { //already contains feature at this count
                 if (printOldFeatures)
-                    System.out.printf("Index %d is already reserved for feature %s at %d times in %s\n", features.get(name).get(count), name, count, featureName);
+                    logger.info(String.format("Index %d is already reserved for feature %s at %d times in %s", features.get(name).get(count), name, count, featureName));
             } else { //contains feature but different count
                 features.get(name).put(count, localIndexCount.getAndIncrement()); //  FIXED: Use atomic increment
                 if (printNewFeatures)
-                    System.out.printf("Feature %s exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s\n",
-                            name, count, localIndexCount.get() - 1, count, featureName);
+                    logger.info(String.format("Feature %s exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s",
+                            name, count, localIndexCount.get() - 1, count, featureName));
             }
         } else { //completely new feature
             occurrences.put(name, 1);
@@ -181,7 +184,7 @@ public class Features implements Serializable {
             n.put(1, localIndexCount.getAndIncrement());
             features.put(name, n);
             if (printNewFeatures)
-                System.out.printf("New feature %s discovered in %s, reserving index %d for this feature\n", name, featureName, n.get(1));
+                logger.info(String.format("New feature %s discovered in %s, reserving index %d for this feature", name, featureName, n.get(1)));
         }
         encoder.featureVector.add(features.get(name).get(occurrences.get(name)));
     }
@@ -218,12 +221,12 @@ public class Features implements Serializable {
 
                 if (numericFeatures.get(name).get(num).containsKey(count)) { //already contains feature at this count
                     if (printOldFeatures)
-                        System.out.printf("Index %d is already reserved for numeric feature %s with %d at %d times in %s\n", numericFeatures.get(name).get(num).get(count), name, num, count, featureName);
+                        logger.info(String.format("Index %d is already reserved for numeric feature %s with %d at %d times in %s", numericFeatures.get(name).get(num).get(count), name, num, count, featureName));
                 } else { //contains feature and num but different count
                     numericFeatures.get(name).get(num).put(count, localIndexCount.getAndIncrement());
                     if (printNewFeatures)
-                        System.out.printf("Numeric feature %s with %d exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s\n",
-                                name, num, count, localIndexCount.get() - 1, count, featureName);
+                        logger.info(String.format("Numeric feature %s with %d exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s",
+                                name, num, count, localIndexCount.get() - 1, count, featureName));
                 }
             } else { //contains category but not this number
                 Map<Integer, Map<Integer, Integer>> map = numericFeatures.get(name);
@@ -232,8 +235,8 @@ public class Features implements Serializable {
                 map.put(num, subMap);
                 numericOccurrences.get(name).put(num, 1);
                 if (printNewFeatures)
-                    System.out.printf("Numeric feature %s exists but has not occurred with %d, reserving index %d for this feature at %d in %s\n",
-                            name, num, localIndexCount.get() - 1, num, featureName);
+                    logger.info(String.format("Numeric feature %s exists but has not occurred with %d, reserving index %d for this feature at %d in %s",
+                            name, num, localIndexCount.get() - 1, num, featureName));
             }
         } else { //completely new feature category
             TreeMap<Integer, Map<Integer, Integer>> newMap = new TreeMap<>();
@@ -245,8 +248,8 @@ public class Features implements Serializable {
             newTreeMap.put(num, 1);
             numericOccurrences.put(name, newTreeMap);
             if (printNewFeatures)
-                System.out.printf("New numeric feature %s discovered with %d in %s, reserving index %d for this feature at %d\n", name,
-                        num, featureName, localIndexCount.get() - 1, num);
+                logger.info(String.format("New numeric feature %s discovered with %d in %s, reserving index %d for this feature at %d", name,
+                        num, featureName, localIndexCount.get() - 1, num));
         }
         encoder.featureVector.add(numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num)));
     }

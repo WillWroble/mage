@@ -1,4 +1,3 @@
-
 package mage.player.ai;
 
 import java.util.*;
@@ -25,7 +24,7 @@ import static java.lang.Math.*;
 public class MCTSNode {
 
     public static final boolean USE_ACTION_CACHE = false;
-    private static final double selectionCoefficient = Math.sqrt(2.0);
+    private static final double selectionCoefficient = 1;
     private static final double passRatioTolerance = 0.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
 
@@ -68,7 +67,7 @@ public class MCTSNode {
         setPlayer();
         nodeCount = 1;
 //        logger.info(this.stateValue);
-    }    
+    }
 
     protected MCTSNode(MCTSNode parent, Game game, Ability action) {
         this.targetPlayer = parent.targetPlayer;
@@ -165,7 +164,6 @@ public class MCTSNode {
         double bestVal = Double.NEGATIVE_INFINITY;
 
         double sqrtN = Math.sqrt(visits);
-        double c = selectionCoefficient;
         synchronized (children) {
             for (MCTSNode child : children) {
                 // value term: 0 if unvisited, else average reward
@@ -174,7 +172,7 @@ public class MCTSNode {
                         : 0.0;
                 double passBonus = child.getAction() instanceof PassAbility ? 0.05 : 0;
                 // exploration term still blows up when visits==0
-                double u = 1 * (child.prior) * (sqrtN / (1 + child.visits));
+                double u = selectionCoefficient * (child.prior) * (sqrtN / (1 + child.visits));
 
                 // combined PUCT
                 double val = sign * q + u;
@@ -199,9 +197,9 @@ public class MCTSNode {
             children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
             for (MCTSNode node : children) {
                 node.depth = depth + 1;
-                node.prior = 1.0;///children.size();
+                node.prior = 1.0/children.size();
             }
-            if (policy != null && player.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {
+            if (policy != null && player.getNextAction() == MCTSPlayer.NextAction.PRIORITY && !ComputerPlayerMCTS.NO_POLICY) {
 
                 double priorTemperature = 1.5; // This controls 'spikeyness' of prior distribution; higher means less spikey
 
@@ -296,15 +294,19 @@ public class MCTSNode {
 
         if (children.size() == 1)
             return children.get(0);
-        System.out.print("actions: ");
-
+        StringBuilder sb = new StringBuilder();
+        sb.append("actions: ");
         for (MCTSNode node: children) {
             if(node.action != null) {
-                System.out.printf("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits);
+                sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
             }
-            if(node.combat != null && !node.combat.getAttackers().isEmpty()) System.out.printf("[%s score: %.3f count: %d] ", node.combat.toString(), node.getScoreRatio(), node.visits);
+            if(node.combat != null && !node.combat.getAttackers().isEmpty()) {
+                sb.append(String.format("[%s score: %.3f count: %d] ", node.combat.toString(), node.getScoreRatio(), node.visits));
+            }
         }
-        if(!children.isEmpty()) System.out.println();
+        if(!children.isEmpty()) {
+            logger.info(sb.toString());
+        }
 
         //derive temp from value
         double temperature = 0.5*(1-abs(this.initialScore));
@@ -435,7 +437,7 @@ public class MCTSNode {
                 }
             }
             else {
-                player.getLibrary().shuffle();                
+                player.getLibrary().shuffle();
             }
         }
     }
@@ -454,10 +456,8 @@ public class MCTSNode {
     }
 
     /**
-     * 
-     * performs a breadth first search for a matching game state
-     * 
-     * @param state - the game state that we are looking for
+     * * performs a breadth first search for a matching game state
+     * * @param state - the game state that we are looking for
      * @return the matching state or null if no match is found
      */
     public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen) {
@@ -507,7 +507,7 @@ public class MCTSNode {
                 List<MCTSNode> tempChildren = new ArrayList<>(this.children);
                 for (MCTSNode child : tempChildren) {
                     if (mergeChild.action != null && child.action != null) {
-                        if (mergeChild.action.toString().equals(child.action.toString())) {
+                        if (mergeChild.action.toString().equals(child.action.toString()) && mergeChild.action.getTargets().equals(child.action.getTargets())) {
                             if (!mergeChild.stateValue.equals(child.stateValue) || !mergeChild.chooseTargetAction.equals(child.chooseTargetAction)) {
                                 // Record mismatch if needed; skip merge.
                             } else {
@@ -600,7 +600,7 @@ public class MCTSNode {
             return attacks;
         }
     }
-    
+
     protected static List<List<List<UUID>>> getBlocks(MCTSPlayer player, String state, Game game) {
         if (blocksCache.containsKey(state)) {
             blocksHit++;
@@ -613,7 +613,7 @@ public class MCTSNode {
             return blocks;
         }
     }
-    
+
     public static int cleanupCache(int turnNum) {
         Set<String> playablesKeys = playablesCache.keySet();
         Iterator<String> playablesIterator = playablesKeys.iterator();
@@ -636,7 +636,7 @@ public class MCTSNode {
                 count++;
             }
         }
-        
+
         Set<String> blocksKeys = blocksCache.keySet();
         Iterator<String> blocksIterator = blocksKeys.iterator();
         while(blocksIterator.hasNext()) {
