@@ -50,6 +50,7 @@ public class MCTSNode {
     public int depth = 1;
     public float[] policy = null;
     private double prior = 1;
+    public long dirichletSeed = 0;
 
     private static int nodeCount;
 
@@ -225,7 +226,7 @@ public class MCTSNode {
                 for (MCTSNode node : children) {
                     node.prior /= sumExp;
                 }
-                long seed = player.dirichletSeed;
+                long seed = this.dirichletSeed;
                 if (seed != 0) {
                     double alpha = 0.03;
                     double eps = 0.15;//0.15 noise for now

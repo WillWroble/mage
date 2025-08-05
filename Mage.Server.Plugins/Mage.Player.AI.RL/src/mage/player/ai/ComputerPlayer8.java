@@ -1,6 +1,5 @@
 package mage.player.ai;
 
-import jdk.nashorn.internal.ir.annotations.Ignore;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.constants.RangeOfInfluence;

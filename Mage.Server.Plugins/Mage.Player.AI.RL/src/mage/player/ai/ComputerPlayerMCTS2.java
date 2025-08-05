@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * ComputerPlayerMCTS2 extends ComputerPlayerMCTS and uses a value function at leaf nodes.
@@ -24,8 +25,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private transient StateEncoder encoder = null;
     private transient ReplayBuffer buffer = null;
     private static final int MAX_MCTS_CYCLES = 6;//number of additional cycles the search is allowed to run
-    private static final int BASE_THREAD_TIMEOUT = 1;//seconds
-    private static final int MIN_TREE_VISITS = 50;//per child per thread
+    private static final int BASE_THREAD_TIMEOUT = 2;//seconds
+    private static final int MIN_TREE_VISITS = 100;//per child per thread
 
     public static boolean SHOW_THREAD_INFO = false;
     public transient NeuralNetEvaluator nn;
@@ -125,8 +126,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     }
 
     /**
-     * Overrides applyMCTS to use the value function at leaf nodes.
+     * Root parallelized MCTS sim (unused)
      */
+    /*
     @Override
     protected void applyMCTS(final Game game, final NextAction action) {
         int initialVisits = root.getAverageVisits();
@@ -221,6 +223,91 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         MCTSNode.logHitMiss();
     }
+    */
+
+    /**
+     * A single-threaded version of applyMCTS that preserves the custom logic for
+     * value function evaluation and dynamic termination conditions.
+     */
+    @Override
+    protected void applyMCTS(final Game game, final NextAction action) {
+        int initialVisits = root.getAverageVisits();
+        if (SHOW_THREAD_INFO) logger.info(String.format("STARTING ROOT VISITS: %d", initialVisits));
+
+        int cycleCounter = 0;
+        int totalSimsThisTurn = 0;
+        long totalThinkTimeThisTurn = 0;
+
+        // Apply dirichlet noise once at the start of the search for this turn
+        root.dirichletSeed = RandomUtil.nextInt();
+
+        while (true) {
+            List<Integer> childVisits = getChildVisitsFromRoot();
+
+            // --- Termination Conditions ---
+            if (averageVisits(childVisits) + initialVisits >= MIN_TREE_VISITS) {
+                if (SHOW_THREAD_INFO) logger.info("EXIT: Reached minimum average visits.");
+                break;
+            }
+            if (cycleCounter > MAX_MCTS_CYCLES) {
+                if (SHOW_THREAD_INFO) logger.info("EXIT: Reached max MCTS cycles.");
+                break;
+            }
+            if (diffVisits(childVisits) > 2.5 && averageVisits(childVisits) > MIN_TREE_VISITS * 0.5) {
+                if (SHOW_THREAD_INFO) logger.info("EXIT: Visit distribution is skewed and search is deep enough.");
+                break;
+            }
+
+            cycleCounter++;
+            long startTime = System.nanoTime();
+            long endTime = startTime + (BASE_THREAD_TIMEOUT * 1_000_000_000L);
+            int simCountInCycle = 0;
+
+            // --- Run simulations for one cycle (e.g., 1 second) ---
+            while (System.nanoTime() < endTime) {
+                MCTSNode current = root;
+
+                // Selection
+                while (!current.isLeaf()) {
+                    current = current.select(this.playerId);
+                }
+
+                double result;
+                if (!current.isTerminal()) {
+                    // Rollout
+                    result = evaluateState(current);
+                    // Expansion
+                    current.expand();
+
+
+                } else {
+                    result = current.isWinner(this.playerId) ? 1.0 : -1.0;
+                }
+                // Backpropagation
+                current.backpropagate(result);
+                simCountInCycle++;
+            }
+
+            totalSimsThisTurn += simCountInCycle;
+            totalThinkTimeThisTurn += BASE_THREAD_TIMEOUT;
+
+            if (SHOW_THREAD_INFO) {
+                logger.info(String.format("CYCLE %d: Ran %d simulations.", cycleCounter, simCountInCycle));
+                logger.info(String.format("COMPOSITE CHILDREN: %s", getChildVisitsFromRoot().toString()));
+            }
+        }
+
+        totalThinkTime += totalThinkTimeThisTurn;
+        totalSimulations += totalSimsThisTurn;
+
+        if (SHOW_THREAD_INFO) {
+            logger.info("Player: " + name + " simulated " + totalSimsThisTurn + " evaluations in " + totalThinkTimeThisTurn
+                    + " seconds - nodes in tree: " + root.size());
+            logger.info("Total: simulated " + totalSimulations + " evaluations in " + totalThinkTime
+                    + " seconds - Average: " + (totalThinkTime > 0 ? totalSimulations / totalThinkTime : 0));
+        }
+        MCTSNode.logHitMiss();
+    }
     double[] getActionVec() {
         double tau = 1.0;            // your temperature hyperparam
         int    A   = 128;
@@ -286,5 +373,14 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             childVisits.add(visitSum);
         }
         return childVisits;
+    }
+    /**
+     * Helper method to get the visit counts of the root's children for a single tree.
+     */
+    private List<Integer> getChildVisitsFromRoot() {
+        if (root == null || root.children.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return root.children.stream().map(child -> child.visits).collect(Collectors.toList());
     }
 }

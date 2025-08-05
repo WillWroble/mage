@@ -27,7 +27,7 @@ public class PriorityNextAction implements MCTSNodeNextAction{
                 continue;//failsafe
             }
             sim.resume();
-            ComputerPlayerMCTS.shuffleUnknowns(sim, node.targetPlayer);
+            //ComputerPlayerMCTS.shuffleUnknowns(sim, node.targetPlayer);
             children.add(new MCTSNode(node, sim, ability.copy()));
         }
 

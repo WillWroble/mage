@@ -6,7 +6,10 @@ import org.mage.test.player.*;
 
 public class SimulateMCTS extends ParallelDataGenerator {
 
-
+    @Test
+    public void test_single_game() {
+        super.test_single_game();
+    }
     @Test
     public void generateTrainingAndTestingData() {
         super.generateTrainingAndTestingData();

@@ -33,7 +33,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
     private static final int NUM_GAMES_TO_SIMULATE_TEST = 50;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 4;
+    private static final int MAX_CONCURRENT_GAMES = 32;
     private static final boolean DONT_USE_NOISE = true;
     private static final boolean DONT_USE_POLICY = true;
 
@@ -99,6 +99,45 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         for (int i = 0; i < aMap.length; i++) {
             System.out.println(i + " => " + aMap[i]);
         }
+    }
+    /**
+     * New test function to run a single game for debugging purposes without saving any data.
+     */
+    @Test
+    public void test_single_game() {
+        System.out.println("\n=========================================");
+        System.out.println("       RUNNING SINGLE DEBUG GAME         ");
+        System.out.println("=========================================");
+
+        // --- Setup (required for the game to run) ---
+        finalFeatures = new Features(); // Start with fresh features for this run
+        try {
+            // Load mappings so the encoder works correctly
+            finalFeatures = Features.loadMapping(MAPPING_FILE);
+            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Warning: Failed to load persistent mappings. Encoders will be empty.");
+            ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
+        }
+        ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+        ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
+        ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
+        Features.printOldFeatures = false;
+        // --- End Setup ---
+
+        try {
+            GameResult result = runSingleGame();
+            System.out.println("\n--- DEBUG GAME COMPLETE ---");
+            System.out.println("Player A won: " + result.didPlayerAWin());
+            System.out.println("Total states generated: " + result.getStates().size());
+            System.out.println("Note: No data was saved from this run.");
+
+        } catch (Exception e) {
+            System.err.println("The single debug game failed to complete.");
+            e.printStackTrace();
+        }
+
+        System.out.println("=========================================");
     }
 
     @Test
