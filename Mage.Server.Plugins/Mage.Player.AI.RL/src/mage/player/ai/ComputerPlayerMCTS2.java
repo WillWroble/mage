@@ -267,23 +267,27 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             while (System.nanoTime() < endTime) {
                 MCTSNode current = root;
 
-                // Selection
+                // selection
                 while (!current.isLeaf()) {
                     current = current.select(this.playerId);
                 }
-
+                if(current.expandNext) {
+                    current.expand();
+                    current.expandNext = false;
+                    current = current.select(this.playerId);
+                }
                 double result;
                 if (!current.isTerminal()) {
-                    // Rollout
+                    // rollout
                     result = evaluateState(current);
-                    // Expansion
-                    current.expand();
+                    // lazy expand (mark for expansion)
+                    current.expandNext = true;
 
 
                 } else {
                     result = current.isWinner(this.playerId) ? 1.0 : -1.0;
                 }
-                // Backpropagation
+                // backprop
                 current.backpropagate(result);
                 simCountInCycle++;
             }

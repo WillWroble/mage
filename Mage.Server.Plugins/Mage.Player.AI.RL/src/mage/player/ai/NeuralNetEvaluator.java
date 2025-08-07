@@ -32,6 +32,8 @@ public class NeuralNetEvaluator implements AutoCloseable {
     private final OrtEnvironment env;
     private final OrtSession session;
     private final ExecutorService executor;
+    public static boolean USE_GPU = false;
+
 
     // You'll need to get these names by inspecting your exported ONNX model
     // (e.g., using a tool like Netron)
@@ -52,6 +54,17 @@ public class NeuralNetEvaluator implements AutoCloseable {
         opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
         opts.setIntraOpNumThreads(1); // Good for when executor handles parallelism
         opts.setInterOpNumThreads(1); // Good for when executor handles parallelism
+        if(USE_GPU) {
+            try {
+                // This line is the key. It tells ONNX to use the CUDA provider.
+                opts.addCUDA(0); // 0 is the device ID for your first GPU
+                System.out.println("INFO: ONNX Runtime configured to use GPU (CUDA).");
+            } catch (OrtException e) {
+                // This will happen if the GPU library is missing or CUDA drivers are not installed.
+                System.err.println("WARNING: Failed to initialize CUDA provider. Falling back to CPU. Error: " + e.getMessage());
+            }
+        }
+
         this.session = env.createSession(onnxPath, opts);
         this.executor = Executors.newFixedThreadPool(Math.max(1, threads));
     }

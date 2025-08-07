@@ -38,8 +38,8 @@
         </dependency>
         <dependency>
             <groupId>com.microsoft.onnxruntime</groupId>
-            <artifactId>onnxruntime</artifactId>
-            <version>1.18.0</version>
+            <artifactId>onnxruntime_gpu</artifactId>
+            <version>1.18.0</version> <!-- Use the latest version -->
         </dependency>
     </dependencies>
 

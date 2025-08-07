@@ -35,12 +35,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static final int MAX_GAME_TURNS = 50;
     private static final int MAX_CONCURRENT_GAMES = 32;
     private static final boolean DONT_USE_NOISE = true;
-    private static final boolean DONT_USE_POLICY = true;
+    private static final boolean DONT_USE_POLICY = false;
 
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "UWTempo.dck";
     private static final String DECK_B = "simplegreen.dck";
-    private static final String MCTS_MODEL_PATH = "models/Model2.onnx";
+    private static final String MCTS_MODEL_PATH = "models/Model3.onnx";
     private static final int MCTS_ROLLOUT_THREADS = 2;
 
     // ================================== FILE PATHS ==================================

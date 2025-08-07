@@ -42,6 +42,7 @@ public class MCTSNode {
     private Game game;//only contains shared game
 
     public Combat combat;
+    public boolean expandNext = false;//marked for expansion
     private final String stateValue;
     private final String fullStateValue;
     public UUID playerId;
