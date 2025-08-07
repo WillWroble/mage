@@ -19,7 +19,6 @@ public class ChooseTargetNextAction implements MCTSNodeNextAction {
             Game sim = game.getLastPriority().createSimulationForAI();
             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
             MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
-            //simPlayer2.copyDialogues(player); //copy previous micro decisions
             simPlayer2.chooseTargetAction.add(targets);
             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);
             sim.resume();

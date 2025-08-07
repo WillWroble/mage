@@ -58,8 +58,8 @@ public class MCTSNode {
     public MCTSNode(UUID targetPlayer, Game game) {
         this.targetPlayer = targetPlayer;
         this.game = game;
-        this.stateValue = game.getState().getValue(game, targetPlayer);
-        this.fullStateValue = game.getState().getValue(true, game);
+        this.stateValue = game.getLastPriority().getState().getValue(game.getLastPriority(), targetPlayer);
+        this.fullStateValue = game.getLastPriority().getState().getValue(true, game.getLastPriority());
         this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         this.action = game.getPlayer(game.getLastPriorityPlayerId()).getLastActivated();
@@ -74,8 +74,8 @@ public class MCTSNode {
     protected MCTSNode(MCTSNode parent, Game game, Ability action) {
         this.targetPlayer = parent.targetPlayer;
         this.game = game;
-        this.stateValue = game.getState().getValue(game, targetPlayer);
-        this.fullStateValue = game.getState().getValue(true, game);
+        this.stateValue = game.getLastPriority().getState().getValue(game.getLastPriority(), targetPlayer);
+        this.fullStateValue = game.getLastPriority().getState().getValue(true, game.getLastPriority());
         this.stackIsEmpty = game.getStack().isEmpty();
         this.terminal = game.checkIfGameIsOver();
         this.parent = parent;
@@ -468,7 +468,11 @@ public class MCTSNode {
 
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
-            if (current.stateValue.equals(state) && current.chooseTargetAction.equals(chosen))
+
+            //logger.info(current.stateValue + " =should= " + state);
+            //logger.info(current.chooseTargetAction.toString() + " =should= " + chosen.toString());
+
+            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosen))
                 return current;
             //System.out.printf("MISMATCH: %s\n %s\n",current.stateValue, state);
             for (MCTSNode child: current.children) {

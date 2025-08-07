@@ -71,7 +71,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
-        chooseTargetAction.clear();
         if (game.getTurnStepType() == PhaseStep.UPKEEP) {
             if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
                 logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList(hand.getCards(game)));
@@ -86,6 +85,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
         getNextAction(game, NextAction.PRIORITY);
+        chooseTargetAction.clear(); //clear after looking for matching states since we are looking for the microstate BEFORE this priority
         Ability ability = root.getAction();
         if (ability == null)
             logger.fatal("null ability");
@@ -121,7 +121,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void getNextAction(Game game, NextAction nextAction) {
         if (root != null) {
             MCTSNode newRoot;
-            newRoot = root.getMatchingState(game.getState().getValue(game, playerId), chooseTargetAction);
+            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction);
             if (newRoot != null) {
                 newRoot.emancipate();
             } else
