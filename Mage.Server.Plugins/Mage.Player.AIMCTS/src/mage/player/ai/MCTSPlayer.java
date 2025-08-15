@@ -271,6 +271,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return true;
         }
         Set<UUID> possible = target.possibleTargets(getId(), game);
+        chooseTargetOptions.clear();
         getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
         game.pause();
         lastToAct = true;
