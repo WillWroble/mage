@@ -297,6 +297,8 @@ public interface Player extends MageItem, Copyable<Player> {
     // TODO: research usage of !hasLeft() && !hasLost() replace it by isInGame() if possible
     boolean hasLeft();
 
+    void resetMicroActions();
+
     /**
      * Player is still active in game (has not left, lost or won the game).
      *

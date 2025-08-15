@@ -1780,6 +1780,10 @@ public abstract class GameImpl implements Game {
                                     getState().handleSimultaneousEvent(this); // needed here to handle triggers e.g. from paying costs like sacrificing a creatures before LKIShort is cleared
                                     applyEffects();
                                 }
+                                for(UUID id : this.playerList) {
+                                    Player p = getPlayer(id);
+                                    p.resetMicroActions();//for MCTS
+                                }
                                 if (isPaused()) {
                                     return;
                                 }

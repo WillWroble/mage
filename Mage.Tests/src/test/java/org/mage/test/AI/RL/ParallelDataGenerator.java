@@ -33,16 +33,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
     private static final int NUM_GAMES_TO_SIMULATE_TEST = 50;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 32;
-    private static final boolean DONT_USE_NOISE = true;
-    private static final boolean DONT_USE_POLICY = false;
-
+    private static final int MAX_CONCURRENT_GAMES = 16;
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "UWTempo.dck";
     private static final String DECK_B = "simplegreen.dck";
-    private static final String MCTS_MODEL_PATH = "models/Model3.onnx";
-    private static final int MCTS_ROLLOUT_THREADS = 2;
-
+    private static final String MCTS_MODEL_PATH = "models/Model9.onnx";
+    private static final boolean DONT_USE_NOISE = true;
+    private static final boolean DONT_USE_POLICY = false;
     // ================================== FILE PATHS ==================================
     private static final String MAPPING_FILE = "features_mapping.ser";
     private static final String ACTIONS_FILE = "actions_mapping.ser";
@@ -108,7 +105,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         System.out.println("\n=========================================");
         System.out.println("       RUNNING SINGLE DEBUG GAME         ");
         System.out.println("=========================================");
-
         // --- Setup (required for the game to run) ---
         finalFeatures = new Features(); // Start with fresh features for this run
         try {
@@ -124,9 +120,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
         Features.printOldFeatures = false;
         // --- End Setup ---
-
+        long seed = -8907919361237717361L;
         try {
-            GameResult result = runSingleGame();
+            GameResult result = runSingleGame(seed);
             System.out.println("\n--- DEBUG GAME COMPLETE ---");
             System.out.println("Player A won: " + result.didPlayerAWin());
             System.out.println("Total states generated: " + result.getStates().size());
@@ -265,6 +261,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         System.out.println("Computed " + newIgnoreListB.size() + " features to ignore from this batch.");
         //intersect
         newIgnoreListA.retainAll(oldIgnoreList);
+        System.out.println("Computed " + (oldIgnoreList.size()-newIgnoreListA.size()) + " features to unignore");
         //union
         newIgnoreListA.addAll(newIgnoreListB);
         finalFeatures.ignoreList = newIgnoreListA;
@@ -281,15 +278,17 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         persistData();
         System.out.println("Successfully saved data to " + ParallelDataGenerator.TRAIN_OUT_FILE + " and " + ParallelDataGenerator.TEST_OUT_FILE);
     }
-
     private GameResult runSingleGame() throws ExecutionException {
+        long seed = ThreadLocalRandom.current().nextLong();
+        return runSingleGame(seed);
+    }
+    private GameResult runSingleGame(long gameSeed) throws ExecutionException {
         try {
 
             Game game;
             StateEncoder threadEncoder = new StateEncoder();
 
             // Use a thread-safe random number generator for the seed.
-            long gameSeed = ThreadLocalRandom.current().nextLong();
             logger.info("Using seed: " + gameSeed);
             RandomUtil.setSeed(gameSeed);
 

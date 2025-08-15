@@ -1345,6 +1345,12 @@ public class ComputerPlayer extends PlayerImpl {
         return true;
     } // end priorityPlay method
 
+    @Override
+    public void resetMicroActions() {
+        chooseTargetAction.clear();
+        chooseTargetOptions.clear();
+    }
+
     protected void playLand(Game game) {
         log.debug("playLand");
         Set<Card> lands = new LinkedHashSet<>();

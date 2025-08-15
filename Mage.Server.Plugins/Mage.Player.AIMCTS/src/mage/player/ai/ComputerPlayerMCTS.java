@@ -10,7 +10,6 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
 import mage.game.Game;
-import mage.game.GameState;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
@@ -36,6 +35,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final boolean USE_MULTIPLE_THREADS = true;
     public static boolean NO_NOISE = false;
     public static boolean NO_POLICY = false;
+    public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
+    public static double POLICY_PRIOR_TEMP = 1.5;
 
     public transient MCTSNode root;
     protected int maxThinkTime;
@@ -85,7 +86,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
         getNextAction(game, NextAction.PRIORITY);
-        chooseTargetAction.clear(); //clear after looking for matching states since we are looking for the microstate BEFORE this priority
+
+        //chooseTargetAction.clear();
+
         Ability ability = root.getAction();
         if (ability == null)
             logger.fatal("null ability");
@@ -101,7 +104,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         return true;
     }
-
     protected void calculateActions(Game game, NextAction action) {
         if (root == null) {
             Game sim = createMCTSGame(game);
@@ -112,8 +114,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
         }
         applyMCTS(game, action);
-        if (root != null && root.bestChild() != null) {
-            root = root.bestChild();
+        if (root != null && root.bestChild(game) != null) {
+            root = root.bestChild(game);
             root.emancipate();
         }
     }
@@ -121,7 +123,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void getNextAction(Game game, NextAction nextAction) {
         if (root != null) {
             MCTSNode newRoot;
-            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction);
+            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, playerId);
             if (newRoot != null) {
                 newRoot.emancipate();
             } else
@@ -139,6 +141,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         Combat combat = root.getCombat();
         UUID opponentId = game.getCombat().getDefenders().iterator().next();
         for (UUID attackerId : combat.getAttackers()) {
+            if(game.getPermanent(attackerId) == null) continue;
             this.declareAttacker(attackerId, opponentId, game, false);
             sb.append(game.getPermanent(attackerId).getName()).append(',');
         }
@@ -419,18 +422,20 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 .append(cardsInfo)
                 .append("]");
         logger.info(sb.toString());
+        for(Player myPlayer : game.getPlayers().values()) {
+            // battlefield
+            sb.setLength(0);
+            String ownPermanentsInfo = game.getBattlefield().getAllPermanents().stream()
+                    .filter(p -> p.isOwnedBy(myPlayer.getId()))
+                    .map(p -> p.getName()
+                            + (p.isTapped() ? ",tapped" : "")
+                            + (p.isAttacking() ? ",attacking" : "")
+                            + (p.getBlocking() > 0 ? ",blocking" : ""))
+                    .collect(Collectors.joining("; "));
+            sb.append("-> Permanents: [").append(ownPermanentsInfo).append("]");
+            logger.info(sb.toString());
+        }
 
-        // battlefield
-        sb.setLength(0);
-        String ownPermanentsInfo = game.getBattlefield().getAllPermanents().stream()
-                .filter(p -> p.isOwnedBy(player.getId()))
-                .map(p -> p.getName()
-                        + (p.isTapped() ? ",tapped" : "")
-                        + (p.isAttacking() ? ",attacking" : "")
-                        + (p.getBlocking() > 0 ? ",blocking" : ""))
-                .collect(Collectors.joining("; "));
-        sb.append("-> Permanents: [").append(ownPermanentsInfo).append("]");
-        logger.info(sb.toString());
     }
     public void clearTree() {
         root = null;

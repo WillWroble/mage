@@ -2596,6 +2596,11 @@ public abstract class PlayerImpl implements Player, Serializable {
     }
 
     @Override
+    public void resetMicroActions() {
+        //do nothing
+    }
+
+    @Override
     public void resetPassed() {
         this.passed = this.loses || this.hasLeft();
     }

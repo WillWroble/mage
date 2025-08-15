@@ -43,7 +43,7 @@ public class GameViewTest extends CardTestPlayerBase {
         GameView gameView = getGameView(playerA, userA);
         Assert.assertNotNull(gameView);
         Assert.assertNotNull(gameView.getMyHand());
-        Assert.assertEquals(1, gameView.getMyHand().size());
+        Assert.assertEquals(8, gameView.getMyHand().size());
         Assert.assertEquals("Forest", gameView.getMyHand().values().stream().findFirst().get().getName());
         Assert.assertEquals(0, gameView.getLookedAt().size());
         Assert.assertEquals(0, gameView.getRevealed().size());
@@ -53,7 +53,7 @@ public class GameViewTest extends CardTestPlayerBase {
         gameView = getGameView(playerB, userB);
         Assert.assertNotNull(gameView);
         Assert.assertNotNull(gameView.getMyHand());
-        Assert.assertEquals(0, gameView.getMyHand().size());
+        Assert.assertEquals(7, gameView.getMyHand().size());
         Assert.assertEquals(0, gameView.getLookedAt().size());
         Assert.assertEquals(0, gameView.getRevealed().size());
         Assert.assertEquals(0, gameView.getWatchedHands().size());

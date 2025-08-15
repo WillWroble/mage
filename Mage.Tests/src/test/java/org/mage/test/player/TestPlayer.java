@@ -178,6 +178,11 @@ public class TestPlayer implements Player {
         computerPlayer.setLastActivated(a);
     }
 
+    @Override
+    public void resetMicroActions() {
+        computerPlayer.resetMicroActions();
+    }
+
     public void addChoice(String choice) {
         // prepare face down
         // how-to fix:

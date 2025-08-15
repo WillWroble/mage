@@ -316,7 +316,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         double tau = 1.0;            // your temperature hyperparam
         int    A   = 128;
         double[] out = new double[A];
-        double   sum = 0;
+        Arrays.fill(out, 0.0);
+        double sum = 0;
         // 1) accumulate visits^(1/tau)
         for (MCTSNode child : root.children) {
             if (child.getAction() != null) {
@@ -324,7 +325,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 double v = child.visits;
                 // apply temperature
                 double vt = Math.pow(v, 1.0 / tau);
-                out[idx] = vt;
+                out[idx] += vt;
                 sum += vt;
             }
         }
@@ -348,16 +349,13 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         applyMCTS(game, action);
         if (root != null) {
-            MCTSNode best = root.bestChild();
+            MCTSNode best = root.bestChild(game);
             if(best == null) return;
-
-            encoder.processMacroState(game, getId());
-            encoder.addAction(getActionVec());
-            encoder.stateScores.add(root.getScoreRatio());
-            Game copiedState = game.copy();
-            if(buffer != null)
-                buffer.add(copiedState);
-
+            if(action == NextAction.PRIORITY) {
+                encoder.processMacroState(game, getId());
+                encoder.addAction(getActionVec());
+                encoder.stateScores.add(root.getScoreRatio());
+            }
             root = best;
             root.emancipate();
         }

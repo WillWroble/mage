@@ -214,7 +214,7 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
         }
         applyMCTS(game, action);
         if (root != null) {
-            MCTSNode best = root.bestChild();
+            MCTSNode best = root.bestChild(game);
             if(best == null) return;
 
             encoder.processMacroState(game, getId());

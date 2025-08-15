@@ -220,7 +220,6 @@ public class MCTSPlayer extends ComputerPlayer {
         game.pause();
         lastToAct = true;
         nextAction = NextAction.PRIORITY;
-        chooseTargetAction.clear();//clear here because chooseTargetAction always gets copied
         return false;
     }
 

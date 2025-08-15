@@ -203,7 +203,7 @@ public class MCTSNode {
             }
             if (policy != null && player.getNextAction() == MCTSPlayer.NextAction.PRIORITY && !ComputerPlayerMCTS.NO_POLICY) {
 
-                double priorTemperature = 1.5; // This controls 'spikeyness' of prior distribution; higher means less spikey
+                double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
 
                 //find max logit for numeric stability
                 double maxLogit = Double.NEGATIVE_INFINITY;
@@ -230,7 +230,7 @@ public class MCTSNode {
                 long seed = this.dirichletSeed;
                 if (seed != 0) {
                     double alpha = 0.03;
-                    double eps = 0.15;//0.15 noise for now
+                    double eps = ComputerPlayerMCTS.DIRICHLET_NOISE_EPS;
                     if(ComputerPlayerMCTS.NO_NOISE) eps = 0;
                     int K = children.size();
                     double[] dir = new double[K];
@@ -292,7 +292,7 @@ public class MCTSNode {
         }
     }
 
-    public MCTSNode bestChild() {
+    public MCTSNode bestChild(Game baseGame) {
 
         if (children.size() == 1)
             return children.get(0);
@@ -300,7 +300,11 @@ public class MCTSNode {
         sb.append("actions: ");
         for (MCTSNode node: children) {
             if(node.action != null) {
-                sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
+                if(node.chooseTargetAction.isEmpty()) {
+                    sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
+                } else {
+                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                }
             }
             if(node.combat != null && !node.combat.getAttackers().isEmpty()) {
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.combat.toString(), node.getScoreRatio(), node.visits));
@@ -462,18 +466,23 @@ public class MCTSNode {
      * * @param state - the game state that we are looking for
      * @return the matching state or null if no match is found
      */
-    public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen) {
+    public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen, UUID givenPlayerId) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
 
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
+            if(false && !current.chooseTargetAction.isEmpty()) {
+                logger.info(current.chooseTargetAction.toString() + " =should= " + chosen.toString());
+                logger.info(current.fullStateValue + " =should= " + state);
+            }
 
             //logger.info(current.stateValue + " =should= " + state);
             //logger.info(current.chooseTargetAction.toString() + " =should= " + chosen.toString());
 
-            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosen))
+            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosen) && current.playerId.equals(givenPlayerId)) {
                 return current;
+            }
             //System.out.printf("MISMATCH: %s\n %s\n",current.stateValue, state);
             for (MCTSNode child: current.children) {
                 queue.add(child);
