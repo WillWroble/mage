@@ -10,6 +10,7 @@ public class MCTSNextActionFactory {
         strategyMap.put(MCTSPlayer.NextAction.SELECT_BLOCKERS, new SelectBlockersNextAction());
         strategyMap.put(MCTSPlayer.NextAction.SELECT_ATTACKERS, new SelectAttackersNextAction());
         strategyMap.put(MCTSPlayer.NextAction.CHOOSE_TARGET, new ChooseTargetNextAction());
+        strategyMap.put(MCTSPlayer.NextAction.MAKE_CHOICE, new MakeChoiceNextAction());
     }
 
     public static MCTSNodeNextAction createNextAction(MCTSPlayer.NextAction nextAction) {

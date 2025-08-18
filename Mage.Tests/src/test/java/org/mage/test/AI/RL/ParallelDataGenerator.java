@@ -10,6 +10,7 @@ import mage.game.match.MatchOptions;
 import mage.game.mulligan.MulliganType;
 import mage.player.ai.*;
 import mage.util.RandomUtil;
+import org.apache.commons.lang3.RandomUtils;
 import org.junit.Test;
 import org.mage.test.player.TestComputerPlayer7;
 import org.mage.test.player.TestComputerPlayer8;
@@ -38,7 +39,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static final String DECK_A = "UWTempo.dck";
     private static final String DECK_B = "simplegreen.dck";
     private static final String MCTS_MODEL_PATH = "models/Model9.onnx";
-    private static final boolean DONT_USE_NOISE = true;
+    private static final boolean DONT_USE_NOISE = false;
     private static final boolean DONT_USE_POLICY = false;
     // ================================== FILE PATHS ==================================
     private static final String MAPPING_FILE = "features_mapping.ser";
@@ -118,9 +119,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
+        //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
+        //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = true;
         Features.printOldFeatures = false;
         // --- End Setup ---
-        long seed = -8907919361237717361L;
+        long seed = System.nanoTime();
+        //seed = -8907919361237717361L; sheltered by ghosts with kitsa
+        seed = -5660463248622594094L;
         try {
             GameResult result = runSingleGame(seed);
             System.out.println("\n--- DEBUG GAME COMPLETE ---");
@@ -291,6 +296,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             // Use a thread-safe random number generator for the seed.
             logger.info("Using seed: " + gameSeed);
             RandomUtil.setSeed(gameSeed);
+
 
 
             // All game objects are local to this thread to prevent race conditions.

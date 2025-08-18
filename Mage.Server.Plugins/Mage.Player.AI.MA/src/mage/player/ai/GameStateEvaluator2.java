@@ -154,6 +154,7 @@ public final class GameStateEvaluator2 {
                         + ":" + GameStateEvaluator2.evaluatePermanent(p, game, true))
                 .collect(Collectors.joining("; "));
         sb.append("-> Permanents: [").append(ownPermanentsInfo).append("]");
+        logger.info(sb.toString());
         // graveyard
         sb.setLength(0);
         String ownGraveInfo = player.getGraveyard().stream()

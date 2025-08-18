@@ -187,8 +187,12 @@ public class Library implements Serializable {
     }
 
     public void addAll(Set<Card> cards, Game game) {
-        // put on bottom
-        for (Card card : cards) {
+        //Convert the unordered Set to a List.
+        List<Card> sortedCards = new ArrayList<>(cards);
+        //Sort the list by a stable property (like card name) to ensure a deterministic order.
+        sortedCards.sort(Comparator.comparing(Card::getName));
+        //Iterate over the deterministically sorted list.
+        for (Card card : sortedCards) {
             card.setZone(Zone.LIBRARY, game);
             library.remove(card.getId());
             library.add(card.getId());

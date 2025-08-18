@@ -32,12 +32,4 @@ public class SelectAttackersNextAction implements MCTSNodeNextAction{
         return children;
     }
 
-    @Override
-    public void applyAction(MCTSNode node, MCTSPlayer player, Game game) {
-        UUID defenderId = game.getOpponents(player.getId()).iterator().next();
-        Set<UUID> attack = node.combat.getAttackers();
-        for (UUID attackerId: attack) {
-            player.declareAttacker(attackerId, defenderId, game, false);
-        }
-    }
 }

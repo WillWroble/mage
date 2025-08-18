@@ -378,8 +378,10 @@ public class GameState implements Serializable, Copyable<GameState> {
                 }
             }
         }
-
-        for (ExileZone zone : exile.getExileZones()) {
+        // Put them in a list so they can be sorted
+        List<ExileZone> sortedZones = new ArrayList<>(exile.getExileZones());
+        sortedZones.sort(Comparator.comparing(ExileZone::getName));
+        for (ExileZone zone : sortedZones) {
             sb.append("exile").append(zone.getName()).append(zone.getValue(game));
         }
 
@@ -434,8 +436,10 @@ public class GameState implements Serializable, Copyable<GameState> {
                 }
             }
         }
-
-        for (ExileZone zone : exile.getExileZones()) {
+        // Put them in a list so they can be sorted
+        List<ExileZone> sortedZones = new ArrayList<>(exile.getExileZones());
+        sortedZones.sort(Comparator.comparing(ExileZone::getName));
+        for (ExileZone zone : sortedZones) {
             sb.append("exile").append(zone.getName()).append(zone.getValue(game));
         }
 

@@ -346,6 +346,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             player.setNextAction(action);
             root = new MCTSNode(playerId, sim);
             root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
+            root.choiceAction = new ArrayList<>(choiceAction);
         }
         applyMCTS(game, action);
         if (root != null) {

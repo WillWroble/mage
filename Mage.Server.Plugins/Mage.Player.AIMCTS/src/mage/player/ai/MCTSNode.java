@@ -39,6 +39,7 @@ public class MCTSNode {
     public final List<MCTSNode> children = new ArrayList<>();
     public Ability action;
     public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
+    public List<String> choiceAction = new ArrayList<>();
     private Game game;//only contains shared game
 
     public Combat combat;
@@ -297,13 +298,16 @@ public class MCTSNode {
         if (children.size() == 1)
             return children.get(0);
         StringBuilder sb = new StringBuilder();
-        sb.append("actions: ");
+        boolean stackIsEmpty = baseGame.getStack().isEmpty();
+        sb.append(baseGame.getTurnStepType().toString()).append(baseGame.getStack().toString()).append(" actions: ");
         for (MCTSNode node: children) {
             if(node.action != null) {
-                if(node.chooseTargetAction.isEmpty()) {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
-                } else {
+                if(!node.chooseTargetAction.isEmpty()) {
                     sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                } else if(!node.choiceAction.isEmpty()) {
+                    sb.append(String.format("[%s score: %.3f count: %d] ", node.choiceAction.get(node.choiceAction.size()-1), node.getScoreRatio(), node.visits));
+                } else {
+                    sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
                 }
             }
             if(node.combat != null && !node.combat.getAttackers().isEmpty()) {
@@ -466,24 +470,22 @@ public class MCTSNode {
      * * @param state - the game state that we are looking for
      * @return the matching state or null if no match is found
      */
-    public MCTSNode getMatchingState(String state, List<Set<UUID>> chosen, UUID givenPlayerId) {
+    public MCTSNode getMatchingState(String state, List<Set<UUID>> chosenTargets, List<String> chosenChoices, UUID givenPlayerId) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
-
+        int showCount = 0;
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
-            if(false && !current.chooseTargetAction.isEmpty()) {
-                logger.info(current.chooseTargetAction.toString() + " =should= " + chosen.toString());
-                logger.info(current.fullStateValue + " =should= " + state);
-            }
 
-            //logger.info(current.stateValue + " =should= " + state);
-            //logger.info(current.chooseTargetAction.toString() + " =should= " + chosen.toString());
-
-            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosen) && current.playerId.equals(givenPlayerId)) {
+            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosenTargets) && current.choiceAction.equals(chosenChoices) && current.playerId.equals(givenPlayerId)) {
                 return current;
             }
-            //System.out.printf("MISMATCH: %s\n %s\n",current.stateValue, state);
+            if(false && showCount < 10) {
+                logger.info(current.chooseTargetAction.toString() + " =should= " + chosenTargets.toString());
+                logger.info(current.choiceAction.toString() + " =should= " + chosenChoices.toString());
+                logger.info(current.fullStateValue + " =should= " + state);
+                showCount++;
+            }
             for (MCTSNode child: current.children) {
                 queue.add(child);
             }

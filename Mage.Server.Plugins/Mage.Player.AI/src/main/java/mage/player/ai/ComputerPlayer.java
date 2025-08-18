@@ -64,9 +64,12 @@ import java.util.Map.Entry;
  * @author BetaSteward_at_googlemail.com, JayDi85
  */
 public class ComputerPlayer extends PlayerImpl {
-
+    //for targeting microdecisions
     public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
     public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
+    //for discrete choices
+    public Set<String> choiceOptions = new HashSet<>();
+    public List<String> choiceAction = new ArrayList<>();
 
     private static final Logger log = Logger.getLogger(ComputerPlayer.class);
     private long lastThinkTime = 0; // msecs for last AI actions calc
@@ -125,6 +128,8 @@ public class ComputerPlayer extends PlayerImpl {
         super(player);
         chooseTargetOptions = new HashSet<>(player.chooseTargetOptions);
         chooseTargetAction = new ArrayList<>(player.chooseTargetAction);
+        choiceOptions = new HashSet<>(player.choiceOptions);
+        choiceAction = new ArrayList<>(player.choiceAction);
     }
 
     @Override
@@ -148,7 +153,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose: ");
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("choose: ");
         if (log.isDebugEnabled()) {
             log.debug("choose: " + outcome.toString() + ':' + target.toString());
         }
@@ -539,7 +544,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTarget: " + (source==null ? "null" : source.toString()));
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseTarget: " + (source==null ? "null" : source.toString()));
         if (log.isDebugEnabled()) {
             log.debug("chooseTarget: " + outcome.toString() + ':' + target.getTargetName() + ':' + (source==null ? "null" : source.toString()));
         }
@@ -1081,7 +1086,7 @@ public class ComputerPlayer extends PlayerImpl {
     } //end of chooseTarget method
 
     protected Card pickTarget(UUID abilityControllerId, List<Card> cards, Outcome outcome, Target target, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("pickTarget: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("pickTarget: " + source.toString());
         Card card;
         while (!cards.isEmpty()) {
 
@@ -1106,7 +1111,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTargetAmount(Outcome outcome, TargetAmount target, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTargetAmount: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseTargetAmount: " + source.toString());
         // TODO: make same code for chooseTarget (without filter and target type dependence)
         if (log.isDebugEnabled()) {
             log.debug("chooseTarget: " + outcome.toString() + ':' + target.toString());
@@ -1349,6 +1354,9 @@ public class ComputerPlayer extends PlayerImpl {
     public void resetMicroActions() {
         chooseTargetAction.clear();
         chooseTargetOptions.clear();
+        choiceAction.clear();
+        choiceOptions.clear();
+
     }
 
     protected void playLand(Game game) {
@@ -1920,7 +1928,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseUse: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseUse: " + source.toString());
         log.debug("chooseUse: " + outcome.isGood());
         // Be proactive! Always use abilities, the evaluation function will decide if it's good or not
         // Otherwise some abilities won't be used by AI like LoseTargetEffect that has "bad" outcome
@@ -1930,10 +1938,10 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose2: " + choice.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("choose2: " + choice.toString());
         //log.info("choose 3");
         // before falling back, dump the culprit
-        //System.out.println(choice.toString());
+        //log.info(choice.toString());
         //TODO: improve this
 
         // choose creature type
@@ -2040,7 +2048,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTarget2: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseTarget2: " + source.toString());
         if (cards == null || cards.isEmpty()) {
             return target.isRequired(source);
         }
@@ -2072,7 +2080,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("choose3: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("choose3: " + source.toString());
         log.debug("choose 2");
         if (cards == null || cards.isEmpty()) {
             return true;
@@ -2157,7 +2165,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseMode: " + source.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseMode: " + source.toString());
         log.debug("chooseMode");
         if (modes.getMode() != null && modes.getMaxModes(game, source) == modes.getSelectedModes().size()) {
             // mode was already set by the AI
@@ -2187,7 +2195,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public TriggeredAbility chooseTriggeredAbility(List<TriggeredAbility> abilities, Game game) {
-        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) System.out.println("chooseTriggeredAbility: " + abilities.toString());
+        if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseTriggeredAbility: " + abilities.toString());
         log.debug("chooseTriggeredAbility: " + abilities.toString());
         //TODO: improve this
         if (!abilities.isEmpty()) {
@@ -3082,6 +3090,8 @@ public class ComputerPlayer extends PlayerImpl {
         ComputerPlayer cPlayer = (ComputerPlayer)player;
         chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
         chooseTargetAction = new ArrayList<>(cPlayer.chooseTargetAction);
+        choiceOptions = new HashSet<>(cPlayer.choiceOptions);
+        choiceAction = new ArrayList<>(cPlayer.choiceAction);
         this.human = false;
     }
 

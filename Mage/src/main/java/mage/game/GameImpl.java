@@ -1325,6 +1325,7 @@ public abstract class GameImpl implements Game {
         //20091005 - 103.1
         if (!gameOptions.skipInitShuffling) { //don't shuffle in test mode for card injection on top of player's libraries
             for (Player player : state.getPlayers().values()) {
+                logger.info("shuffling library of " + player.getName());
                 player.shuffleLibrary(null, this);
             }
         }
@@ -1350,13 +1351,14 @@ public abstract class GameImpl implements Game {
             if (choosingPlayer == null) {
                 return;
             }
-            getState().setChoosingPlayerId(choosingPlayerId); // needed to start/stop the timer if active
-            if (choosingPlayer.choose(Outcome.Benefit, targetPlayer, null, this)) {
-                startingPlayerId = targetPlayer.getTargets().get(0);
-            } else if (getState().getPlayers().size() < 3) {
-                // not possible to choose starting player, choosing player has probably conceded, so stop here
-                return;
-            }
+            startingPlayerId=choosingPlayerId;
+//            getState().setChoosingPlayerId(choosingPlayerId); // needed to start/stop the timer if active
+//            if (choosingPlayer.choose(Outcome.Benefit, targetPlayer, null, this)) {
+//                startingPlayerId = targetPlayer.getTargets().get(0);
+//            } else if (getState().getPlayers().size() < 3) {
+//                // not possible to choose starting player, choosing player has probably conceded, so stop here
+//                return;
+//            }
         }
         if (startingPlayerId == null) {
             // choose any available player as starting player

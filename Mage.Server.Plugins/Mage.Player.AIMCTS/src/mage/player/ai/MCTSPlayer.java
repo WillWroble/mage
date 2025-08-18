@@ -3,6 +3,7 @@ package mage.player.ai;
 import mage.ConditionalMana;
 import mage.MageObject;
 import mage.Mana;
+import mage.ObjectColor;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.SpellAbility;
@@ -16,6 +17,8 @@ import mage.abilities.costs.mana.VariableManaCost;
 import mage.abilities.effects.Effect;
 import mage.abilities.mana.ManaOptions;
 import mage.cards.Cards;
+import mage.choices.Choice;
+import mage.choices.ChoiceColor;
 import mage.constants.Outcome;
 import mage.constants.Zone;
 import mage.game.Game;
@@ -45,12 +48,13 @@ public class MCTSPlayer extends ComputerPlayer {
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
 
     private int chooseTargetCount = 0;
+    private int makeChoiceCount = 0;
     public static boolean PRINT_CHOOSE_DIALOGUES = false;
 
 
 
     public enum NextAction {
-                PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, CHOOSE_TRIGGERED_ABILITY
+                PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, MAKE_CHOICE
     }
 
     public MCTSPlayer(UUID id) {
@@ -65,10 +69,6 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public MCTSPlayer copy() {
         return new MCTSPlayer(this);
-    }
-
-    public void copyDialogues(MCTSPlayer player) {
-        this.chooseTargetAction = new ArrayList<>(player.chooseTargetAction);
     }
 
     protected List<ActivatedAbility> getPlayableAbilities(Game game) {
@@ -253,7 +253,7 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        //logger.info("chooseTarget: " + source.toString());
+        //for choosing targets of triggered abilities
         if(PRINT_CHOOSE_DIALOGUES) logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
         if(chooseTargetCount < chooseTargetAction.size()) {
             StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
@@ -280,13 +280,29 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-        //reroute to chooseTarget
-        if(true) {
-            //reroute to mcts simulator
-            return chooseTarget(outcome, target, source, game);
-        } else {
-            //reroute to default
-            return super.choose(outcome, target, source, game, options);
-        }
+        //for discarding
+        return chooseTarget(outcome, target, source, game);
+
     }
+    @Override
+    public boolean choose(Outcome outcome, Choice choice, Game game) {
+        if(outcome == Outcome.PutManaInPool) {
+            return super.choose(outcome, choice, game);
+        }
+        //for choosing colors/types etc
+        if(PRINT_CHOOSE_DIALOGUES) logger.info("CALLING MAKE CHOICE: " + choice.toString());
+        if(makeChoiceCount < choiceAction.size()) {
+            String chosen = choiceAction.get(makeChoiceCount);
+            choice.setChoice(chosen);
+            if(PRINT_CHOOSE_DIALOGUES) logger.info(String.format("tried choice: %s ", chosen));
+            makeChoiceCount++;
+            return true;
+        }
+        choiceOptions = new HashSet<>(choice.getChoices());
+        game.pause();
+        lastToAct = true;
+        nextAction = NextAction.MAKE_CHOICE;
+        return super.choose(outcome, choice, game);
+    }
+
 }

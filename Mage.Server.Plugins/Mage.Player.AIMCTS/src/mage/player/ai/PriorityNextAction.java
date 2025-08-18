@@ -33,9 +33,4 @@ public class PriorityNextAction implements MCTSNodeNextAction{
 
         return children;
     }
-
-    @Override
-    public void applyAction(MCTSNode node, MCTSPlayer player, Game game) {
-        player.activateAbility((ActivatedAbility) node.getAction(), game);
-    }
 }

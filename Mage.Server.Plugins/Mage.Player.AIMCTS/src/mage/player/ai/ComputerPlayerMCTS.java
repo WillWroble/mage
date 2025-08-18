@@ -5,6 +5,7 @@ import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
 import mage.cards.Card;
+import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -111,6 +112,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             player.setNextAction(action);
             root = new MCTSNode(playerId, sim);
             root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
+            root.choiceAction = new ArrayList<>(choiceAction);
 
         }
         applyMCTS(game, action);
@@ -123,7 +125,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void getNextAction(Game game, NextAction nextAction) {
         if (root != null) {
             MCTSNode newRoot;
-            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, playerId);
+            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, choiceAction, playerId);
             if (newRoot != null) {
                 newRoot.emancipate();
             } else
@@ -207,6 +209,22 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.info("falling back to default choose target");
             return super.choose(outcome, target, source, game, options);
         }
+    }
+    @Override
+    public boolean choose(Outcome outcome, Choice choice, Game game) {
+        if(outcome == Outcome.PutManaInPool) {
+            return super.choose(outcome, choice, game);
+        }
+        logger.info("base make choice " + choice.toString());
+        choiceOptions = new HashSet<>(choice.getChoices());
+        getNextAction(game, NextAction.MAKE_CHOICE);
+        String chosen = root.choiceAction.get(root.choiceAction.size()-1);
+
+        logger.info(String.format("Choosing %s", chosen));
+        choiceAction.add(chosen);
+        choice.setChoice(chosen);
+
+        return true;
     }
     protected long totalThinkTime = 0;
     protected long totalSimulations = 0;
