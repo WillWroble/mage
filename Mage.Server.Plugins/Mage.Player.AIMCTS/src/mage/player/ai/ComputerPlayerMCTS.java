@@ -182,8 +182,14 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        logger.info("base choose target");
+        logger.info("base choose target " + (source == null ? "null" : source.toString()));
         Set<UUID> possible = target.possibleTargets(getId(), game);
+        logger.info("possible targets: " + possible.size());
+        if(possible.size() == 1) {
+            //if only one possible just choose it and leave
+            target.addTarget(possible.iterator().next(), source, game);
+            return true;
+        }
         chooseTargetOptions.clear();
         MCTSPlayer.getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
         getNextAction(game, NextAction.CHOOSE_TARGET);
@@ -212,7 +218,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if(outcome == Outcome.PutManaInPool) {
+        if(outcome == Outcome.PutManaInPool || choice.getChoices().size() == 1) {
             return super.choose(outcome, choice, game);
         }
         logger.info("base make choice " + choice.toString());
@@ -387,6 +393,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(firstCall) {
             mcts.setLastPriority(createMCTSGame(game.getLastPriority(), false));
             assert (mcts.getLastPriority().getPlayer(playerId) instanceof MCTSPlayer);
+        } else {
+            mcts.setLastPriority(mcts);
         }
         mcts.resume();
         return mcts;

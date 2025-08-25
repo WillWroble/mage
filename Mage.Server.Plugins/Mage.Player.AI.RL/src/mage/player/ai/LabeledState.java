@@ -35,9 +35,6 @@ public class LabeledState implements Serializable {
         this.actionVector = actionVec;
         this.resultLabel = label;
     }
-    public void compress(StateEncoder encoder) {
-        stateVector = encoder.getCompressedVectorArray(stateVector);
-    }
     public void compress(Set<Integer> ignoreList) {
         stateVector = FeatureMerger.getCompressedVectorArray(ignoreList, stateVector);
     }

@@ -13,6 +13,7 @@ import mage.game.events.ZoneChangeEvent;
 import mage.game.permanent.token.Token;
 import mage.util.CardUtil;
 
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -27,6 +28,8 @@ public class PermanentToken extends PermanentImpl {
 
     public PermanentToken(Token token, UUID controllerId, Game game) {
         super(controllerId, controllerId, token.getName()); // random id
+        Random rand = game.getLocalRandom(); // game local deterministic ID
+        this.objectId = new UUID(rand.nextLong(), rand.nextLong());
         this.token = token.copy();
         this.token.getAbilities().newOriginalId(); // neccessary if token has ability like DevourAbility()
         this.token.getAbilities().setSourceId(objectId);

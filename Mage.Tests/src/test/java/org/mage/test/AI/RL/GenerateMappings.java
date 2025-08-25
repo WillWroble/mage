@@ -1,25 +1,15 @@
 package org.mage.test.AI.RL;
 
-import mage.constants.MultiplayerAttackOption;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
-import mage.game.Game;
-import mage.game.GameException;
-import mage.game.TwoPlayerDuel;
-import mage.game.mulligan.MulliganType;
 import mage.player.ai.*;
 import mage.util.RandomUtil;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.TestComputerPlayer7;
 import org.mage.test.player.TestComputerPlayerPureMonteCarlo;
 import org.mage.test.player.TestPlayer;
-import org.mage.test.serverside.base.CardTestPlayerBaseAI;
 
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 
 public class GenerateMappings extends MinimaxVectorExtractionTests {
@@ -80,7 +70,7 @@ public class GenerateMappings extends MinimaxVectorExtractionTests {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.stateVectors));
         Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
         encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
         //actions = new HashMap<>(ActionEncoder.actionMap);

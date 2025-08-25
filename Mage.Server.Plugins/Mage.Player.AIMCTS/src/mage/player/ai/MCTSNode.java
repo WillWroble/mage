@@ -24,8 +24,7 @@ import static java.lang.Math.*;
 public class MCTSNode {
 
     public static final boolean USE_ACTION_CACHE = false;
-    private static final double selectionCoefficient = 1;
-    private static final double passRatioTolerance = 0.0;
+    private static final double selectionCoefficient = 1.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
 
 
@@ -196,29 +195,47 @@ public class MCTSNode {
         if (player.getNextAction() == null) {
             logger.fatal("next action is null");
         }
+        //assert (game.getLastPriority().getLastPriority() == game.getLastPriority());
         synchronized (children) {
+            MCTSPlayer.NextAction nextAction = player.getNextAction();
             children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
             for (MCTSNode node : children) {
                 node.depth = depth + 1;
                 node.prior = 1.0/children.size();
             }
-            if (policy != null && player.getNextAction() == MCTSPlayer.NextAction.PRIORITY && !ComputerPlayerMCTS.NO_POLICY) {
+            if (policy != null && !ComputerPlayerMCTS.NO_POLICY && nextAction == MCTSPlayer.NextAction.PRIORITY) {
 
                 double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
 
                 //find max logit for numeric stability
                 double maxLogit = Double.NEGATIVE_INFINITY;
                 for (MCTSNode node : children) {
-                    if (node.action == null) continue;
-                    int idx = ActionEncoder.getAction(node.getAction());
+                    if (node.action == null)
+                        continue;
+                    int idx = -1;//ActionEncoder.getAction(node.getAction());
+                    if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
+                        idx = ActionEncoder.getMicroAction(game.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).getName());
+                    } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
+                        idx = ActionEncoder.getMicroAction(node.choiceAction.get(node.choiceAction.size() - 1));
+                    } else {
+                        idx = ActionEncoder.getAction(node.getAction());
+                    }
                     maxLogit = Math.max(maxLogit, policy[idx]);
                 }
 
                 //compute raw exps and sum
                 double sumExp = 0;
                 for (MCTSNode node : children) {
-                    if (node.action == null) continue;
-                    int idx = ActionEncoder.getAction(node.action);
+                    if (node.action == null)
+                        continue;
+                    int idx = -1;//ActionEncoder.getAction(node.action);
+                    if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
+                        idx = ActionEncoder.getMicroAction(game.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).getName());
+                    } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
+                        idx = ActionEncoder.getMicroAction(node.choiceAction.get(node.choiceAction.size() - 1));
+                    } else {
+                        idx = ActionEncoder.getAction(node.getAction());
+                    }
                     double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
                     node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
                     sumExp += raw;
@@ -255,7 +272,7 @@ public class MCTSNode {
                     }
 
                     // 4) mark done
-                    player.dirichletSeed = 0;
+                    dirichletSeed = 0;
                 }
             }
             if (!children.isEmpty()) {
@@ -298,7 +315,6 @@ public class MCTSNode {
         if (children.size() == 1)
             return children.get(0);
         StringBuilder sb = new StringBuilder();
-        boolean stackIsEmpty = baseGame.getStack().isEmpty();
         sb.append(baseGame.getTurnStepType().toString()).append(baseGame.getStack().toString()).append(" actions: ");
         for (MCTSNode node: children) {
             if(node.action != null) {
@@ -310,7 +326,7 @@ public class MCTSNode {
                     sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
                 }
             }
-            if(node.combat != null && !node.combat.getAttackers().isEmpty()) {
+            if(node.combat != null) {
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.combat.toString(), node.getScoreRatio(), node.visits));
             }
         }
@@ -319,7 +335,7 @@ public class MCTSNode {
         }
 
         //derive temp from value
-        double temperature = 0.5*(1-abs(this.initialScore));
+        double temperature = (1-abs(this.initialScore));
 
         if (ComputerPlayerMCTS.NO_NOISE || temperature < 0.01) {
             MCTSNode best = null;
@@ -360,6 +376,7 @@ public class MCTSNode {
         for (int i = 0; i < children.size(); i++) {
             cumulativeProbability += probabilities.get(i);
             if (randomValue <= cumulativeProbability) {
+                //assert(children.get(i).chooseTargetAction.size() < chooseTargetAction.size()+2);
                 return children.get(i);
             }
         }
@@ -476,15 +493,14 @@ public class MCTSNode {
         int showCount = 0;
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
-
+            if(true && showCount < 10) {
+                logger.debug(current.chooseTargetAction.toString() + " =should= " + chosenTargets.toString());
+                logger.debug(current.choiceAction.toString() + " =should= " + chosenChoices.toString());
+                logger.debug(current.fullStateValue + " =should= " + state);
+                showCount++;
+            }
             if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosenTargets) && current.choiceAction.equals(chosenChoices) && current.playerId.equals(givenPlayerId)) {
                 return current;
-            }
-            if(false && showCount < 10) {
-                logger.info(current.chooseTargetAction.toString() + " =should= " + chosenTargets.toString());
-                logger.info(current.choiceAction.toString() + " =should= " + chosenChoices.toString());
-                logger.info(current.fullStateValue + " =should= " + state);
-                showCount++;
             }
             for (MCTSNode child: current.children) {
                 queue.add(child);

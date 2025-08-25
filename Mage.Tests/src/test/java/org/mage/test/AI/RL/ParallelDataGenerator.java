@@ -10,9 +10,7 @@ import mage.game.match.MatchOptions;
 import mage.game.mulligan.MulliganType;
 import mage.player.ai.*;
 import mage.util.RandomUtil;
-import org.apache.commons.lang3.RandomUtils;
 import org.junit.Test;
-import org.mage.test.player.TestComputerPlayer7;
 import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
@@ -34,16 +32,17 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
     private static final int NUM_GAMES_TO_SIMULATE_TEST = 50;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 16;
+    private static final int MAX_CONCURRENT_GAMES = 8;
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "UWTempo.dck";
     private static final String DECK_B = "simplegreen.dck";
-    private static final String MCTS_MODEL_PATH = "models/Model9.onnx";
-    private static final boolean DONT_USE_NOISE = false;
+    private static final String MCTS_MODEL_PATH = "models/Model12.1.onnx";
+    private static final boolean DONT_USE_NOISE = true;
     private static final boolean DONT_USE_POLICY = false;
     // ================================== FILE PATHS ==================================
     private static final String MAPPING_FILE = "features_mapping.ser";
     private static final String ACTIONS_FILE = "actions_mapping.ser";
+    private static final String MICRO_ACTIONS_FILE = "micro_actions_mapping.ser";
     private static final String TRAIN_OUT_FILE = "training.bin";
     private static final String TEST_OUT_FILE = "testing.bin";
     // ================================== GLOBAL FIELDS ==================================
@@ -81,6 +80,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         try {
             finalFeatures = Features.loadMapping(MAPPING_FILE);
             ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
+            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("failed to load persistent mappings.");
         }
@@ -97,6 +97,22 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         for (int i = 0; i < aMap.length; i++) {
             System.out.println(i + " => " + aMap[i]);
         }
+        System.out.println("Micro Action map:");
+        String[] aMap2 = new String[ActionEncoder.microActionMap.size()];
+        for (String s : ActionEncoder.microActionMap.keySet()) {
+            //System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
+            aMap2[ActionEncoder.microActionMap.get(s)] = s;
+        }
+        for (int i = 0; i < aMap2.length; i++) {
+            System.out.println(i + " => " + aMap2[i]);
+        }
+    }
+    @Override
+    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
+        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
+        playerA = createPlayer(game, "PlayerA",  DECK_A);
+        playerB = createPlayer(game, "PlayerB",  DECK_B);
+        return game;
     }
     /**
      * New test function to run a single game for debugging purposes without saving any data.
@@ -112,6 +128,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             // Load mappings so the encoder works correctly
             finalFeatures = Features.loadMapping(MAPPING_FILE);
             ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
+            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
+            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
+            ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("Warning: Failed to load persistent mappings. Encoders will be empty.");
             ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
@@ -119,24 +138,51 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
+        ComputerPlayer.PRINT_DECISION_FALLBACKS = false;
+        int maxTurn = 50;
         //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
-        //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = true;
+        MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
         Features.printOldFeatures = false;
         // --- End Setup ---
         long seed = System.nanoTime();
-        //seed = -8907919361237717361L; sheltered by ghosts with kitsa
-        seed = -5660463248622594094L;
-        try {
-            GameResult result = runSingleGame(seed);
-            System.out.println("\n--- DEBUG GAME COMPLETE ---");
-            System.out.println("Player A won: " + result.didPlayerAWin());
-            System.out.println("Total states generated: " + result.getStates().size());
-            System.out.println("Note: No data was saved from this run.");
+        //seed = -8907919361237717361L; //sheltered by ghosts with kitsa
+        //seed = -5660463248622594094L; //skrelv in hand
+        //seed = 2745780631660485102L; //lost jitte bug
+        //seed = -5433610134761732485L; //malcolm with 4 chorus counters
+        //seed = -7047796267994671121L; //random state mismatch on kitsa
+        //seed = 334539798271200L; //fatal crash on choosetarget (SOLVED single target bug)
+        //seed = -7199640081568634458L; //fatal crash on mirrex token (SOLVED non-deterministic UUIDs)
+        //seed = -2354711993304784775L; //fatal crash on cast no more lies (SOLVED UUID insensitive state)
+        //seed = -1587950460155780201L; //null current game? (in MCTS loop)
 
-        } catch (Exception e) {
-            System.err.println("The single debug game failed to complete.");
-            e.printStackTrace();
+
+        StateEncoder threadEncoder = new StateEncoder();
+
+        // Use a thread-safe random number generator for the seed.
+        logger.info("Using seed: " + seed);
+        RandomUtil.setSeed(seed);
+
+        try {
+            threadEncoder.loadMapping(finalFeatures);
+            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
+            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("failed to load persistent mappings.");
         }
+
+        configurePlayer(playerA, threadEncoder);
+        configurePlayer(playerB, threadEncoder);
+        threadEncoder.setAgent(playerA.getId());
+        threadEncoder.setOpponent(playerB.getId());
+
+
+        setStrictChooseMode(true);
+        setStopAt(maxTurn, PhaseStep.END_TURN);
+        //GameImpl.drawHand = false;
+        //addCard(Zone.BATTLEFIELD, playerA, "Island", 2);
+        //addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
+        //addCard(Zone.HAND, playerA, "Combat Research", 7);
+        execute();
 
         System.out.println("=========================================");
     }
@@ -309,7 +355,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             try {
                 threadEncoder.loadMapping(finalFeatures);
                 ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
+                ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
                 ActionEncoder.indexCount = ActionEncoder.actionMap.size();
+                ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
             } catch (IOException | ClassNotFoundException e) {
                 System.err.println("Worker thread failed to load persistent mappings.");
             }
@@ -327,18 +375,19 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             options.stopAtStep = PhaseStep.END_TURN;
             game.setGameOptions(options);
 
+
             // Start the game simulation. This is a blocking call that will run the game to completion.
             game.start(playerA.getId());
 
             boolean playerAWon = playerA.hasWon();
             List<Set<Integer>> newStateVectors = new ArrayList<>();
-            for (int i = 0; i < threadEncoder.macroStateVectors.size(); i++) {
+            for (int i = 0; i < threadEncoder.stateVectors.size(); i++) {
                 newStateVectors.add(new HashSet<>());
             }
             //merge to the final features
             finalFeatures.merge(threadEncoder.getFeatures(), newStateVectors);
             //update generated dataset with remapped one
-            threadEncoder.macroStateVectors = newStateVectors;
+            threadEncoder.stateVectors = newStateVectors;
             if(playerA.hasWon()) winCount.incrementAndGet();
             logger.info("Game #" + gameCount.incrementAndGet() + " completed successfully");
             logger.info("Current WR: " + winCount.get()*1.0/gameCount.get());
@@ -363,12 +412,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
         synchronized (encoder) {
             List<LabeledState> results = new ArrayList<>();
-            int N = encoder.macroStateVectors.size();
+            int N = encoder.stateVectors.size();
             double gamma = 0.99;
             double lambda = 0.5;
 
             for (int i = 0; i < N; i++) {
-                Set<Integer> state = encoder.macroStateVectors.get(i);
+                Set<Integer> state = encoder.stateVectors.get(i);
                 double[] action = encoder.actionVectors.get(i);
                 double normScore = encoder.stateScores.get(i);
                 double terminal = didPlayerAWin ? +1.0 : -1.0;
@@ -397,7 +446,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
         return updatedIgnoreList;
     }
-
     public void persistData() {
         try {
             finalFeatures.previousLocalIndexCount = initialRawSize;
@@ -406,6 +454,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             System.out.printf("Persisted feature mapping (and ignore list) to %s%n", MAPPING_FILE);
             saveObject(new HashMap<>(ActionEncoder.actionMap), ACTIONS_FILE);
             System.out.printf("Persisted action mapping to %s%n", ACTIONS_FILE);
+            saveObject(new HashMap<>(ActionEncoder.microActionMap), MICRO_ACTIONS_FILE);
+            System.out.printf("Persisted micro action mapping to %s%n", MICRO_ACTIONS_FILE);
         } catch (IOException e) {
             e.printStackTrace();
         }

@@ -277,6 +277,10 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     current = current.select(this.playerId);
                 }
                 double result;
+                if(current == null) {
+                    logger.error("Current node is null in search");
+                    break;
+                }
                 if (!current.isTerminal()) {
                     // rollout
                     result = evaluateState(current);
@@ -338,6 +342,39 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         return out;
     }
+    double[] getMicroActionVec(NextAction nextAction, Game game) {
+        double tau = 1.0;            // your temperature hyperparam
+        int    A   = 128;
+        double[] out = new double[A];
+        Arrays.fill(out, 0.0);
+        double sum = 0;
+        // 1) accumulate visits^(1/tau)
+        for (MCTSNode child : root.children) {
+            if (child.getAction() != null) {
+                int idx = -1;
+                if(nextAction == NextAction.CHOOSE_TARGET) {
+                    idx = ActionEncoder.getMicroAction(game.getObject(child.chooseTargetAction.get(child.chooseTargetAction.size()-1).iterator().next()).getName());
+                } else if(nextAction == NextAction.MAKE_CHOICE) {
+                    idx = ActionEncoder.getMicroAction(child.choiceAction.get(child.choiceAction.size() - 1));
+                } else {
+                    logger.error("not a recognized micro action");
+                }
+                double v = child.visits;
+                // apply temperature
+                double vt = Math.pow(v, 1.0 / tau);
+                out[idx%128] += vt;
+                sum += vt;
+            }
+        }
+
+        // 2) normalize into a proper distribution
+        if (sum > 0) {
+            for (int i = 0; i < A; i++) {
+                out[i] = out[i] / sum;
+            }
+        }
+        return out;
+    }
     @Override
     protected void calculateActions(Game game, NextAction action) {
         if (root == null) {
@@ -357,6 +394,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 encoder.addAction(getActionVec());
                 encoder.stateScores.add(root.getScoreRatio());
             }
+//            else if(action == NextAction.CHOOSE_TARGET || action == NextAction.MAKE_CHOICE) {
+//                encoder.processMicroState(game, getId(), chooseTargetAction.size() + choiceAction.size());
+//                encoder.addAction(getMicroActionVec(action, game));
+//                encoder.stateScores.add(root.getScoreRatio());
+//            }
             root = best;
             root.emancipate();
         }

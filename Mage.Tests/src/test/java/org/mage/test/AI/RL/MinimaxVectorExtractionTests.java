@@ -130,7 +130,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
 
     }
     public void reset_vectors() {
-        encoder.macroStateVectors.clear();
+        encoder.stateVectors.clear();
         encoder.stateScores.clear();
         encoder.actionVectors.clear();
     }
@@ -139,13 +139,13 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
      * uses saved list of actions and states to make a labeled vector batch for training
      */
     public void create_labeled_states() {
-        int N = encoder.macroStateVectors.size();
+        int N = encoder.stateVectors.size();
         double γ = 0.99;          // discount factor
         double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
 
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
-            Set<Integer> state = encoder.macroStateVectors.get(i);
+            Set<Integer> state = encoder.stateVectors.get(i);
             double[] action = encoder.actionVectors.get(i);
             double normScore = encoder.stateScores.get(i);
 
@@ -224,7 +224,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
         //assert(!encoder.getFeatures().ignoreList.isEmpty());
-        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
+        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.stateVectors));
         Set<Integer> oldIgnore = new HashSet<>(encoder.getFeatures().ignoreList);
         encoder.getFeatures().ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
         //actions = new HashMap<>(ActionEncoder.actionMap);

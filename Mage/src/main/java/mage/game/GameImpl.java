@@ -97,6 +97,7 @@ public abstract class GameImpl implements Game {
     private Game lastPriority = this;
     private UUID lastPriorityPlayerId;
     public Ability lastPriorityAction;
+    public static boolean drawHand = true;
 
     private static final int ROLLBACK_TURNS_MAX = 4;
     private static final String UNIT_TESTS_ERROR_TEXT = "Error in unit tests";
@@ -112,6 +113,7 @@ public abstract class GameImpl implements Game {
     protected AtomicInteger totalErrorsCount = new AtomicInteger(); // for debug only: error stats
 
     protected final UUID id;
+    private final Random gameLocalRandom; //for deterministic UUID generation
 
     protected boolean ready;
     protected transient TableEventSource tableEventSource = new TableEventSource();
@@ -173,6 +175,7 @@ public abstract class GameImpl implements Game {
 
     public GameImpl(MultiplayerAttackOption attackOption, RangeOfInfluence range, Mulligan mulligan, int minimumDeckSize, int startingLife, int startingHandSize) {
         this.id = UUID.randomUUID();
+        this.gameLocalRandom = new Random();
         this.range = range;
         this.mulligan = mulligan;
         this.attackOption = attackOption;
@@ -195,6 +198,7 @@ public abstract class GameImpl implements Game {
         this.checkPlayableState = game.checkPlayableState;
 
         this.id = game.id;
+        this.gameLocalRandom = RandomUtil.deepCopy(game.gameLocalRandom);
         this.totalErrorsCount.set(game.totalErrorsCount.get());
 
         this.ready = game.ready;
@@ -251,6 +255,10 @@ public abstract class GameImpl implements Game {
         this.lastPlayersLifes = game.lastPlayersLifes;
         this.stackObjectsCheck = game.stackObjectsCheck;
          */
+    }
+    @Override
+    public Random getLocalRandom() {
+        return gameLocalRandom;
     }
 
     /**
@@ -1385,7 +1393,7 @@ public abstract class GameImpl implements Game {
             if (!gameOptions.testMode || player.getLife() == 0) {
                 player.initLife(this.getStartingLife());
             }
-            if (true || !gameOptions.testMode) {
+            if (drawHand || !gameOptions.testMode) {
                 mulligan.drawHand(startingHandSize, player, this);
             }
         }
@@ -1771,8 +1779,8 @@ public abstract class GameImpl implements Game {
                                 if (isPaused() || checkIfGameIsOver()) {
                                     return;
                                 }
-                                lastPriority = this.copy();
                                 lastPriorityPlayerId = player.getId();
+                                lastPriority = this.copy();
                                 // resetPassed should be called if player performs any action
                                 if (player.priority(this)) {
                                     assert (player.getLastActivated()!= null);

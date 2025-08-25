@@ -1,0 +1,221 @@
+"main@1" prio=5 tid=0x1 nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+	  at mage.player.ai.ChooseTargetNextAction.performNextAction(ChooseTargetNextAction.java:28)
+	  at mage.player.ai.MCTSNode.expand(MCTSNode.java:201)
+	  - locked <0x1525> (a java.util.ArrayList)
+	  at mage.player.ai.ComputerPlayerMCTS2.applyMCTS(ComputerPlayerMCTS2.java:275)
+	  at mage.player.ai.ComputerPlayerMCTS2.calculateActions(ComputerPlayerMCTS2.java:351)
+	  at mage.player.ai.ComputerPlayerMCTS.getNextAction(ComputerPlayerMCTS.java:135)
+	  at mage.player.ai.ComputerPlayerMCTS.chooseTarget(ComputerPlayerMCTS.java:189)
+	  at org.mage.test.player.TestComputerPlayerMonteCarlo2.chooseTarget(TestComputerPlayerMonteCarlo2.java:64)
+	  at mage.player.ai.ComputerPlayerMCTS.choose(ComputerPlayerMCTS.java:206)
+	  at mage.player.ai.ComputerPlayer.choose(ComputerPlayer.java:151)
+	  at org.mage.test.player.TestComputerPlayerMonteCarlo2.choose(TestComputerPlayerMonteCarlo2.java:37)
+	  at mage.players.PlayerImpl.getToDiscard(PlayerImpl.java:896)
+	  at mage.players.PlayerImpl.discard(PlayerImpl.java:858)
+	  at mage.players.PlayerImpl.discard(PlayerImpl.java:853)
+	  at org.mage.test.player.TestPlayer.discard(TestPlayer.java:3216)
+	  at mage.cards.m.MalcolmAlluringScoundrelEffect.apply(MalcolmAlluringScoundrel.java:89)
+	  at mage.abilities.AbilityImpl.resolveMode(AbilityImpl.java:226)
+	  at mage.abilities.AbilityImpl.resolve(AbilityImpl.java:210)
+	  at mage.abilities.TriggeredAbilityImpl.resolve(TriggeredAbilityImpl.java:249)
+	  at mage.game.stack.StackAbility.resolve(StackAbility.java:85)
+	  at mage.game.GameImpl.resolve(GameImpl.java:1880)
+	  at mage.game.GameImpl.playPriority(GameImpl.java:1803)
+	  at mage.game.turn.Step.priority(Step.java:73)
+	  at mage.game.turn.CombatDamageStep.priority(CombatDamageStep.java:37)
+	  at mage.game.turn.Phase.playStep(Phase.java:205)
+	  at mage.game.turn.Phase.play(Phase.java:91)
+	  at mage.game.turn.Turn.play(Turn.java:141)
+	  at mage.game.GameImpl.playTurn(GameImpl.java:1213)
+	  at mage.game.GameImpl.play(GameImpl.java:1120)
+	  at mage.game.GameImpl.start(GameImpl.java:1096)
+	  at org.mage.test.AI.RL.ParallelDataGenerator.runSingleGame(ParallelDataGenerator.java:336)
+	  at org.mage.test.AI.RL.ParallelDataGenerator.test_single_game(ParallelDataGenerator.java:135)
+	  at org.mage.test.AI.RL.SimulateMCTS.test_single_game(SimulateMCTS.java:11)
+	  at java.lang.invoke.LambdaForm$DMH/0x00000238fb303c00.invokeVirtual(LambdaForm$DMH:-1)
+	  at java.lang.invoke.LambdaForm$MH/0x00000238fb304800.invoke(LambdaForm$MH:-1)
+	  at java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder:-1)
+	  at jdk.internal.reflect.DirectMethodHandleAccessor.invokeImpl(DirectMethodHandleAccessor.java:153)
+	  at jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	  at java.lang.reflect.Method.invoke(Method.java:580)
+	  at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	  at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	  at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	  at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	  at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	  at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	  at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	  at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	  at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	  at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:63)
+	  at org.junit.runners.ParentRunner$4.run(ParentRunner.java:331)
+	  at org.junit.runners.ParentRunner$1.schedule(ParentRunner.java:79)
+	  at org.junit.runners.ParentRunner.runChildren(ParentRunner.java:329)
+	  at org.junit.runners.ParentRunner.access$100(ParentRunner.java:66)
+	  at org.junit.runners.ParentRunner$2.evaluate(ParentRunner.java:293)
+	  at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	  at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	  at org.junit.runners.ParentRunner.run(ParentRunner.java:413)
+	  at org.junit.runner.JUnitCore.run(JUnitCore.java:137)
+	  at com.intellij.junit4.JUnit4IdeaTestRunner.startRunnerWithArgs(JUnit4IdeaTestRunner.java:69)
+	  at com.intellij.rt.junit.IdeaTestRunner$Repeater$1.execute(IdeaTestRunner.java:38)
+	  at com.intellij.rt.execution.junit.TestsRepeater.repeat(TestsRepeater.java:11)
+	  at com.intellij.rt.junit.IdeaTestRunner$Repeater.startRunnerWithArgs(IdeaTestRunner.java:35)
+	  at com.intellij.rt.junit.JUnitStarter.prepareStreamsAndStart(JUnitStarter.java:231)
+	  at com.intellij.rt.junit.JUnitStarter.main(JUnitStarter.java:55)
+
+"AI-SIM-MAD - 1@4789" daemon prio=5 tid=0x65 nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at jdk.internal.misc.Unsafe.park(Unsafe.java:-1)
+	  at java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:519)
+	  at java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3780)
+	  at java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3725)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1707)
+	  at java.util.concurrent.LinkedBlockingQueue.take(LinkedBlockingQueue.java:435)
+	  at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+	  at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+	  at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"AI-SIM-MAD - 2@4803" daemon prio=5 tid=0x66 nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at jdk.internal.misc.Unsafe.park(Unsafe.java:-1)
+	  at java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:519)
+	  at java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3780)
+	  at java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3725)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1707)
+	  at java.util.concurrent.LinkedBlockingQueue.take(LinkedBlockingQueue.java:435)
+	  at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+	  at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+	  at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"AI-SIM-MAD - 3@4808" daemon prio=5 tid=0x67 nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at jdk.internal.misc.Unsafe.park(Unsafe.java:-1)
+	  at java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:519)
+	  at java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3780)
+	  at java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3725)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1707)
+	  at java.util.concurrent.LinkedBlockingQueue.take(LinkedBlockingQueue.java:435)
+	  at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+	  at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+	  at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"AI-SIM-MAD - 4@4813" daemon prio=5 tid=0x68 nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at jdk.internal.misc.Unsafe.park(Unsafe.java:-1)
+	  at java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:519)
+	  at java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3780)
+	  at java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3725)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1707)
+	  at java.util.concurrent.LinkedBlockingQueue.take(LinkedBlockingQueue.java:435)
+	  at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+	  at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+	  at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"AI-SIM-MAD - 5@4849" daemon prio=5 tid=0x69 nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at jdk.internal.misc.Unsafe.park(Unsafe.java:-1)
+	  at java.util.concurrent.locks.LockSupport.park(LockSupport.java:371)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionNode.block(AbstractQueuedSynchronizer.java:519)
+	  at java.util.concurrent.ForkJoinPool.unmanagedBlock(ForkJoinPool.java:3780)
+	  at java.util.concurrent.ForkJoinPool.managedBlock(ForkJoinPool.java:3725)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1707)
+	  at java.util.concurrent.LinkedBlockingQueue.take(LinkedBlockingQueue.java:435)
+	  at java.util.concurrent.ThreadPoolExecutor.getTask(ThreadPoolExecutor.java:1070)
+	  at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1130)
+	  at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"H2 TCP Server (tcp://192.168.1.216:61009)@3378" daemon prio=5 tid=0x5f nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+	  at sun.nio.ch.Net.accept(Net.java:-1)
+	  at sun.nio.ch.NioSocketImpl.accept(NioSocketImpl.java:748)
+	  at java.net.ServerSocket.implAccept(ServerSocket.java:698)
+	  at java.net.ServerSocket.platformImplAccept(ServerSocket.java:663)
+	  at java.net.ServerSocket.implAccept(ServerSocket.java:639)
+	  at java.net.ServerSocket.implAccept(ServerSocket.java:585)
+	  at java.net.ServerSocket.accept(ServerSocket.java:543)
+	  at org.h2.server.TcpServer.listen(TcpServer.java:247)
+	  at org.h2.tools.Server.run(Server.java:576)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"IntelliJ Suspend Helper@787" daemon prio=5 tid=0x25 nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+	  at java.lang.Thread.sleep0(Thread.java:-1)
+	  at java.lang.Thread.sleep(Thread.java:509)
+	  at com.intellij.rt.debugger.agent.SuspendHelper.suspendHelperLoopBody(SuspendHelper.java:29)
+	  at com.intellij.rt.debugger.agent.SuspendHelper.access$000(SuspendHelper.java:5)
+	  at com.intellij.rt.debugger.agent.SuspendHelper$1.run(SuspendHelper.java:15)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"H2 File Lock Watchdog C:/Users/owner/Documents/GitHub/mage/Mage.Tests/db/cards.h2.lock.db@3173" daemon prio=9 tid=0x5d nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+	  at java.lang.Thread.sleep0(Thread.java:-1)
+	  at java.lang.Thread.sleep(Thread.java:509)
+	  at org.h2.store.FileLock.run(FileLock.java:488)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+
+"MVStore background writer nio:C:/Users/owner/Documents/GitHub/mage/Mage.Tests/db/cards.h2.mv.db@3460" daemon prio=5 tid=0x62 nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at java.lang.Object.wait0(Object.java:-1)
+	  at java.lang.Object.wait(Object.java:366)
+	  at org.h2.mvstore.MVStore$BackgroundWriterThread.run(MVStore.java:2708)
+
+"Reference Handler@5419" daemon prio=10 tid=0x9 nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+	  at java.lang.ref.Reference.waitForReferencePendingList(Reference.java:-1)
+	  at java.lang.ref.Reference.processPendingReferences(Reference.java:246)
+	  at java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)
+
+"Finalizer@5420" daemon prio=8 tid=0xa nid=NA waiting
+  java.lang.Thread.State: WAITING
+	  at java.lang.Object.wait0(Object.java:-1)
+	  at java.lang.Object.wait(Object.java:366)
+	  at java.lang.Object.wait(Object.java:339)
+	  at java.lang.ref.NativeReferenceQueue.await(NativeReferenceQueue.java:48)
+	  at java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:158)
+	  at java.lang.ref.NativeReferenceQueue.remove(NativeReferenceQueue.java:89)
+	  at java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:173)
+
+"Common-Cleaner@5423" daemon prio=8 tid=0x21 nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+	  at jdk.internal.misc.Unsafe.park(Unsafe.java:-1)
+	  at java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+	  at java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1847)
+	  at java.lang.ref.ReferenceQueue.await(ReferenceQueue.java:71)
+	  at java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:143)
+	  at java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:218)
+	  at jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:140)
+	  at java.lang.Thread.runWith(Thread.java:1596)
+	  at java.lang.Thread.run(Thread.java:1583)
+	  at jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:186)
+
+"Signal Dispatcher@5421" daemon prio=9 tid=0xb nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+
+
+"Attach Listener@5422" daemon prio=5 tid=0xc nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+
+
+"Notification Thread@802" daemon prio=9 tid=0x26 nid=NA runnable
+  java.lang.Thread.State: RUNNABLE
+
+

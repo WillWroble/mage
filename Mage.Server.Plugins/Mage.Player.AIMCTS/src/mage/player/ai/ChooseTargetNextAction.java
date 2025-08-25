@@ -16,12 +16,16 @@ public class ChooseTargetNextAction implements MCTSNodeNextAction {
         // Get targets for the current ability
         for (Set<UUID> targets: player.chooseTargetOptions) {
             //create node to add option to
+            //assert (game.getLastPriority().getLastPriority() == game.getLastPriority());
             Game sim = game.getLastPriority().createSimulationForAI();
             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
             MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
+            simPlayer2.chooseTargetAction = new ArrayList<>(node.chooseTargetAction);//for stability
             simPlayer2.chooseTargetAction.add(targets);
             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);
             sim.resume();
+
+            if(simPlayer2.getNextAction() != MCTSPlayer.NextAction.PRIORITY) System.out.println("DIDNT MAKE IT TO PRIORITY");
             MCTSNode newNode = new MCTSNode(node, sim, node.getAction().copy());
             newNode.chooseTargetAction = new ArrayList<>(node.chooseTargetAction);
             newNode.chooseTargetAction.add(targets);

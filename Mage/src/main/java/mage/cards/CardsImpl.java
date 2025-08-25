@@ -150,16 +150,15 @@ public class CardsImpl extends LinkedHashSet<UUID> implements Cards, Serializabl
     @Override
     public String getValue(Game game) {
         StringBuilder sb = threadLocalBuilder.get();
-        List<String> cards = new ArrayList<>();
+        Map<String, UUID> cards = new TreeMap<>();
         for (UUID cardId : this) {
             Card card = game.getCard(cardId);
             if (card != null) {
-                cards.add(card.getName());
+                cards.put(card.getName(),  card.getId());
             }
         }
-        Collections.sort(cards);
-        for (String name : cards) {
-            sb.append(name).append(':');
+        for (Map.Entry<String, UUID> entry : cards.entrySet()) {
+            sb.append(entry.getKey()).append(entry.getValue()).append(':');
         }
         return sb.toString();
     }

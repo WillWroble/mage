@@ -146,7 +146,7 @@ public class MCTSEncoderTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }

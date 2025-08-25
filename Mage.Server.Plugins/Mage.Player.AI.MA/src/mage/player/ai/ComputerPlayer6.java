@@ -33,6 +33,7 @@ import mage.util.CardUtil;
 import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import java.util.*;

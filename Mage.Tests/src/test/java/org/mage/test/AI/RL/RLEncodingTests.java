@@ -118,7 +118,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
         logger.info(old_features.localIndexCount);
         logger.info(encoder.getFeatures().localIndexCount);
         List<Set<Integer>> newStateVectors = new ArrayList<>();
-        for (int i = 0; i < encoder.macroStateVectors.size(); i++) {
+        for (int i = 0; i < encoder.stateVectors.size(); i++) {
             newStateVectors.add(new HashSet<>());
         }
         old_features.merge(encoder.getFeatures(), newStateVectors);
@@ -179,7 +179,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }
@@ -194,7 +194,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }
@@ -209,7 +209,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
     }
@@ -224,7 +224,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
         //run one more game this time using ignore list
@@ -247,7 +247,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
             reset_game();
             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
         }
-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
+        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
         //run one more game this time using ignore list

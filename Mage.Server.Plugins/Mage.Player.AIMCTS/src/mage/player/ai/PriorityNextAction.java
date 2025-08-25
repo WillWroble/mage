@@ -4,6 +4,7 @@ import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.game.Game;
 import mage.game.GameState;
+import mage.players.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,10 +19,24 @@ public class PriorityNextAction implements MCTSNodeNextAction{
             abilities = player.getPlayableOptions(game);
         else
             abilities = MCTSNode.getPlayables(player, fullStateValue, game);
+        int optionCount = 0;
         for (Ability ability: abilities) {
-            Game sim = game.createSimulationForAI();
+            Game sim;
+            if(false && optionCount==abilities.size()-1) {
+                sim = game;//no copy necessary
+                for(Player p : sim.getPlayers().values()) {
+                    MCTSPlayer mctsPlayer = (MCTSPlayer) p;
+                    mctsPlayer.lastToAct = false;
+                    mctsPlayer.chooseTargetCount = 0;
+                    mctsPlayer.makeChoiceCount = 0;
+                }
+            } else {
+                sim = game.createSimulationForAI();
+                optionCount++;
+            }
             MCTSPlayer simPlayer = (MCTSPlayer) sim.getPlayer(player.getId());
             boolean success = simPlayer.activateAbility((ActivatedAbility)ability.copy(), sim);
+
             if(!success) {
                 if(MCTSPlayer.PRINT_CHOOSE_DIALOGUES) System.out.println("PRIORITY FAILSAFE TRIGGERED: " + ability.toString());
                 continue;//failsafe

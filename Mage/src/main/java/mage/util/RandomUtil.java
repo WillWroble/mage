@@ -1,6 +1,7 @@
 package mage.util;
 
 import java.awt.Color;
+import java.io.*;
 import java.util.Collection;
 import java.util.Random;
 
@@ -129,5 +130,25 @@ public final class RandomUtil {
             count++;
         }
         return null; // Should be unreachable if collection is not empty
+    }
+    /**
+     * Creates a true deep copy of a Random object's internal state.
+     * @param original The Random object to copy.
+     * @return A new Random object with the identical state.
+     */
+    public static Random deepCopy(Random original) {
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(bos);
+            oos.writeObject(original);
+            oos.flush();
+
+            ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+            ObjectInputStream ois = new ObjectInputStream(bis);
+            return (Random) ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            // This should not happen with java.util.Random
+            throw new RuntimeException("Failed to deep copy Random object", e);
+        }
     }
 }

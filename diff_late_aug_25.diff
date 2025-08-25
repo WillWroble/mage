@@ -1,0 +1,1394 @@
+diff --git a/Mage.Server.Plugins/Mage.Player.AI.MA/src/mage/player/ai/ComputerPlayer6.java b/Mage.Server.Plugins/Mage.Player.AI.MA/src/mage/player/ai/ComputerPlayer6.java
+index 98d36984fd..b1bab5b774 100644
+--- a/Mage.Server.Plugins/Mage.Player.AI.MA/src/mage/player/ai/ComputerPlayer6.java
++++ b/Mage.Server.Plugins/Mage.Player.AI.MA/src/mage/player/ai/ComputerPlayer6.java
+@@ -33,6 +33,7 @@ import mage.util.CardUtil;
+ import mage.util.RandomUtil;
+ import mage.util.ThreadUtils;
+ import mage.util.XmageThreadFactory;
++import org.apache.log4j.Level;
+ import org.apache.log4j.Logger;
+ 
+ import java.util.*;
+diff --git a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/ComputerPlayerMCTS2.java b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/ComputerPlayerMCTS2.java
+index 6bb5d2e855..f5caf86f13 100644
+--- a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/ComputerPlayerMCTS2.java
++++ b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/ComputerPlayerMCTS2.java
+@@ -338,6 +338,39 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
+         }
+         return out;
+     }
++    double[] getMicroActionVec(NextAction nextAction, Game game) {
++        double tau = 1.0;            // your temperature hyperparam
++        int    A   = 128;
++        double[] out = new double[A];
++        Arrays.fill(out, 0.0);
++        double sum = 0;
++        // 1) accumulate visits^(1/tau)
++        for (MCTSNode child : root.children) {
++            if (child.getAction() != null) {
++                int idx = -1;
++                if(nextAction == NextAction.CHOOSE_TARGET) {
++                    idx = ActionEncoder.getMicroAction(game.getObject(child.chooseTargetAction.get(child.chooseTargetAction.size()-1).iterator().next()).getName());
++                } else if(nextAction == NextAction.MAKE_CHOICE) {
++                    idx = ActionEncoder.getMicroAction(child.choiceAction.get(child.choiceAction.size() - 1));
++                } else {
++                    logger.error("not a recognized micro action");
++                }
++                double v = child.visits;
++                // apply temperature
++                double vt = Math.pow(v, 1.0 / tau);
++                out[idx%128] += vt;
++                sum += vt;
++            }
++        }
++
++        // 2) normalize into a proper distribution
++        if (sum > 0) {
++            for (int i = 0; i < A; i++) {
++                out[i] = out[i] / sum;
++            }
++        }
++        return out;
++    }
+     @Override
+     protected void calculateActions(Game game, NextAction action) {
+         if (root == null) {
+@@ -357,6 +390,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
+                 encoder.addAction(getActionVec());
+                 encoder.stateScores.add(root.getScoreRatio());
+             }
++//            else if(action == NextAction.CHOOSE_TARGET || action == NextAction.MAKE_CHOICE) {
++//                encoder.processMicroState(game, getId(), chooseTargetAction.size() + choiceAction.size());
++//                encoder.addAction(getMicroActionVec(action, game));
++//                encoder.stateScores.add(root.getScoreRatio());
++//            }
+             root = best;
+             root.emancipate();
+         }
+diff --git a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/Features.java b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/Features.java
+index 13f7718771..ae09c6e71b 100644
+--- a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/Features.java
++++ b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/Features.java
+@@ -291,7 +291,7 @@ public class Features implements Serializable {
+      */
+     public synchronized void merge(Features f, List<Set<Integer>> newStateVectors) {
+         if (this == f) return;
+-        List<Set<Integer>> oldStateVectors = f.encoder.macroStateVectors;
++        List<Set<Integer>> oldStateVectors = f.encoder.stateVectors;
+         // Normal features
+         for (String n : f.features.keySet()) {
+             Map<Integer, Integer> thisOccurrenceMap = this.features.computeIfAbsent(n, k -> new HashMap<>());
+diff --git a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/LabeledState.java b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/LabeledState.java
+index 04d950ac62..7f358fd007 100644
+--- a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/LabeledState.java
++++ b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/LabeledState.java
+@@ -35,9 +35,6 @@ public class LabeledState implements Serializable {
+         this.actionVector = actionVec;
+         this.resultLabel = label;
+     }
+-    public void compress(StateEncoder encoder) {
+-        stateVector = encoder.getCompressedVectorArray(stateVector);
+-    }
+     public void compress(Set<Integer> ignoreList) {
+         stateVector = FeatureMerger.getCompressedVectorArray(ignoreList, stateVector);
+     }
+diff --git a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/StateEncoder.java b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/StateEncoder.java
+index 5eaa7a99c2..16ffffe16e 100644
+--- a/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/StateEncoder.java
++++ b/Mage.Server.Plugins/Mage.Player.AI.RL/src/mage/player/ai/StateEncoder.java
+@@ -37,9 +37,8 @@ public class StateEncoder {
+     public Set<Integer> featureVector = new HashSet<>();
+     private UUID opponentID;
+     private UUID myPlayerID;
+-    public List<Set<Integer>> macroStateVectors = new ArrayList<>();
++    public List<Set<Integer>> stateVectors = new ArrayList<>();
+     public List<Set<Integer>> microStateVectors = new ArrayList<>();
+-    public List<Boolean> activeStates = new ArrayList<>();
+ 
+     public List<Double> stateScores = new ArrayList<>();
+     public List<double[]> actionVectors = new ArrayList<>();
+@@ -328,7 +327,7 @@ public class StateEncoder {
+         myPlayerID = temp;
+ 
+     }
+-    public synchronized void processState(Game game, UUID actingPlayerID) {
++    public synchronized void processState(Game game, UUID actingPlayerID, int microCounter) {
+         features.stateRefresh();
+         featureVector.clear();
+ 
+@@ -373,59 +372,27 @@ public class StateEncoder {
+         //lastly do opponent
+         processOpponentState(game, actingPlayerID);
+ 
++        //micro counter
++        features.addNumericFeature("Micro Counter", microCounter);
++
+         //mapping version
+         features.addNumericFeature("Mapping Version", features.version);
+ 
+     }
+-    public void processMicroState(Game game, UUID actingPlayerID) {
+-        processState(game, actingPlayerID);
+-        microStateVectors.add(new HashSet<>(featureVector));
++    public void processState(Game game, UUID actingPlayerID) {
++        processState(game, actingPlayerID, 0);
++    }
++    public void processMicroState(Game game, UUID actingPlayerID, int microCounter) {
++        processState(game, actingPlayerID, microCounter);
++        stateVectors.add(new HashSet<>(featureVector));
+     }
+     public synchronized void processMacroState(Game game, UUID actingPlayerID) {
+         processState(game, actingPlayerID);
+-        macroStateVectors.add(new HashSet<>(featureVector));
+-        //activeStates.add(game.getActivePlayerId() == myPlayerID);
+-    }
+-    /**
+-     * Takes an array of raw indices, filters out those present in the ignoreList,
+-     * and returns a new array of the remaining indices.
+-     *
+-     * @param rawIndices The input array of feature indices.
+-     * @return A new int[] containing only the indices not in the ignoreList.
+-     */
+-    public int[] getCompressedVectorArray(int[] rawIndices) {
+-        Set<Integer> filteredIndicesSet = new HashSet<>();
+-
+-        for (int index : rawIndices) {
+-            if (!this.ignoreList.contains(index)) { // Assuming ignoreList is a member
+-                filteredIndicesSet.add(index);
+-            }
+-        }
+-
+-        // Convert the Set<Integer> to an int[]
+-        return filteredIndicesSet.stream()
+-                .mapToInt(Integer::intValue)
+-                .toArray();
+-    }
+-    public Set<Integer> getCompressedVector(Set<Integer> rawIndices) {
+-        Set<Integer> filteredIndicesSet = new HashSet<>();
+-
+-        for (int index : rawIndices) {
+-            if (!this.ignoreList.contains(index)) { // Assuming ignoreList is a member
+-                filteredIndicesSet.add(index);
+-            }
+-        }
+-        return filteredIndicesSet;
+-    }
+-    public synchronized int[] getFinalActiveGlobalIndicesArray() {
+-        Set<Integer> out1 = getCompressedVector(featureVector);
+-        return out1.stream().mapToInt(Integer::intValue).toArray();
+-
++        stateVectors.add(new HashSet<>(featureVector));
+     }
+     // Persist the persistent feature mapping
+     public void persistMapping(String filename) throws IOException {
+-        //features.localIndexCount = indexCount;
+-        //features.ignoreList = new HashSet<>(ignoreList);
++
+         features.version = mappingVersion;
+         features.saveMapping(filename);
+     }
+@@ -434,10 +401,6 @@ public class StateEncoder {
+     public void loadMapping(String filename) throws IOException, ClassNotFoundException {
+         features = Features.loadMapping(filename);
+         features.setEncoder(this);
+-        //indexCount = features.localIndexCount;
+-        //ignoreList = new HashSet<>(features.ignoreList);
+-        //mappingVersion = features.version;
+-        //initialRawSize = indexCount;
+     }
+     // Load the feature mapping from object
+     public void loadMapping(Features f) {
+diff --git a/Mage.Server.Plugins/Mage.Player.AI/src/main/java/mage/player/ai/ComputerPlayer.java b/Mage.Server.Plugins/Mage.Player.AI/src/main/java/mage/player/ai/ComputerPlayer.java
+index fa25276b93..772156127f 100644
+--- a/Mage.Server.Plugins/Mage.Player.AI/src/main/java/mage/player/ai/ComputerPlayer.java
++++ b/Mage.Server.Plugins/Mage.Player.AI/src/main/java/mage/player/ai/ComputerPlayer.java
+@@ -2169,6 +2169,7 @@ public class ComputerPlayer extends PlayerImpl {
+         log.debug("chooseMode");
+         if (modes.getMode() != null && modes.getMaxModes(game, source) == modes.getSelectedModes().size()) {
+             // mode was already set by the AI
++            log.info("pre chosen mode: " + modes.getMode().getEffects().get(0).toString());
+             return modes.getMode();
+         }
+ 
+@@ -2187,6 +2188,7 @@ public class ComputerPlayer extends PlayerImpl {
+             }
+             if (mode.getTargets().canChoose(source.getControllerId(), source, game)) {
+                 // and where targets are available
++                log.info("chosen mode: " + mode.getEffects().get(0).toString());
+                 return mode;
+             }
+         }
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ActionEncoder.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ActionEncoder.java
+index c889ca5b02..3d77eddaaf 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ActionEncoder.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ActionEncoder.java
+@@ -6,13 +6,11 @@ import java.util.*;
+ 
+ public class ActionEncoder {
+     public static int indexCount = 0;
++    public static int microIndexCount = 0;
+     public static boolean printActions = false;
+-    public static List<double[]> actionVectors = new ArrayList<>();
+     public static Map<String, Integer> actionMap = new HashMap<>();
++    public static Map<String, Integer> microActionMap = new HashMap<>();
+ 
+-    public static synchronized void addAction(double[] label) {
+-        actionVectors.add(label);
+-    }
+     public static synchronized int getAction(Ability sa) {
+         String name = sa.toString();
+         if(actionMap.containsKey(name)) {//already contains action
+@@ -21,8 +19,15 @@ public class ActionEncoder {
+             actionMap.put(name, indexCount++);
+             if(printActions) System.out.printf("New action: %s discovered, reserving index %d for this action\n", name, actionMap.get(name));
+         }
+-        //actionIndices.add(actionMap.get(name));
+         return actionMap.get(name);
+     }
+-
++    public static synchronized int getMicroAction(String name) {
++        if(microActionMap.containsKey(name)) {//already contains action
++            if(printActions) System.out.printf("Micro Action: %s already maps to index %d\n", name, microActionMap.get(name));
++        } else {
++            microActionMap.put(name, microIndexCount++);
++            if(printActions) System.out.printf("New micro action: %s discovered, reserving index %d for this action\n", name, microActionMap.get(name));
++        }
++        return microActionMap.get(name);
++    }
+ }
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ChooseTargetNextAction.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ChooseTargetNextAction.java
+index 0be32b3163..c7c67fb3b4 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ChooseTargetNextAction.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ChooseTargetNextAction.java
+@@ -16,12 +16,16 @@ public class ChooseTargetNextAction implements MCTSNodeNextAction {
+         // Get targets for the current ability
+         for (Set<UUID> targets: player.chooseTargetOptions) {
+             //create node to add option to
++            //assert (game.getLastPriority().getLastPriority() == game.getLastPriority());
+             Game sim = game.getLastPriority().createSimulationForAI();
+             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
+             MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
++            simPlayer2.chooseTargetAction = new ArrayList<>(node.chooseTargetAction);//for stability
+             simPlayer2.chooseTargetAction.add(targets);
+             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);
+             sim.resume();
++
++            if(simPlayer2.getNextAction() != MCTSPlayer.NextAction.PRIORITY) System.out.println("DIDNT MAKE IT TO PRIORITY");
+             MCTSNode newNode = new MCTSNode(node, sim, node.getAction().copy());
+             newNode.chooseTargetAction = new ArrayList<>(node.chooseTargetAction);
+             newNode.chooseTargetAction.add(targets);
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ComputerPlayerMCTS.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ComputerPlayerMCTS.java
+index 286ab6dba4..b6f67a54e0 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ComputerPlayerMCTS.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/ComputerPlayerMCTS.java
+@@ -182,8 +182,14 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
+     }
+     @Override
+     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+-        logger.info("base choose target");
++        logger.info("base choose target " + (source == null ? "null" : source.toString()));
+         Set<UUID> possible = target.possibleTargets(getId(), game);
++        logger.info("possible targets: " + possible.size());
++        if(possible.size() == 1) {
++            //if only one possible just choose it and leave
++            target.addTarget(possible.iterator().next(), source, game);
++            return true;
++        }
+         chooseTargetOptions.clear();
+         MCTSPlayer.getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
+         getNextAction(game, NextAction.CHOOSE_TARGET);
+@@ -212,7 +218,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
+     }
+     @Override
+     public boolean choose(Outcome outcome, Choice choice, Game game) {
+-        if(outcome == Outcome.PutManaInPool) {
++        if(outcome == Outcome.PutManaInPool || choice.getChoices().size() == 1) {
+             return super.choose(outcome, choice, game);
+         }
+         logger.info("base make choice " + choice.toString());
+@@ -387,6 +393,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
+         if(firstCall) {
+             mcts.setLastPriority(createMCTSGame(game.getLastPriority(), false));
+             assert (mcts.getLastPriority().getPlayer(playerId) instanceof MCTSPlayer);
++        } else {
++            mcts.setLastPriority(mcts);
+         }
+         mcts.resume();
+         return mcts;
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java
+index 1acfedfca3..91f32c0113 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java
+@@ -24,8 +24,7 @@ import static java.lang.Math.*;
+ public class MCTSNode {
+ 
+     public static final boolean USE_ACTION_CACHE = false;
+-    private static final double selectionCoefficient = 1;
+-    private static final double passRatioTolerance = 0.0;
++    private static final double selectionCoefficient = 1.0;
+     private static final Logger logger = Logger.getLogger(MCTSNode.class);
+ 
+ 
+@@ -196,13 +195,15 @@ public class MCTSNode {
+         if (player.getNextAction() == null) {
+             logger.fatal("next action is null");
+         }
++        //assert (game.getLastPriority().getLastPriority() == game.getLastPriority());
+         synchronized (children) {
++            MCTSPlayer.NextAction nextAction = player.getNextAction();
+             children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
+             for (MCTSNode node : children) {
+                 node.depth = depth + 1;
+                 node.prior = 1.0/children.size();
+             }
+-            if (policy != null && player.getNextAction() == MCTSPlayer.NextAction.PRIORITY && !ComputerPlayerMCTS.NO_POLICY) {
++            if (policy != null && !ComputerPlayerMCTS.NO_POLICY && nextAction == MCTSPlayer.NextAction.PRIORITY) {
+ 
+                 double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
+ 
+@@ -210,7 +211,14 @@ public class MCTSNode {
+                 double maxLogit = Double.NEGATIVE_INFINITY;
+                 for (MCTSNode node : children) {
+                     if (node.action == null) continue;
+-                    int idx = ActionEncoder.getAction(node.getAction());
++                    int idx = -1;//ActionEncoder.getAction(node.getAction());
++                    if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
++                        idx = ActionEncoder.getMicroAction(game.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).getName());
++                    } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
++                        idx = ActionEncoder.getMicroAction(node.choiceAction.get(node.choiceAction.size() - 1));
++                    } else {
++                        idx = ActionEncoder.getAction(node.getAction());
++                    }
+                     maxLogit = Math.max(maxLogit, policy[idx]);
+                 }
+ 
+@@ -218,7 +226,14 @@ public class MCTSNode {
+                 double sumExp = 0;
+                 for (MCTSNode node : children) {
+                     if (node.action == null) continue;
+-                    int idx = ActionEncoder.getAction(node.action);
++                    int idx = -1;//ActionEncoder.getAction(node.action);
++                    if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
++                        idx = ActionEncoder.getMicroAction(game.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).getName());
++                    } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
++                        idx = ActionEncoder.getMicroAction(node.choiceAction.get(node.choiceAction.size() - 1));
++                    } else {
++                        idx = ActionEncoder.getAction(node.getAction());
++                    }
+                     double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
+                     node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
+                     sumExp += raw;
+@@ -255,7 +270,7 @@ public class MCTSNode {
+                     }
+ 
+                     // 4) mark done
+-                    player.dirichletSeed = 0;
++                    dirichletSeed = 0;
+                 }
+             }
+             if (!children.isEmpty()) {
+@@ -298,7 +313,6 @@ public class MCTSNode {
+         if (children.size() == 1)
+             return children.get(0);
+         StringBuilder sb = new StringBuilder();
+-        boolean stackIsEmpty = baseGame.getStack().isEmpty();
+         sb.append(baseGame.getTurnStepType().toString()).append(baseGame.getStack().toString()).append(" actions: ");
+         for (MCTSNode node: children) {
+             if(node.action != null) {
+@@ -310,7 +324,7 @@ public class MCTSNode {
+                     sb.append(String.format("[%s score: %.3f count: %d] ", node.action.toString(), node.getScoreRatio(), node.visits));
+                 }
+             }
+-            if(node.combat != null && !node.combat.getAttackers().isEmpty()) {
++            if(node.combat != null) {
+                 sb.append(String.format("[%s score: %.3f count: %d] ", node.combat.toString(), node.getScoreRatio(), node.visits));
+             }
+         }
+@@ -319,7 +333,7 @@ public class MCTSNode {
+         }
+ 
+         //derive temp from value
+-        double temperature = 0.5*(1-abs(this.initialScore));
++        double temperature = (1-abs(this.initialScore));
+ 
+         if (ComputerPlayerMCTS.NO_NOISE || temperature < 0.01) {
+             MCTSNode best = null;
+@@ -360,6 +374,7 @@ public class MCTSNode {
+         for (int i = 0; i < children.size(); i++) {
+             cumulativeProbability += probabilities.get(i);
+             if (randomValue <= cumulativeProbability) {
++                //assert(children.get(i).chooseTargetAction.size() < chooseTargetAction.size()+2);
+                 return children.get(i);
+             }
+         }
+@@ -476,16 +491,15 @@ public class MCTSNode {
+         int showCount = 0;
+         while (!queue.isEmpty()) {
+             MCTSNode current = queue.remove();
+-
+-            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosenTargets) && current.choiceAction.equals(chosenChoices) && current.playerId.equals(givenPlayerId)) {
+-                return current;
+-            }
+             if(false && showCount < 10) {
+                 logger.info(current.chooseTargetAction.toString() + " =should= " + chosenTargets.toString());
+                 logger.info(current.choiceAction.toString() + " =should= " + chosenChoices.toString());
+                 logger.info(current.fullStateValue + " =should= " + state);
+                 showCount++;
+             }
++            if (current.fullStateValue.equals(state) && current.chooseTargetAction.equals(chosenTargets) && current.choiceAction.equals(chosenChoices) && current.playerId.equals(givenPlayerId)) {
++                return current;
++            }
+             for (MCTSNode child: current.children) {
+                 queue.add(child);
+             }
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java
+index 7805d6616b..e75646ea50 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java
+@@ -4,10 +4,7 @@ import mage.ConditionalMana;
+ import mage.MageObject;
+ import mage.Mana;
+ import mage.ObjectColor;
+-import mage.abilities.Ability;
+-import mage.abilities.ActivatedAbility;
+-import mage.abilities.SpellAbility;
+-import mage.abilities.TriggeredAbility;
++import mage.abilities.*;
+ import mage.abilities.common.PassAbility;
+ import mage.abilities.costs.Costs;
+ import mage.abilities.costs.mana.GenericManaCost;
+@@ -15,14 +12,20 @@ import mage.abilities.costs.mana.ManaCost;
+ import mage.abilities.costs.mana.ManaCostsImpl;
+ import mage.abilities.costs.mana.VariableManaCost;
+ import mage.abilities.effects.Effect;
++import mage.abilities.mana.ActivatedManaAbilityImpl;
+ import mage.abilities.mana.ManaOptions;
++import mage.cards.Card;
+ import mage.cards.Cards;
+ import mage.choices.Choice;
+ import mage.choices.ChoiceColor;
+ import mage.constants.Outcome;
+ import mage.constants.Zone;
++import mage.game.ExileZone;
+ import mage.game.Game;
++import mage.game.command.CommandObject;
++import mage.game.events.GameEvent;
+ import mage.game.permanent.Permanent;
++import mage.game.stack.StackObject;
+ import mage.players.Player;
+ import mage.target.Target;
+ import mage.target.TargetCard;
+@@ -31,6 +34,7 @@ import org.apache.log4j.Logger;
+ import java.io.Serializable;
+ import java.util.*;
+ import java.util.concurrent.ConcurrentLinkedQueue;
++import java.util.stream.Collectors;
+ 
+ /**
+  * AI: server side bot with monte carlo logic (experimental, the latest version)
+@@ -42,19 +46,18 @@ import java.util.concurrent.ConcurrentLinkedQueue;
+  */
+ public class MCTSPlayer extends ComputerPlayer {
+ 
+-    public boolean lastToAct =  false;
++    public boolean lastToAct = false;
+     private NextAction nextAction;
+     public long dirichletSeed = 0;
+     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
+ 
+-    private int chooseTargetCount = 0;
+-    private int makeChoiceCount = 0;
++    public int chooseTargetCount = 0;
++    public int makeChoiceCount = 0;
+     public static boolean PRINT_CHOOSE_DIALOGUES = false;
+ 
+ 
+-
+     public enum NextAction {
+-                PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, MAKE_CHOICE
++        PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, MAKE_CHOICE
+     }
+ 
+     public MCTSPlayer(UUID id) {
+@@ -73,17 +76,12 @@ public class MCTSPlayer extends ComputerPlayer {
+ 
+     protected List<ActivatedAbility> getPlayableAbilities(Game game) {
+         List<ActivatedAbility> playables = getPlayable(game, true);
+-        ManaOptions availableMana = getManaAvailable(game);
+         List<ActivatedAbility> out = new ArrayList<>();
+-        //if only land tapping abilities - just return pass JUST FOR TESTING THIS CANT BE USED FOR TRAINING SINCE SOME DECKS CARE ABOUT THIS TODO:remove
+-        boolean onlyMana = true;
+-        for(ActivatedAbility aa : playables) {
+-            if(!aa.isManaAbility()) {
+-                onlyMana = false;
++        for (ActivatedAbility aa : playables) {
++            if (!aa.isManaAbility()) {
+                 out.add(aa);
+             }
+         }
+-        if(onlyMana) playables.clear();
+         playables.add(new PassAbility());
+         out.add(new PassAbility());
+         return out;
+@@ -210,13 +208,18 @@ public class MCTSPlayer extends ComputerPlayer {
+     public void setNextAction(NextAction action) {
+         this.nextAction = action;
+     }
++
+     @Override
+     public void restore(Player player) {
+         // simulated player can be created from any player type
+         super.restore(player.getRealPlayer());
+     }
++
+     @Override
+     public boolean priority(Game game) {
++        chooseTargetAction.clear();
++        choiceAction.clear();
++        assert (game.getState().getValue(true, game).equals(game.getLastPriority().getState().getValue(true, game.getLastPriority())));
+         game.pause();
+         lastToAct = true;
+         nextAction = NextAction.PRIORITY;
+@@ -236,12 +239,13 @@ public class MCTSPlayer extends ComputerPlayer {
+         lastToAct = true;
+         nextAction = NextAction.SELECT_BLOCKERS;
+     }
++
+     public static void getAllPossible(Set<Set<UUID>> out, Set<UUID> possible, Target target, Ability source, Game game, UUID myID) {
+         if (target.isChosen(game)) out.add(new HashSet<>(target.getTargets()));
+-        for(UUID id : possible) {
++        for (UUID id : possible) {
+             if (!target.canTarget(myID, id, source, game)) continue;
+             target.add(id, game);
+-            if(out.contains(new HashSet<>(target.getTargets()))) {
++            if (out.contains(new HashSet<>(target.getTargets()))) {
+                 target.remove(id);
+                 continue;
+             }
+@@ -251,14 +255,18 @@ public class MCTSPlayer extends ComputerPlayer {
+             target.remove(id);
+         }
+     }
++
+     @Override
+     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
++        if (game.isPaused())
++            return super.chooseTarget(outcome, target, source, game); //if game is already paused don't overwrite last decision
+         //for choosing targets of triggered abilities
+-        if(PRINT_CHOOSE_DIALOGUES) logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
+-        if(chooseTargetCount < chooseTargetAction.size()) {
++        if (PRINT_CHOOSE_DIALOGUES)
++            logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
++        if (chooseTargetCount < chooseTargetAction.size()) {
+             StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
+-            for(UUID id : chooseTargetAction.get(chooseTargetCount)) {
+-                if(!target.canTarget(getId(), id, source, game)) continue;
++            for (UUID id : chooseTargetAction.get(chooseTargetCount)) {
++                if (!target.canTarget(getId(), id, source, game)) continue;
+                 target.addTarget(id, source, game);
+                 if (sb != null) {
+                     sb.append(String.format("tried target: %s ", game.getObject(id).toString()));
+@@ -275,26 +283,29 @@ public class MCTSPlayer extends ComputerPlayer {
+         getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
+         game.pause();
+         lastToAct = true;
++        //if(chooseTargetCount > 0) logger.info("MICRO DECISION CHAIN");
+         nextAction = NextAction.CHOOSE_TARGET;
+-        return super.chooseTarget(outcome, target, source, game);
++        return super.chooseTarget(outcome, target, source, game);//continue with default target until able to pause
+     }
++
+     @Override
+     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
+         //for discarding
+         return chooseTarget(outcome, target, source, game);
+ 
+     }
++
+     @Override
+     public boolean choose(Outcome outcome, Choice choice, Game game) {
+-        if(outcome == Outcome.PutManaInPool) {
++        if (outcome == Outcome.PutManaInPool || game.isPaused()) {
+             return super.choose(outcome, choice, game);
+         }
+         //for choosing colors/types etc
+-        if(PRINT_CHOOSE_DIALOGUES) logger.info("CALLING MAKE CHOICE: " + choice.toString());
+-        if(makeChoiceCount < choiceAction.size()) {
++        if (PRINT_CHOOSE_DIALOGUES) logger.info("CALLING MAKE CHOICE: " + choice.toString());
++        if (makeChoiceCount < choiceAction.size()) {
+             String chosen = choiceAction.get(makeChoiceCount);
+             choice.setChoice(chosen);
+-            if(PRINT_CHOOSE_DIALOGUES) logger.info(String.format("tried choice: %s ", chosen));
++            if (PRINT_CHOOSE_DIALOGUES) logger.info(String.format("tried choice: %s ", chosen));
+             makeChoiceCount++;
+             return true;
+         }
+@@ -306,3 +317,184 @@ public class MCTSPlayer extends ComputerPlayer {
+     }
+ 
+ }
++
++
++    //overridden for optimization (doesnt need to copy state again since this is called after the fact
++//    public List<ActivatedAbility> getPlayable(Game originalGame, boolean hidden, Zone fromZone, boolean hideDuplicatedAbilities) {
++//        List<ActivatedAbility> playable = new ArrayList<>();
++//
++//        ManaOptions availableMana = getManaAvailable(originalGame); // get available mana options (mana pool and conditional mana added (but conditional still lose condition))
++//        boolean fromAll = fromZone.equals(Zone.ALL);
++//        if (hidden && (fromAll || fromZone == Zone.HAND)) {
++//            for (Card card : hand.getCards(originalGame)) {
++//                for (Ability ability : card.getAbilities(originalGame)) { // gets this activated ability from hand? (Morph?)
++//                    if (ability.getZone().match(Zone.HAND)) {
++//                        boolean isPlaySpell = (ability instanceof SpellAbility);
++//                        boolean isPlayLand = (ability instanceof PlayLandAbility);
++//
++//                        // play land restrictions
++//                        if (isPlayLand && originalGame.getContinuousEffects().preventedByRuleModification(
++//                                GameEvent.getEvent(GameEvent.EventType.PLAY_LAND, ability.getSourceId(),
++//                                        ability, this.getId()), ability, originalGame, true)) {
++//                            continue;
++//                        }
++//                        // cast spell restrictions 1
++//                        GameEvent castEvent = GameEvent.getEvent(GameEvent.EventType.CAST_SPELL,
++//                                ability.getId(), ability, this.getId());
++//                        castEvent.setZone(fromZone);
++//                        if (isPlaySpell && originalGame.getContinuousEffects().preventedByRuleModification(
++//                                castEvent, ability, originalGame, true)) {
++//                            continue;
++//                        }
++//                        // cast spell restrictions 2
++//                        GameEvent castLateEvent = GameEvent.getEvent(GameEvent.EventType.CAST_SPELL_LATE,
++//                                ability.getId(), ability, this.getId());
++//                        castLateEvent.setZone(fromZone);
++//                        if (isPlaySpell && originalGame.getContinuousEffects().preventedByRuleModification(
++//                                castLateEvent, ability, originalGame, true)) {
++//                            continue;
++//                        }
++//
++//                        ActivatedAbility playAbility = findActivatedAbilityFromPlayable(card, availableMana, ability, originalGame);
++//                        if (playAbility != null && !playable.contains(playAbility)) {
++//                            playable.add(playAbility);
++//                        }
++//                    }
++//                }
++//            }
++//        }
++//
++//        if (fromAll || fromZone == Zone.GRAVEYARD) {
++//            for (UUID playerId : originalGame.getState().getPlayersInRange(getId(), originalGame)) {
++//                Player player = originalGame.getPlayer(playerId);
++//                if (player == null) {
++//                    continue;
++//                }
++//                for (Card card : player.getGraveyard().getCards(originalGame)) {
++//                    getPlayableFromObjectAll(originalGame, Zone.GRAVEYARD, card, availableMana, playable);
++//                }
++//            }
++//        }
++//
++//        if (fromAll || fromZone == Zone.EXILED) {
++//            for (ExileZone exile : originalGame.getExile().getExileZones()) {
++//                for (Card card : exile.getCards(originalGame)) {
++//                    getPlayableFromObjectAll(originalGame, Zone.EXILED, card, availableMana, playable);
++//                }
++//            }
++//        }
++//
++//        // check to play revealed cards
++//        if (fromAll) {
++//            for (Cards revealedCards : originalGame.getState().getRevealed().values()) {
++//                for (Card card : revealedCards.getCards(originalGame)) {
++//                    // revealed cards can be from any zones
++//                    getPlayableFromObjectAll(originalGame, originalGame.getState().getZone(card.getId()), card, availableMana, playable);
++//                }
++//            }
++//        }
++//
++//        // outside cards
++//        if (fromAll || fromZone == Zone.OUTSIDE) {
++//            // companion cards
++//            for (Cards companionCards : originalGame.getState().getCompanion().values()) {
++//                for (Card card : companionCards.getCards(originalGame)) {
++//                    getPlayableFromObjectAll(originalGame, Zone.OUTSIDE, card, availableMana, playable);
++//                }
++//            }
++//
++//            // sideboard cards (example: Wish)
++//            for (UUID sideboardCardId : this.getSideboard()) {
++//                Card sideboardCard = originalGame.getCard(sideboardCardId);
++//                if (sideboardCard != null) {
++//                    getPlayableFromObjectAll(originalGame, Zone.OUTSIDE, sideboardCard, availableMana, playable);
++//                }
++//            }
++//        }
++//
++//        // check if it's possible to play the top card of a library
++//        if (fromAll || fromZone == Zone.LIBRARY) {
++//            for (UUID playerInRangeId : originalGame.getState().getPlayersInRange(getId(), originalGame)) {
++//                Player player = originalGame.getPlayer(playerInRangeId);
++//                if (player != null && player.getLibrary().hasCards()) {
++//                    Card card = player.getLibrary().getFromTop(originalGame);
++//                    if (card != null) {
++//                        getPlayableFromObjectAll(originalGame, Zone.LIBRARY, card, availableMana, playable);
++//                    }
++//                }
++//            }
++//        }
++//
++//        // check the hand zone (Sen Triplets)
++//        // TODO: remove direct hand check (reveal fix in Sen Triplets)?
++//        // human games: cards from opponent's hand must be revealed before play
++//        // AI games: computer can see and play cards from opponent's hand without reveal
++//        if (fromAll || fromZone == Zone.HAND) {
++//            for (UUID playerInRangeId : originalGame.getState().getPlayersInRange(getId(), originalGame)) {
++//                Player player = originalGame.getPlayer(playerInRangeId);
++//                if (player != null && !player.getHand().isEmpty()) {
++//                    for (Card card : player.getHand().getCards(originalGame)) {
++//                        if (card != null) {
++//                            getPlayableFromObjectAll(originalGame, Zone.HAND, card, availableMana, playable);
++//                        }
++//                    }
++//                }
++//            }
++//        }
++//
++//        // eliminate duplicate activated abilities (uses for AI plays)
++//        Map<String, ActivatedAbility> activatedUnique = new HashMap<>();
++//        List<ActivatedAbility> activatedAll = new ArrayList<>();
++//
++//        // activated abilities from battlefield objects
++//        if (fromAll || fromZone == Zone.BATTLEFIELD) {
++//            for (Permanent permanent : originalGame.getBattlefield().getAllActivePermanents()) {
++//                boolean canUseActivated = permanent.canUseActivatedAbilities(originalGame);
++//                List<ActivatedAbility> currentPlayable = new ArrayList<>();
++//                getPlayableFromObjectAll(originalGame, Zone.BATTLEFIELD, permanent, availableMana, currentPlayable);
++//                for (ActivatedAbility ability : currentPlayable) {
++//                    if (ability instanceof SpecialAction || canUseActivated) {
++//                        activatedUnique.putIfAbsent(ability.toString(), ability);
++//                        activatedAll.add(ability);
++//                    }
++//                }
++//            }
++//        }
++//
++//        // activated abilities from stack objects
++//        if (fromAll || fromZone == Zone.STACK) {
++//            for (StackObject stackObject : originalGame.getState().getStack()) {
++//                List<ActivatedAbility> currentPlayable = new ArrayList<>();
++//                getPlayableFromObjectAll(originalGame, Zone.STACK, stackObject, availableMana, currentPlayable);
++//                for (ActivatedAbility ability : currentPlayable) {
++//                    activatedUnique.put(ability.toString(), ability);
++//                    activatedAll.add(ability);
++//                }
++//            }
++//        }
++//
++//        // activated abilities from objects in the command zone (emblems or commanders)
++//        if (fromAll || fromZone == Zone.COMMAND) {
++//            for (CommandObject commandObject : originalGame.getState().getCommand()) {
++//                List<ActivatedAbility> currentPlayable = new ArrayList<>();
++//                getPlayableFromObjectAll(originalGame, Zone.COMMAND, commandObject, availableMana, currentPlayable);
++//                for (ActivatedAbility ability : currentPlayable) {
++//                    activatedUnique.put(ability.toString(), ability);
++//                    activatedAll.add(ability);
++//                }
++//            }
++//        }
++//
++//        if (hideDuplicatedAbilities) {
++//            playable.addAll(activatedUnique.values());
++//        } else {
++//            playable.addAll(activatedAll);
++//        }
++//
++//        // make sure it independent of sim game
++//        return playable.stream()
++//                .map(ActivatedAbility::copy)
++//                .collect(Collectors.toList());
++//    }
++//
++//}
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/PriorityNextAction.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/PriorityNextAction.java
+index 1741aeb931..d8056a0791 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/PriorityNextAction.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/PriorityNextAction.java
+@@ -4,6 +4,7 @@ import mage.abilities.Ability;
+ import mage.abilities.ActivatedAbility;
+ import mage.game.Game;
+ import mage.game.GameState;
++import mage.players.Player;
+ 
+ import java.util.ArrayList;
+ import java.util.List;
+@@ -18,10 +19,24 @@ public class PriorityNextAction implements MCTSNodeNextAction{
+             abilities = player.getPlayableOptions(game);
+         else
+             abilities = MCTSNode.getPlayables(player, fullStateValue, game);
++        int optionCount = 0;
+         for (Ability ability: abilities) {
+-            Game sim = game.createSimulationForAI();
++            Game sim;
++            if(optionCount==abilities.size()-1) {
++                sim = game;//no copy necessary
++                for(Player p : sim.getPlayers().values()) {
++                    MCTSPlayer mctsPlayer = (MCTSPlayer) p;
++                    mctsPlayer.lastToAct = false;
++                    mctsPlayer.chooseTargetCount = 0;
++                    mctsPlayer.makeChoiceCount = 0;
++                }
++            } else {
++                sim = game.createSimulationForAI();
++                optionCount++;
++            }
+             MCTSPlayer simPlayer = (MCTSPlayer) sim.getPlayer(player.getId());
+             boolean success = simPlayer.activateAbility((ActivatedAbility)ability.copy(), sim);
++
+             if(!success) {
+                 if(MCTSPlayer.PRINT_CHOOSE_DIALOGUES) System.out.println("PRIORITY FAILSAFE TRIGGERED: " + ability.toString());
+                 continue;//failsafe
+diff --git a/Mage.Server/src/main/resources/log4j.properties b/Mage.Server/src/main/resources/log4j.properties
+index 96659299ba..9f5bc7afc2 100644
+--- a/Mage.Server/src/main/resources/log4j.properties
++++ b/Mage.Server/src/main/resources/log4j.properties
+@@ -33,4 +33,5 @@ log4j.appender.logfileByDayly=org.apache.log4j.DailyRollingFileAppender
+ log4j.appender.logfileByDayly.layout=org.apache.log4j.PatternLayout
+ log4j.appender.logfileByDayly.layout.ConversionPattern=%-5p %d{yyyy-MM-dd HH:mm:ss,SSS} %-90m =>[%t] %C{1}.%M %n
+ log4j.appender.logfileByDayly.File=mageserver.log
+-log4j.appender.logfileByDayly.DatePattern='.'yyyy-MM-dd
+\ No newline at end of file
++log4j.appender.logfileByDayly.DatePattern='.'yyyy-MM-dd
++
+diff --git a/Mage.Tests/UWTempo.dck b/Mage.Tests/UWTempo.dck
+index 8aa53c714c..2d57c43036 100644
+--- a/Mage.Tests/UWTempo.dck
++++ b/Mage.Tests/UWTempo.dck
+@@ -8,14 +8,13 @@
+ 4 [DMU:243] Adarkar Wastes
+ 4 [ONE:258] Seachrome Coast
+ 2 [MKM:264] Meticulous Archive
+-1 [ONE:254] Mirrex
++3 [ONE:254] Mirrex
+ 2 [DSK:29] Shardmage's Rescue
+ 3 [DSK:259] Floodfarm Verge
+ 2 [BRO:26] Soul Partition
+ 2 [STA:18] Negate
+ 4 [BLB:54] Kitsa, Otterball Elite
+ 4 [DFT:39] Bounce Off
+-2 [BIG:23] Lost Jitte
+ 2 [NEO:80] Spell Pierce
+ 2 [WOE:66] Sleep-Cursed Faerie
+ SB: 3 [MOM:13] Elspeth's Smite
+diff --git a/Mage.Tests/src/test/java/org/mage/test/AI/RL/GenerateMappings.java b/Mage.Tests/src/test/java/org/mage/test/AI/RL/GenerateMappings.java
+index 861bac7b8f..723052b055 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/AI/RL/GenerateMappings.java
++++ b/Mage.Tests/src/test/java/org/mage/test/AI/RL/GenerateMappings.java
+@@ -1,25 +1,15 @@
+ package org.mage.test.AI.RL;
+ 
+-import mage.constants.MultiplayerAttackOption;
+ import mage.constants.PhaseStep;
+ import mage.constants.RangeOfInfluence;
+-import mage.game.Game;
+-import mage.game.GameException;
+-import mage.game.TwoPlayerDuel;
+-import mage.game.mulligan.MulliganType;
+ import mage.player.ai.*;
+ import mage.util.RandomUtil;
+ import org.junit.After;
+-import org.junit.Before;
+ import org.junit.Test;
+ import org.mage.test.player.TestComputerPlayer7;
+ import org.mage.test.player.TestComputerPlayerPureMonteCarlo;
+ import org.mage.test.player.TestPlayer;
+-import org.mage.test.serverside.base.CardTestPlayerBaseAI;
+ 
+-import java.io.*;
+-import java.nio.file.Files;
+-import java.nio.file.Paths;
+ import java.util.*;
+ 
+ public class GenerateMappings extends MinimaxVectorExtractionTests {
+@@ -80,7 +70,7 @@ public class GenerateMappings extends MinimaxVectorExtractionTests {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
++        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.stateVectors));
+         Set<Integer> oldIgnore = new HashSet<>(encoder.ignoreList);
+         encoder.ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+         //actions = new HashMap<>(ActionEncoder.actionMap);
+diff --git a/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTS2WithNNTests.java b/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTS2WithNNTests.java
+index 8c8ae2b94c..d9eb095bf9 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTS2WithNNTests.java
++++ b/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTS2WithNNTests.java
+@@ -132,14 +132,14 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
+     public void create_labeled_states() {
+         total++;
+         if(playerA.hasWon()) wins++;
+-        int N = encoder.macroStateVectors.size();
++        int N = encoder.stateVectors.size();
+         double γ = 0.99;          // discount factor
+         double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
+ 
+         labeledStateBatch.clear();
+         for(int i = 0; i < N; i++) {
+-            Set<Integer> state = encoder.macroStateVectors.get(i);
+-            double[] action = ActionEncoder.actionVectors.get(i);
++            Set<Integer> state = encoder.stateVectors.get(i);
++            //double[] action = ActionEncoder.actionVectors.get(i);
+             double normScore = encoder.stateScores.get(i);
+ 
+             boolean win = playerA.hasWon();
+@@ -148,7 +148,7 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
+ 
+             double blended = λ * normScore + (1.0 - λ) * terminal * discount;
+ 
+-            labeledStateBatch.add(new LabeledState(state, action, blended));
++            //labeledStateBatch.add(new LabeledState(state, action, blended));
+         }
+         reset_vectors();
+     }
+diff --git a/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTSEncoderTests.java b/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTSEncoderTests.java
+index f6b4018cda..7e1ffc0caa 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTSEncoderTests.java
++++ b/Mage.Tests/src/test/java/org/mage/test/AI/RL/MCTSEncoderTests.java
+@@ -146,7 +146,7 @@ public class MCTSEncoderTests extends CardTestPlayerBaseAI {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
++        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
+         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
+         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
+     }
+diff --git a/Mage.Tests/src/test/java/org/mage/test/AI/RL/MinimaxVectorExtractionTests.java b/Mage.Tests/src/test/java/org/mage/test/AI/RL/MinimaxVectorExtractionTests.java
+index 971181ff85..5c8789409d 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/AI/RL/MinimaxVectorExtractionTests.java
++++ b/Mage.Tests/src/test/java/org/mage/test/AI/RL/MinimaxVectorExtractionTests.java
+@@ -130,7 +130,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
+ 
+     }
+     public void reset_vectors() {
+-        encoder.macroStateVectors.clear();
++        encoder.stateVectors.clear();
+         encoder.stateScores.clear();
+         encoder.actionVectors.clear();
+     }
+@@ -139,13 +139,13 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
+      * uses saved list of actions and states to make a labeled vector batch for training
+      */
+     public void create_labeled_states() {
+-        int N = encoder.macroStateVectors.size();
++        int N = encoder.stateVectors.size();
+         double γ = 0.99;          // discount factor
+         double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
+ 
+         labeledStateBatch.clear();
+         for(int i = 0; i < N; i++) {
+-            Set<Integer> state = encoder.macroStateVectors.get(i);
++            Set<Integer> state = encoder.stateVectors.get(i);
+             double[] action = encoder.actionVectors.get(i);
+             double normScore = encoder.stateScores.get(i);
+ 
+@@ -224,7 +224,7 @@ public class MinimaxVectorExtractionTests extends CardTestPlayerBaseAI {
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+         //assert(!encoder.getFeatures().ignoreList.isEmpty());
+-        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.macroStateVectors));
++        Set<Integer> newIgnore = new HashSet<>(FeatureMerger.computeIgnoreList(encoder.stateVectors));
+         Set<Integer> oldIgnore = new HashSet<>(encoder.getFeatures().ignoreList);
+         encoder.getFeatures().ignoreList = combine_ignore_lists(oldIgnore, newIgnore);
+         //actions = new HashMap<>(ActionEncoder.actionMap);
+diff --git a/Mage.Tests/src/test/java/org/mage/test/AI/RL/ParallelDataGenerator.java b/Mage.Tests/src/test/java/org/mage/test/AI/RL/ParallelDataGenerator.java
+index 898f4159b4..8ae8183ac7 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/AI/RL/ParallelDataGenerator.java
++++ b/Mage.Tests/src/test/java/org/mage/test/AI/RL/ParallelDataGenerator.java
+@@ -10,9 +10,7 @@ import mage.game.match.MatchOptions;
+ import mage.game.mulligan.MulliganType;
+ import mage.player.ai.*;
+ import mage.util.RandomUtil;
+-import org.apache.commons.lang3.RandomUtils;
+ import org.junit.Test;
+-import org.mage.test.player.TestComputerPlayer7;
+ import org.mage.test.player.TestComputerPlayer8;
+ import org.mage.test.player.TestPlayer;
+ import org.mage.test.serverside.base.CardTestPlayerBaseAI;
+@@ -32,18 +30,19 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+     //region Configuration
+     // ============================ DATA GENERATION SETTINGS ============================
+     private static final int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
+-    private static final int NUM_GAMES_TO_SIMULATE_TEST = 50;
++    private static final int NUM_GAMES_TO_SIMULATE_TEST = 0;
+     private static final int MAX_GAME_TURNS = 50;
+-    private static final int MAX_CONCURRENT_GAMES = 16;
++    private static final int MAX_CONCURRENT_GAMES = 8;
+     // =============================== DECK AND AI SETTINGS ===============================
+     private static final String DECK_A = "UWTempo.dck";
+     private static final String DECK_B = "simplegreen.dck";
+-    private static final String MCTS_MODEL_PATH = "models/Model9.onnx";
+-    private static final boolean DONT_USE_NOISE = false;
+-    private static final boolean DONT_USE_POLICY = false;
++    private static final String MCTS_MODEL_PATH = "models/Model11.onnx";
++    private static final boolean DONT_USE_NOISE = true;
++    private static final boolean DONT_USE_POLICY = true;
+     // ================================== FILE PATHS ==================================
+     private static final String MAPPING_FILE = "features_mapping.ser";
+     private static final String ACTIONS_FILE = "actions_mapping.ser";
++    private static final String MICRO_ACTIONS_FILE = "micro_actions_mapping.ser";
+     private static final String TRAIN_OUT_FILE = "training.bin";
+     private static final String TEST_OUT_FILE = "testing.bin";
+     // ================================== GLOBAL FIELDS ==================================
+@@ -81,6 +80,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+         try {
+             finalFeatures = Features.loadMapping(MAPPING_FILE);
+             ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
++            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
+         } catch (IOException | ClassNotFoundException e) {
+             System.err.println("failed to load persistent mappings.");
+         }
+@@ -97,6 +97,22 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+         for (int i = 0; i < aMap.length; i++) {
+             System.out.println(i + " => " + aMap[i]);
+         }
++        System.out.println("Micro Action map:");
++        String[] aMap2 = new String[ActionEncoder.microActionMap.size()];
++        for (String s : ActionEncoder.microActionMap.keySet()) {
++            //System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
++            aMap2[ActionEncoder.microActionMap.get(s)] = s;
++        }
++        for (int i = 0; i < aMap2.length; i++) {
++            System.out.println(i + " => " + aMap2[i]);
++        }
++    }
++    @Override
++    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
++        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
++        playerA = createPlayer(game, "PlayerA",  DECK_A);
++        playerB = createPlayer(game, "PlayerB",  DECK_B);
++        return game;
+     }
+     /**
+      * New test function to run a single game for debugging purposes without saving any data.
+@@ -112,6 +128,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+             // Load mappings so the encoder works correctly
+             finalFeatures = Features.loadMapping(MAPPING_FILE);
+             ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
++            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
++            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
++            ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
+         } catch (IOException | ClassNotFoundException e) {
+             System.err.println("Warning: Failed to load persistent mappings. Encoders will be empty.");
+             ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
+@@ -119,25 +138,50 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
+         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
+         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
++        ComputerPlayer.PRINT_DECISION_FALLBACKS = false;
++        int maxTurn = 50;
+         //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
+-        //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = true;
++        MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
+         Features.printOldFeatures = false;
+         // --- End Setup ---
+         long seed = System.nanoTime();
+-        //seed = -8907919361237717361L; sheltered by ghosts with kitsa
+-        seed = -5660463248622594094L;
+-        try {
+-            GameResult result = runSingleGame(seed);
+-            System.out.println("\n--- DEBUG GAME COMPLETE ---");
+-            System.out.println("Player A won: " + result.didPlayerAWin());
+-            System.out.println("Total states generated: " + result.getStates().size());
+-            System.out.println("Note: No data was saved from this run.");
++        //seed = -8907919361237717361L; //sheltered by ghosts with kitsa
++        //seed = -5660463248622594094L; //skrelv in hand
++        //seed = 2745780631660485102L; //lost jitte bug
++        //seed = -5433610134761732485L; //malcolm with 4 chorus counters
++        //seed = -7047796267994671121L; //random state mismatch on kitsa
++        //seed = 334539798271200L; //fatal crash on choosetarget (single target bug)
++        seed = -7199640081568634458L;
+ 
+-        } catch (Exception e) {
+-            System.err.println("The single debug game failed to complete.");
+-            e.printStackTrace();
++
++        StateEncoder threadEncoder = new StateEncoder();
++
++        // Use a thread-safe random number generator for the seed.
++        logger.info("Using seed: " + seed);
++        RandomUtil.setSeed(seed);
++
++        try {
++            threadEncoder.loadMapping(finalFeatures);
++            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
++            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
++        } catch (IOException | ClassNotFoundException e) {
++            System.err.println("failed to load persistent mappings.");
+         }
+ 
++        configurePlayer(playerA, threadEncoder);
++        configurePlayer(playerB, threadEncoder);
++        threadEncoder.setAgent(playerA.getId());
++        threadEncoder.setOpponent(playerB.getId());
++
++
++        setStrictChooseMode(true);
++        setStopAt(maxTurn, PhaseStep.END_TURN);
++        //GameImpl.drawHand = false;
++        //addCard(Zone.BATTLEFIELD, playerA, "Island", 2);
++        //addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
++        //addCard(Zone.HAND, playerA, "Combat Research", 7);
++        execute();
++
+         System.out.println("=========================================");
+     }
+ 
+@@ -309,7 +353,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+             try {
+                 threadEncoder.loadMapping(finalFeatures);
+                 ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
++                ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
+                 ActionEncoder.indexCount = ActionEncoder.actionMap.size();
++                ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
+             } catch (IOException | ClassNotFoundException e) {
+                 System.err.println("Worker thread failed to load persistent mappings.");
+             }
+@@ -327,18 +373,19 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+             options.stopAtStep = PhaseStep.END_TURN;
+             game.setGameOptions(options);
+ 
++
+             // Start the game simulation. This is a blocking call that will run the game to completion.
+             game.start(playerA.getId());
+ 
+             boolean playerAWon = playerA.hasWon();
+             List<Set<Integer>> newStateVectors = new ArrayList<>();
+-            for (int i = 0; i < threadEncoder.macroStateVectors.size(); i++) {
++            for (int i = 0; i < threadEncoder.stateVectors.size(); i++) {
+                 newStateVectors.add(new HashSet<>());
+             }
+             //merge to the final features
+             finalFeatures.merge(threadEncoder.getFeatures(), newStateVectors);
+             //update generated dataset with remapped one
+-            threadEncoder.macroStateVectors = newStateVectors;
++            threadEncoder.stateVectors = newStateVectors;
+             if(playerA.hasWon()) winCount.incrementAndGet();
+             logger.info("Game #" + gameCount.incrementAndGet() + " completed successfully");
+             logger.info("Current WR: " + winCount.get()*1.0/gameCount.get());
+@@ -363,12 +410,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+     private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
+         synchronized (encoder) {
+             List<LabeledState> results = new ArrayList<>();
+-            int N = encoder.macroStateVectors.size();
++            int N = encoder.stateVectors.size();
+             double gamma = 0.99;
+             double lambda = 0.5;
+ 
+             for (int i = 0; i < N; i++) {
+-                Set<Integer> state = encoder.macroStateVectors.get(i);
++                Set<Integer> state = encoder.stateVectors.get(i);
+                 double[] action = encoder.actionVectors.get(i);
+                 double normScore = encoder.stateScores.get(i);
+                 double terminal = didPlayerAWin ? +1.0 : -1.0;
+@@ -397,7 +444,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+         }
+         return updatedIgnoreList;
+     }
+-
+     public void persistData() {
+         try {
+             finalFeatures.previousLocalIndexCount = initialRawSize;
+@@ -406,6 +452,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+             System.out.printf("Persisted feature mapping (and ignore list) to %s%n", MAPPING_FILE);
+             saveObject(new HashMap<>(ActionEncoder.actionMap), ACTIONS_FILE);
+             System.out.printf("Persisted action mapping to %s%n", ACTIONS_FILE);
++            saveObject(new HashMap<>(ActionEncoder.microActionMap), MICRO_ACTIONS_FILE);
++            System.out.printf("Persisted micro action mapping to %s%n", MICRO_ACTIONS_FILE);
+         } catch (IOException e) {
+             e.printStackTrace();
+         }
+diff --git a/Mage.Tests/src/test/java/org/mage/test/AI/RL/RLEncodingTests.java b/Mage.Tests/src/test/java/org/mage/test/AI/RL/RLEncodingTests.java
+index 036796db47..de68cd3379 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/AI/RL/RLEncodingTests.java
++++ b/Mage.Tests/src/test/java/org/mage/test/AI/RL/RLEncodingTests.java
+@@ -118,7 +118,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
+         logger.info(old_features.localIndexCount);
+         logger.info(encoder.getFeatures().localIndexCount);
+         List<Set<Integer>> newStateVectors = new ArrayList<>();
+-        for (int i = 0; i < encoder.macroStateVectors.size(); i++) {
++        for (int i = 0; i < encoder.stateVectors.size(); i++) {
+             newStateVectors.add(new HashSet<>());
+         }
+         old_features.merge(encoder.getFeatures(), newStateVectors);
+@@ -179,7 +179,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
++        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
+         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
+         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
+     }
+@@ -194,7 +194,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
++        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
+         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
+         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
+     }
+@@ -209,7 +209,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
++        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
+         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
+         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
+     }
+@@ -224,7 +224,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
++        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
+         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
+         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
+         //run one more game this time using ignore list
+@@ -247,7 +247,7 @@ public class RLEncodingTests extends CardTestPlayerBaseAI {
+             reset_game();
+             System.out.printf("GAME #%d RESET... NEW GAME STARTING\n", i+1);
+         }
+-        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.macroStateVectors);
++        Set<Integer> ignore = FeatureMerger.computeIgnoreList(encoder.stateVectors);
+         System.out.printf("IGNORE LIST SIZE: %d\n", ignore.size());
+         System.out.printf("REDUCED VECTOR SIZE: %d\n", StateEncoder.indexCount - ignore.size());
+         //run one more game this time using ignore list
+diff --git a/Mage.Tests/src/test/java/org/mage/test/player/TestPlayer.java b/Mage.Tests/src/test/java/org/mage/test/player/TestPlayer.java
+index 85bde028e3..926da76847 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/player/TestPlayer.java
++++ b/Mage.Tests/src/test/java/org/mage/test/player/TestPlayer.java
+@@ -42,7 +42,6 @@ import mage.game.stack.StackAbility;
+ import mage.game.stack.StackObject;
+ import mage.game.tournament.Tournament;
+ import mage.player.ai.ComputerPlayer;
+-import mage.player.ai.ComputerPlayerRL;
+ import mage.players.*;
+ import mage.players.net.UserData;
+ import mage.target.*;
+diff --git a/Mage.Tests/src/test/java/org/mage/test/serverside/base/impl/CardTestPlayerAPIImpl.java b/Mage.Tests/src/test/java/org/mage/test/serverside/base/impl/CardTestPlayerAPIImpl.java
+index 913a1f31fc..9eb50f2ea5 100644
+--- a/Mage.Tests/src/test/java/org/mage/test/serverside/base/impl/CardTestPlayerAPIImpl.java
++++ b/Mage.Tests/src/test/java/org/mage/test/serverside/base/impl/CardTestPlayerAPIImpl.java
+@@ -787,6 +787,73 @@ public abstract class CardTestPlayerAPIImpl extends MageTestPlayerBase implement
+             }
+         }
+     }
++    public void addCard(Game game, Zone gameZone, TestPlayer player, String cardName, int count, boolean tapped) {
++
++        // aliases for mage objects
++        String aliasName = "";
++        boolean useAliasMultiNames = (count != 1);
++        if (cardName.contains(ALIAS_PREFIX)) {
++            aliasName = cardName.substring(cardName.indexOf(ALIAS_PREFIX) + ALIAS_PREFIX.length());
++            cardName = cardName.substring(0, cardName.indexOf(ALIAS_PREFIX));
++        }
++        // one card = one alias, massive adds can use auto-name
++        if (!useAliasMultiNames && !aliasName.isEmpty() && player.getAliasByName(aliasName) != null) {
++            Assert.fail("Can't add card " + cardName + " - alias " + aliasName + " already exists for " + player.getName());
++        }
++
++        // set code for card
++        String setCode;
++        List<String> cardCommand = SystemUtil.parseSetAndCardNameCommand(cardName);
++        setCode = cardCommand.get(0);
++        cardName = cardCommand.get(1);
++
++        CardInfo cardInfo;
++        if (setCode.isEmpty()) {
++            // fast search for any set's card
++            cardInfo = CardRepository.instance.findCard(cardName, true);
++        } else {
++            // normal search for specific set's card
++            cardInfo = CardRepository.instance.findCardWithPreferredSetAndNumber(cardName, setCode, null);
++            Assert.assertNotNull("[TEST] Couldn't find a card:" + cardName + " from specific set: " + setCode, cardInfo);
++            Assert.assertEquals("[TEST] Found card from wrong set. Found: " + cardInfo.getSetCode() + ":" + cardInfo.getName()
++                            + ", but need " + setCode + ":" + cardName,
++                    setCode, cardInfo.getSetCode());
++        }
++
++        if (cardInfo == null) {
++            throw new IllegalArgumentException("[TEST] Couldn't find a card: " + cardName);
++        }
++
++        if (gameZone == Zone.BATTLEFIELD) {
++            for (int i = 0; i < count; i++) {
++                Card newCard = cardInfo.createCard();
++                getBattlefieldCards(player).add(new PutToBattlefieldInfo(
++                        newCard,
++                        tapped
++                ));
++                if (!aliasName.isEmpty()) {
++                    // TODO: is it bugged with double faced cards (wrong ref)?
++                    // add to all players
++                    String aliasId = player.generateAliasName(aliasName, useAliasMultiNames, i + 1);
++                    game.getPlayers().values().forEach(pl -> ((TestPlayer) pl).addAlias(aliasId, newCard.getId()));
++                }
++            }
++        } else {
++            if (tapped) {
++                throw new IllegalArgumentException("Parameter tapped=true can be used only for Zone.BATTLEFIELD.");
++            }
++            List<Card> cards = getCardList(gameZone, player);
++            for (int i = 0; i < count; i++) {
++                Card newCard = cardInfo.createCard();
++                cards.add(newCard);
++                if (!aliasName.isEmpty()) {
++                    // add to all players
++                    String aliasId = player.generateAliasName(aliasName, useAliasMultiNames, i + 1);
++                    game.getPlayers().values().forEach(pl -> ((TestPlayer) pl).addAlias(aliasId, newCard.getId()));
++                }
++            }
++        }
++    }
+ 
+     public void addPlane(Player player, Planes plane) {
+         assertTrue("Can't put plane to game: " + plane.getClassName(), SystemUtil.putPlaneToGame(currentGame, player, plane.getClassName()));
+diff --git a/Mage.Tests/testing.bin b/Mage.Tests/testing.bin
+index 8ac2de5874..dca9a77cc5 100644
+Binary files a/Mage.Tests/testing.bin and b/Mage.Tests/testing.bin differ
+diff --git a/Mage.Tests/training.bin b/Mage.Tests/training.bin
+index bbb947ccbf..2329b6e2fb 100644
+Binary files a/Mage.Tests/training.bin and b/Mage.Tests/training.bin differ
+diff --git a/Mage/src/main/java/mage/game/GameImpl.java b/Mage/src/main/java/mage/game/GameImpl.java
+index e8ee1b2057..8f551ce449 100644
+--- a/Mage/src/main/java/mage/game/GameImpl.java
++++ b/Mage/src/main/java/mage/game/GameImpl.java
+@@ -97,6 +97,7 @@ public abstract class GameImpl implements Game {
+     private Game lastPriority = this;
+     private UUID lastPriorityPlayerId;
+     public Ability lastPriorityAction;
++    public static boolean drawHand = true;
+ 
+     private static final int ROLLBACK_TURNS_MAX = 4;
+     private static final String UNIT_TESTS_ERROR_TEXT = "Error in unit tests";
+@@ -1385,7 +1386,7 @@ public abstract class GameImpl implements Game {
+             if (!gameOptions.testMode || player.getLife() == 0) {
+                 player.initLife(this.getStartingLife());
+             }
+-            if (true || !gameOptions.testMode) {
++            if (drawHand || !gameOptions.testMode) {
+                 mulligan.drawHand(startingHandSize, player, this);
+             }
+         }
+@@ -1771,8 +1772,8 @@ public abstract class GameImpl implements Game {
+                                 if (isPaused() || checkIfGameIsOver()) {
+                                     return;
+                                 }
+-                                lastPriority = this.copy();
+                                 lastPriorityPlayerId = player.getId();
++                                lastPriority = this.copy();
+                                 // resetPassed should be called if player performs any action
+                                 if (player.priority(this)) {
+                                     assert (player.getLastActivated()!= null);

@@ -291,7 +291,7 @@ public class Features implements Serializable {
      */
     public synchronized void merge(Features f, List<Set<Integer>> newStateVectors) {
         if (this == f) return;
-        List<Set<Integer>> oldStateVectors = f.encoder.macroStateVectors;
+        List<Set<Integer>> oldStateVectors = f.encoder.stateVectors;
         // Normal features
         for (String n : f.features.keySet()) {
             Map<Integer, Integer> thisOccurrenceMap = this.features.computeIfAbsent(n, k -> new HashMap<>());

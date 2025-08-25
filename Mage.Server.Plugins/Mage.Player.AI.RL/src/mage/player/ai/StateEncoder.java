@@ -37,9 +37,8 @@ public class StateEncoder {
     public Set<Integer> featureVector = new HashSet<>();
     private UUID opponentID;
     private UUID myPlayerID;
-    public List<Set<Integer>> macroStateVectors = new ArrayList<>();
+    public List<Set<Integer>> stateVectors = new ArrayList<>();
     public List<Set<Integer>> microStateVectors = new ArrayList<>();
-    public List<Boolean> activeStates = new ArrayList<>();
 
     public List<Double> stateScores = new ArrayList<>();
     public List<double[]> actionVectors = new ArrayList<>();
@@ -328,7 +327,7 @@ public class StateEncoder {
         myPlayerID = temp;
 
     }
-    public synchronized void processState(Game game, UUID actingPlayerID) {
+    public synchronized void processState(Game game, UUID actingPlayerID, int microCounter) {
         features.stateRefresh();
         featureVector.clear();
 
@@ -373,59 +372,27 @@ public class StateEncoder {
         //lastly do opponent
         processOpponentState(game, actingPlayerID);
 
+        //micro counter
+        features.addNumericFeature("Micro Counter", microCounter);
+
         //mapping version
         features.addNumericFeature("Mapping Version", features.version);
 
     }
-    public void processMicroState(Game game, UUID actingPlayerID) {
-        processState(game, actingPlayerID);
-        microStateVectors.add(new HashSet<>(featureVector));
+    public void processState(Game game, UUID actingPlayerID) {
+        processState(game, actingPlayerID, 0);
+    }
+    public void processMicroState(Game game, UUID actingPlayerID, int microCounter) {
+        processState(game, actingPlayerID, microCounter);
+        stateVectors.add(new HashSet<>(featureVector));
     }
     public synchronized void processMacroState(Game game, UUID actingPlayerID) {
         processState(game, actingPlayerID);
-        macroStateVectors.add(new HashSet<>(featureVector));
-        //activeStates.add(game.getActivePlayerId() == myPlayerID);
-    }
-    /**
-     * Takes an array of raw indices, filters out those present in the ignoreList,
-     * and returns a new array of the remaining indices.
-     *
-     * @param rawIndices The input array of feature indices.
-     * @return A new int[] containing only the indices not in the ignoreList.
-     */
-    public int[] getCompressedVectorArray(int[] rawIndices) {
-        Set<Integer> filteredIndicesSet = new HashSet<>();
-
-        for (int index : rawIndices) {
-            if (!this.ignoreList.contains(index)) { // Assuming ignoreList is a member
-                filteredIndicesSet.add(index);
-            }
-        }
-
-        // Convert the Set<Integer> to an int[]
-        return filteredIndicesSet.stream()
-                .mapToInt(Integer::intValue)
-                .toArray();
-    }
-    public Set<Integer> getCompressedVector(Set<Integer> rawIndices) {
-        Set<Integer> filteredIndicesSet = new HashSet<>();
-
-        for (int index : rawIndices) {
-            if (!this.ignoreList.contains(index)) { // Assuming ignoreList is a member
-                filteredIndicesSet.add(index);
-            }
-        }
-        return filteredIndicesSet;
-    }
-    public synchronized int[] getFinalActiveGlobalIndicesArray() {
-        Set<Integer> out1 = getCompressedVector(featureVector);
-        return out1.stream().mapToInt(Integer::intValue).toArray();
-
+        stateVectors.add(new HashSet<>(featureVector));
     }
     // Persist the persistent feature mapping
     public void persistMapping(String filename) throws IOException {
-        //features.localIndexCount = indexCount;
-        //features.ignoreList = new HashSet<>(ignoreList);
+
         features.version = mappingVersion;
         features.saveMapping(filename);
     }
@@ -434,10 +401,6 @@ public class StateEncoder {
     public void loadMapping(String filename) throws IOException, ClassNotFoundException {
         features = Features.loadMapping(filename);
         features.setEncoder(this);
-        //indexCount = features.localIndexCount;
-        //ignoreList = new HashSet<>(features.ignoreList);
-        //mappingVersion = features.version;
-        //initialRawSize = indexCount;
     }
     // Load the feature mapping from object
     public void loadMapping(Features f) {

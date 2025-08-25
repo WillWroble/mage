@@ -787,6 +787,73 @@ public abstract class CardTestPlayerAPIImpl extends MageTestPlayerBase implement
             }
         }
     }
+    public void addCard(Game game, Zone gameZone, TestPlayer player, String cardName, int count, boolean tapped) {
+
+        // aliases for mage objects
+        String aliasName = "";
+        boolean useAliasMultiNames = (count != 1);
+        if (cardName.contains(ALIAS_PREFIX)) {
+            aliasName = cardName.substring(cardName.indexOf(ALIAS_PREFIX) + ALIAS_PREFIX.length());
+            cardName = cardName.substring(0, cardName.indexOf(ALIAS_PREFIX));
+        }
+        // one card = one alias, massive adds can use auto-name
+        if (!useAliasMultiNames && !aliasName.isEmpty() && player.getAliasByName(aliasName) != null) {
+            Assert.fail("Can't add card " + cardName + " - alias " + aliasName + " already exists for " + player.getName());
+        }
+
+        // set code for card
+        String setCode;
+        List<String> cardCommand = SystemUtil.parseSetAndCardNameCommand(cardName);
+        setCode = cardCommand.get(0);
+        cardName = cardCommand.get(1);
+
+        CardInfo cardInfo;
+        if (setCode.isEmpty()) {
+            // fast search for any set's card
+            cardInfo = CardRepository.instance.findCard(cardName, true);
+        } else {
+            // normal search for specific set's card
+            cardInfo = CardRepository.instance.findCardWithPreferredSetAndNumber(cardName, setCode, null);
+            Assert.assertNotNull("[TEST] Couldn't find a card:" + cardName + " from specific set: " + setCode, cardInfo);
+            Assert.assertEquals("[TEST] Found card from wrong set. Found: " + cardInfo.getSetCode() + ":" + cardInfo.getName()
+                            + ", but need " + setCode + ":" + cardName,
+                    setCode, cardInfo.getSetCode());
+        }
+
+        if (cardInfo == null) {
+            throw new IllegalArgumentException("[TEST] Couldn't find a card: " + cardName);
+        }
+
+        if (gameZone == Zone.BATTLEFIELD) {
+            for (int i = 0; i < count; i++) {
+                Card newCard = cardInfo.createCard();
+                getBattlefieldCards(player).add(new PutToBattlefieldInfo(
+                        newCard,
+                        tapped
+                ));
+                if (!aliasName.isEmpty()) {
+                    // TODO: is it bugged with double faced cards (wrong ref)?
+                    // add to all players
+                    String aliasId = player.generateAliasName(aliasName, useAliasMultiNames, i + 1);
+                    game.getPlayers().values().forEach(pl -> ((TestPlayer) pl).addAlias(aliasId, newCard.getId()));
+                }
+            }
+        } else {
+            if (tapped) {
+                throw new IllegalArgumentException("Parameter tapped=true can be used only for Zone.BATTLEFIELD.");
+            }
+            List<Card> cards = getCardList(gameZone, player);
+            for (int i = 0; i < count; i++) {
+                Card newCard = cardInfo.createCard();
+                cards.add(newCard);
+                if (!aliasName.isEmpty()) {
+                    // add to all players
+                    String aliasId = player.generateAliasName(aliasName, useAliasMultiNames, i + 1);
+                    game.getPlayers().values().forEach(pl -> ((TestPlayer) pl).addAlias(aliasId, newCard.getId()));
+                }
+            }
+        }
+    }
 
     public void addPlane(Player player, Planes plane) {
         assertTrue("Can't put plane to game: " + plane.getClassName(), SystemUtil.putPlaneToGame(currentGame, player, plane.getClassName()));

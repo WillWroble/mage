@@ -368,6 +368,7 @@ public class GameState implements Serializable, Copyable<GameState> {
         for (StackObject spell : stack) {
             sb.append(spell.getControllerId()).append(spell.getName());
             sb.append(spell.getStackAbility().toString());
+            sb.append(spell.getStackAbility().getId()); //TODO: make stack abilities deterministically IDed
             for (UUID modeId : spell.getStackAbility().getModes().getSelectedModes()) {
                 Mode mode = spell.getStackAbility().getModes().get(modeId);
                 if (!mode.getTargets().isEmpty()) {
@@ -426,6 +427,7 @@ public class GameState implements Serializable, Copyable<GameState> {
         for (StackObject spell : stack) {
             sb.append(spell.getControllerId()).append(spell.getName());
             sb.append(spell.getStackAbility().toString());
+            sb.append(spell.getStackAbility().getId());
             for (UUID modeId : spell.getStackAbility().getModes().getSelectedModes()) {
                 Mode mode = spell.getStackAbility().getModes().get(modeId);
                 if (!mode.getTargets().isEmpty()) {

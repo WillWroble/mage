@@ -263,7 +263,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     @Override
     public String getValue(GameState state) {
         StringBuilder sb = threadLocalBuilder.get();
-        sb.append(controllerId).append(getName()).append(tapped).append(damage);
+        sb.append(controllerId).append(objectId).append(getName()).append(tapped).append(damage);
         sb.append(subtype).append(supertype).append(power.getValue()).append(toughness.getValue());
         sb.append(abilities.getValue());
         for (Counter counter : getCounters(state).values()) {

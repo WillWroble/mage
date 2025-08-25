@@ -132,14 +132,14 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
     public void create_labeled_states() {
         total++;
         if(playerA.hasWon()) wins++;
-        int N = encoder.macroStateVectors.size();
+        int N = encoder.stateVectors.size();
         double γ = 0.99;          // discount factor
         double λ = 0.5;           // how much weight to give the minimax estimate vs. terminal
 
         labeledStateBatch.clear();
         for(int i = 0; i < N; i++) {
-            Set<Integer> state = encoder.macroStateVectors.get(i);
-            double[] action = ActionEncoder.actionVectors.get(i);
+            Set<Integer> state = encoder.stateVectors.get(i);
+            //double[] action = ActionEncoder.actionVectors.get(i);
             double normScore = encoder.stateScores.get(i);
 
             boolean win = playerA.hasWon();
@@ -148,7 +148,7 @@ public class MCTS2WithNNTests extends MinimaxVectorExtractionTests {
 
             double blended = λ * normScore + (1.0 - λ) * terminal * discount;
 
-            labeledStateBatch.add(new LabeledState(state, action, blended));
+            //labeledStateBatch.add(new LabeledState(state, action, blended));
         }
         reset_vectors();
     }

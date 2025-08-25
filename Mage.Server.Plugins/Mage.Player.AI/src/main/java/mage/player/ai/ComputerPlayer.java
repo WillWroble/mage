@@ -2169,6 +2169,7 @@ public class ComputerPlayer extends PlayerImpl {
         log.debug("chooseMode");
         if (modes.getMode() != null && modes.getMaxModes(game, source) == modes.getSelectedModes().size()) {
             // mode was already set by the AI
+            log.info("pre chosen mode: " + modes.getMode().getEffects().get(0).toString());
             return modes.getMode();
         }
 
@@ -2187,6 +2188,7 @@ public class ComputerPlayer extends PlayerImpl {
             }
             if (mode.getTargets().canChoose(source.getControllerId(), source, game)) {
                 // and where targets are available
+                log.info("chosen mode: " + mode.getEffects().get(0).toString());
                 return mode;
             }
         }
