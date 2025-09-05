@@ -1532,7 +1532,8 @@ public abstract class PlayerImpl implements Player, Serializable {
         if (ability.isUsesStack()) {
             // put to stack
             setStoredBookmark(bookmark); // move global bookmark to current state (if you activated mana before then you can't rollback it)
-            ability.newId();
+            UUID localID = new UUID(game.getLocalRandom().nextLong(), game.getLocalRandom().nextLong());
+            ability.setId(localID); //make ID deterministic
             ability.setControllerId(playerId);
             game.getStack().push(new StackAbility(ability, playerId));
             if (ability.activate(game, false)) {

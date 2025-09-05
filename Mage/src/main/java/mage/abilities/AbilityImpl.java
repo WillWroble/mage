@@ -26,6 +26,7 @@ import mage.choices.ChoiceImpl;
 import mage.constants.*;
 import mage.filter.FilterMana;
 import mage.game.Game;
+import mage.game.GameInfo;
 import mage.game.command.Dungeon;
 import mage.game.command.Emblem;
 import mage.game.command.Plane;
@@ -150,6 +151,17 @@ public abstract class AbilityImpl implements Ability {
     public void newId() {
         if (!(this instanceof MageSingleton)) {
             this.id = UUID.randomUUID();
+        }
+        getEffects().newId();
+
+        for (Ability sub : getSubAbilities()) {
+            sub.newId();
+        }
+    }
+    @Override
+    public void setId(UUID newId) {
+        if (!(this instanceof MageSingleton)) {
+            this.id = newId;
         }
         getEffects().newId();
 

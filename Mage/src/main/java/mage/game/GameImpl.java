@@ -2233,7 +2233,8 @@ public abstract class GameImpl implements Game {
             }
         } else {
             TriggeredAbility newAbility = ability.copy();
-            newAbility.newId();
+            UUID localID = new UUID(gameLocalRandom.nextLong(), gameLocalRandom.nextLong());
+            newAbility.setId(localID);
             if (newAbility.getSourceObjectZoneChangeCounter() == 0) {
                 newAbility.setSourceObjectZoneChangeCounter(getState().getZoneChangeCounter(ability.getSourceId()));
             }

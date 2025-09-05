@@ -489,6 +489,13 @@ public class StackAbility extends StackObjectImpl implements Ability {
     }
 
     @Override
+    public void setId(UUID newId) {
+        if (!(this instanceof MageSingleton)) {
+            this.ability.setId(newId);
+        }
+    }
+
+    @Override
     public void newOriginalId() {
     }
 

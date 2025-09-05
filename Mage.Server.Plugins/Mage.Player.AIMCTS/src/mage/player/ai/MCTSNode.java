@@ -154,6 +154,10 @@ public class MCTSNode {
 //        }
     }
     public MCTSNode select(UUID targetPlayerId) {
+        if(children.isEmpty()) {
+            logger.error("no children available for selection");
+            return this;
+        }
         // Single‐child shortcut
         if (children.size() == 1) {
             return children.get(0);

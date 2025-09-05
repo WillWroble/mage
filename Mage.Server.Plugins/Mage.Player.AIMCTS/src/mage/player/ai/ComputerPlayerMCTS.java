@@ -192,6 +192,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         chooseTargetOptions.clear();
         MCTSPlayer.getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
+        if(chooseTargetOptions.isEmpty()) {
+            logger.info("no possible targets found");
+            return false;
+        }
         getNextAction(game, NextAction.CHOOSE_TARGET);
         Set<UUID> choice = root.chooseTargetAction.get(root.chooseTargetAction.size()-1);
         for(UUID targetId : choice) {
@@ -223,16 +227,19 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         logger.info("base make choice " + choice.toString());
         choiceOptions = new HashSet<>(choice.getChoices());
+        if(choiceOptions.isEmpty()) {
+            logger.info("choice is empty, spell fizzled");
+            return false;
+        }
         getNextAction(game, NextAction.MAKE_CHOICE);
         String chosen = root.choiceAction.get(root.choiceAction.size()-1);
-
         logger.info(String.format("Choosing %s", chosen));
         choiceAction.add(chosen);
         choice.setChoice(chosen);
 
         return true;
     }
-    protected long totalThinkTime = 0;
+    protected double totalThinkTime = 0;
     protected long totalSimulations = 0;
 
     protected void applyMCTS(final Game game, final NextAction action) {

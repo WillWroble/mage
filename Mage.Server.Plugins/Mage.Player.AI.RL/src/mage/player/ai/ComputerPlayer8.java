@@ -6,10 +6,13 @@ import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.target.Target;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
 public class ComputerPlayer8 extends ComputerPlayer7{
+    private static final Logger log = LoggerFactory.getLogger(ComputerPlayer8.class);
     //public static boolean saveMinimaxScore = true;
     private transient StateEncoder encoder;
     public ComputerPlayer8(ComputerPlayer7 player) {
@@ -133,13 +136,16 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         getName(),
                         getAbilityAndSourceInfo(game, ability, true)
                 ));
-                //save action vector
-                encoder.addAction(getActionVec(ability));
-                //save state vector
-                encoder.processMacroState(game, getId());
-                //add scores
-                double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
-                encoder.stateScores.add(perspectiveFactor*Math.tanh(root.score*1.0/20000));
+                if(!getPlayable(game, true).isEmpty()) {//only log decision states
+                    log.info("logged: {} for PlayerB", ability.toString());
+                    //save action vector
+                    encoder.addAction(getActionVec(ability));
+                    //save state vector
+                    encoder.processMacroState(game, getId());
+                    //add scores
+                    double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
+                    encoder.stateScores.add(perspectiveFactor * Math.tanh(root.score * 1.0 / 20000));
+                }
                 if (!ability.getTargets().isEmpty()) {
                     for (Target target : ability.getTargets()) {
                         for (UUID id : target.getTargets()) {

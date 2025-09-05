@@ -38,6 +38,8 @@ public interface Ability extends Controllable, Serializable {
      */
     void newId();
 
+    void setId(UUID newID);
+
     /**
      * Assigns a new {@link java.util.UUID}
      */

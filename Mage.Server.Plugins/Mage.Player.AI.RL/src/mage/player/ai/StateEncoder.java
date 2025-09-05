@@ -1,5 +1,6 @@
 package mage.player.ai;
 
+import com.j256.ormlite.stmt.query.In;
 import mage.MageObject;
 import mage.abilities.*;
 import mage.abilities.costs.Cost;
@@ -21,7 +22,10 @@ import mage.game.stack.SpellStack;
 import mage.game.stack.StackObject;
 import mage.players.ManaPool;
 import mage.players.Player;
+import org.roaringbitmap.RoaringBitmap;
+import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
+import java.io.*;
 
 import java.io.IOException;
 import java.util.*;
@@ -33,6 +37,8 @@ import java.util.*;
  */
 public class StateEncoder {
     public static int indexCount;
+    public static volatile ImmutableRoaringBitmap globalIgnore;
+    public static boolean perfectInfo = true;
     private Features features;
     public Set<Integer> featureVector = new HashSet<>();
     private UUID opponentID;
@@ -314,20 +320,20 @@ public class StateEncoder {
 
         //now do hand (cards are face down so only keep count of number of cards
         // TODO: keep track of face up cards and exile
-        if(myPlayerID==activePlayerID) { //invert perspective
+        if(myPlayerID==activePlayerID || perfectInfo) { //invert perspective
             Cards hand = myPlayer.getHand();
-            Features handFeatures = features.getSubFeatures("Hand");
+            Features handFeatures = features.getSubFeatures("OpponentHand");
             processHand(hand, game, handFeatures);
         } else {
             Cards hand = myPlayer.getHand();
-            features.addNumericFeature("OpponentCardsInHand", hand.size());
+            features.addNumericFeature("CardsInHand", hand.size());
         }
         //switch back
         opponentID = myPlayerID;
         myPlayerID = temp;
 
     }
-    public synchronized void processState(Game game, UUID actingPlayerID, int microCounter) {
+    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, int microCounter) {
         features.stateRefresh();
         featureVector.clear();
 
@@ -359,7 +365,7 @@ public class StateEncoder {
         processGraveyard(gy, game, gyFeatures);
 
         //now do hand
-        if(myPlayerID==actingPlayerID) { //keep perspective
+        if(myPlayerID==actingPlayerID || perfectInfo) { //keep perspective
             Cards hand = myPlayer.getHand();
             Features handFeatures = features.getSubFeatures("Hand");
             processHand(hand, game, handFeatures);
@@ -376,7 +382,8 @@ public class StateEncoder {
         features.addNumericFeature("Micro Counter", microCounter);
 
         //mapping version
-        features.addNumericFeature("Mapping Version", features.version);
+        //features.addNumericFeature("Mapping Version", features.version);
+        return featureVector;
 
     }
     public void processState(Game game, UUID actingPlayerID) {
