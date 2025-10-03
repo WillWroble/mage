@@ -53,7 +53,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
     public int chooseTargetCount = 0;
     public int makeChoiceCount = 0;
-    public static boolean PRINT_CHOOSE_DIALOGUES = false;
+    public static boolean PRINT_CHOOSE_DIALOGUES = true;
 
 
     public enum NextAction {

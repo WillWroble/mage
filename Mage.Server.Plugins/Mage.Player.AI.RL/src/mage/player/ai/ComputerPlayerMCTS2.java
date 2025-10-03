@@ -25,6 +25,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final int BASE_THREAD_TIMEOUT = 4;//seconds
     private static final int MIN_TREE_VISITS_PER_CHILD = 100;//per child per thread
     private static final int MAX_TREE_VISITS = 300;//per thread
+    private static final int MAX_TREE_NODES = 800;//per thread
 
     public static boolean SHOW_THREAD_INFO = false;
     public transient NeuralNetEvaluator nn;
@@ -143,7 +144,15 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int simCount = 0;
 
         // --- Run simulations for one cycle (e.g., 1 second) ---
-        while (System.nanoTime() < endTime && simCount + initialVisits < MAX_TREE_VISITS) {
+        while (System.nanoTime() < endTime) {
+            if(simCount + initialVisits >= MAX_TREE_VISITS) {
+                logger.info("required visits reached, ending search");
+                break;
+            }
+            if(root.size() >= MAX_TREE_NODES) {
+                logger.info("too many nodes in tree, ending search");
+                break;
+            }
             MCTSNode current = root;
 
             // selection
@@ -266,6 +275,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         applyMCTS(game, action);
         if (root != null) {
+            MCTSNode match = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, choiceAction, playerId);
+            if(match != null) {
+                root = match;
+            } else {
+                logger.warn("MATCH FAILED");
+            }
             MCTSNode best = root.bestChild(game);
             if(best == null) return;
 
@@ -279,7 +294,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 //                encoder.addAction(getMicroActionVec(action, game));
 //                encoder.stateScores.add(root.getScoreRatio());
 //            }
-
             root = best;
             root.emancipate();
         }

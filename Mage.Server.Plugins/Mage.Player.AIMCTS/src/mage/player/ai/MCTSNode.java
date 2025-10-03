@@ -323,7 +323,13 @@ public class MCTSNode {
         for (MCTSNode node: children) {
             if(node.action != null) {
                 if(!node.chooseTargetAction.isEmpty()) {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                    if(baseGame.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()) != null) {
+                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getObject(node.chooseTargetAction.get(node.chooseTargetAction.size() - 1).iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                    } else if(baseGame.getPlayer(node.chooseTargetAction.get(node.chooseTargetAction.size()-1).iterator().next()) != null){
+                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction.get(node.chooseTargetAction.size() - 1).iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                    } else {
+                        logger.error("target not found");
+                    }
                 } else if(!node.choiceAction.isEmpty()) {
                     sb.append(String.format("[%s score: %.3f count: %d] ", node.choiceAction.get(node.choiceAction.size()-1), node.getScoreRatio(), node.visits));
                 } else {

@@ -17,7 +17,7 @@ public class ActionEncoder {
             if(printActions) System.out.printf("Action: %s already maps to index %d\n", name, actionMap.get(name));
         } else {
             actionMap.put(name, indexCount++);
-            if(printActions) System.out.printf("New action: %s discovered, reserving index %d for this action\n", name, actionMap.get(name));
+            System.out.printf("New action: %s discovered, reserving index %d for this action\n", name, actionMap.get(name));
         }
         return actionMap.get(name);
     }
@@ -26,7 +26,7 @@ public class ActionEncoder {
             if(printActions) System.out.printf("Micro Action: %s already maps to index %d\n", name, microActionMap.get(name));
         } else {
             microActionMap.put(name, microIndexCount++);
-            if(printActions) System.out.printf("New micro action: %s discovered, reserving index %d for this action\n", name, microActionMap.get(name));
+            System.out.printf("New micro action: %s discovered, reserving index %d for this action\n", name, microActionMap.get(name));
         }
         return microActionMap.get(name);
     }

@@ -7,12 +7,14 @@ import mage.target.Target;
 
 import java.util.*;
 
+import static mage.player.ai.ComputerPlayerMCTS.logger;
+
 public class ChooseTargetNextAction implements MCTSNodeNextAction {
 
     @Override
     public List<MCTSNode> performNextAction(MCTSNode node, MCTSPlayer player, Game game, String fullStateValue) {
         List<MCTSNode> children = new ArrayList<>();
-        if(MCTSPlayer.PRINT_CHOOSE_DIALOGUES) System.out.println("expanding choose target");
+        if(MCTSPlayer.PRINT_CHOOSE_DIALOGUES) logger.info("expanding choose target: " + player.chooseTargetOptions.size() + " " + ((ComputerPlayer)game.getPlayer(game.getOpponents(player.getId()).iterator().next())).chooseTargetOptions.size());
         // Get targets for the current ability
         for (Set<UUID> targets: player.chooseTargetOptions) {
             //create node to add option to

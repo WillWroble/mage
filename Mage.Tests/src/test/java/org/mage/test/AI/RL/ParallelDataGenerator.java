@@ -14,13 +14,11 @@ import org.junit.Test;
 import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
-import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
 import java.io.*;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
@@ -37,20 +35,23 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
-    public static int NUM_GAMES_TO_SIMULATE_TEST = 50;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 50;
+    public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 8;
+    private static final int MAX_CONCURRENT_GAMES = 4;
     // =============================== DECK AND AI SETTINGS ===============================
-    private static final String DECK_A = "UWTempo.dck";
-    private static final String DECK_B = "simplegreen.dck";
-    private static final String MCTS_MODEL_PATH = "models/Model14.2.onnx";
-    private static final String IGNORE_PATH = "ignores/ignore14.roar";
+    private static final String DECK_A = "MTGA_MonoU";
+    private static final String DECK_B= "MTGA_MonoR";
+    private static final String DECK_A_PATH = "decks/" + DECK_A + ".dck";
+    private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
+    private static final String MCTS_MODEL_PATH = "models/" + DECK_A + "/Model1.onnx";//was 14.5
+    private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore2.roar";//was 14
     private static final boolean DONT_USE_NOISE = true;
-    private static final boolean DONT_USE_POLICY = false;
+    private static final boolean DONT_USE_POLICY = true;
+    private static double DISCOUNT_FACTOR = 0.99;
     // ================================== FILE PATHS ==================================
     private static final String MAPPING_FILE = "features_mapping.ser";
-    private static final String ACTIONS_FILE = "actions_mapping.ser";
+    private static final String ACTIONS_FILE = "actionMappings/" + DECK_A + "/actions_mapping.ser";
     private static final String MICRO_ACTIONS_FILE = "micro_actions_mapping.ser";
     public static String TRAIN_OUT_FILE = "training.bin";
     public static String TEST_OUT_FILE = "testing.bin";
@@ -60,7 +61,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private int previousRawSize;
     private final AtomicInteger gameCount = new AtomicInteger(0);
     private final AtomicInteger winCount = new AtomicInteger(0);
-    //end region
+    //end
 
     /**
      * A simple class to hold the results of a single game, compatible with Java 1.8.
@@ -119,8 +120,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
         Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA",  DECK_A);
-        playerB = createPlayer(game, "PlayerB",  DECK_B);
+        playerA = createPlayer(game, "PlayerA", DECK_A_PATH);
+        playerB = createPlayer(game, "PlayerB", DECK_B_PATH);
         return game;
     }
     /**
@@ -140,13 +141,16 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
             ActionEncoder.indexCount = ActionEncoder.actionMap.size();
             ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
-            try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
-                MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-                StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
-            }
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("Warning: Failed to load persistent mappings. Encoders will be empty.");
             ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
+        }
+        try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
+            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+            StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
+            logger.info("global ignore list: " + StateEncoder.globalIgnore);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
@@ -216,13 +220,15 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
             ActionEncoder.indexCount = ActionEncoder.actionMap.size();
             ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
-            try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
-                MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-                StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
-                logger.info("global ignore list: " + StateEncoder.globalIgnore);
-            }
         } catch (IOException | ClassNotFoundException e) {
             System.err.println("failed to load persistent mappings.");
+        }
+        try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
+            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+            StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
+            logger.info("global ignore list: " + StateEncoder.globalIgnore);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
         Features.printOldFeatures = false;
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
@@ -371,8 +377,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             MatchOptions matchOptions = new MatchOptions("test match", "test game type", true, 4);
             Match localMatch = new FreeForAllMatch(matchOptions);
             game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-            TestPlayer playerA = createLocalPlayer(game, "PlayerA", DECK_A, localMatch);
-            TestPlayer playerB = createLocalPlayer(game, "PlayerB", DECK_B, localMatch);
+            TestPlayer playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
+            TestPlayer playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
 
 
             threadEncoder.loadMapping(finalFeatures);
@@ -426,23 +432,21 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     }
 
     private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
-        synchronized (encoder) {
-            List<LabeledState> results = new ArrayList<>();
-            int N = encoder.stateVectors.size();
-            double gamma = 0.99;
-            double lambda = 0.5;
+        List<LabeledState> results = new ArrayList<>();
+        int N = encoder.stateVectors.size();
+        double lambda = 0.5;
 
-            for (int i = 0; i < N; i++) {
-                Set<Integer> state = encoder.stateVectors.get(i);
-                double[] action = encoder.actionVectors.get(i);
-                double normScore = encoder.stateScores.get(i);
-                double terminal = didPlayerAWin ? +1.0 : -1.0;
-                double discount = Math.pow(gamma, (N - i - 1));
-                double blended = lambda * normScore + (1.0 - lambda) * terminal * discount;
-                results.add(new LabeledState(state, action, blended));
-            }
-            return results;
+        for (int i = 0; i < N; i++) {
+            Set<Integer> state = encoder.stateVectors.get(i);
+            double[] action = encoder.actionVectors.get(i);
+            double normScore = encoder.stateScores.get(i);
+            double terminal = didPlayerAWin ? +1.0 : -1.0;
+            double discount = Math.pow(DISCOUNT_FACTOR, (N - i - 1));
+            double blended = lambda * normScore + (1.0 - lambda) * terminal * discount;
+            results.add(new LabeledState(state, action, blended));
         }
+        return results;
+
     }
 
     //region Helper Methods
@@ -538,6 +542,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // This is the correct override to use for creating players within our self-contained games.
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
+        DISCOUNT_FACTOR = 0.95; //less states means higher discount
         if (name.equals("PlayerA")) {
             TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
             TestPlayer testPlayer = new TestPlayer(t8);
