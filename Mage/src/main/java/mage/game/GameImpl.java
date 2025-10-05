@@ -406,6 +406,7 @@ public abstract class GameImpl implements Game {
     }
 
     private void addCardToState(Card card) {
+        logger.info(card.toString() + " added to state");
         gameCards.put(card.getId(), card);
         state.addCard(card);
     }
@@ -1002,14 +1003,6 @@ public abstract class GameImpl implements Game {
             return savedStates.size();
         }
         return savedStates.size();
-    }
-    // In mage.game.GameImpl.java
-    @Override
-    public void addCard(UUID cardId, Card card) {
-        // This public method allows our reconstructor to populate the master card map.
-        if (cardId != null && card != null) {
-            this.gameCards.put(cardId, card);
-        }
     }
     /**
      * Warning, for inner usage only, use player.restoreState as much as possible instead

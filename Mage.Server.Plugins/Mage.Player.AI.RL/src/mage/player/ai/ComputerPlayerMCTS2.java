@@ -270,8 +270,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             root = new MCTSNode(playerId, sim);
             root.prefixScript = new PlayerScript(getPlayerHistory());
             root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
-            logger.info("prefix at root: " + root.prefixScript.toString());
-            logger.info("opponent prefix at root: " + root.opponentPrefixScript.toString());
+            logger.debug("prefix at root: " + root.prefixScript.toString());
+            logger.debug("opponent prefix at root: " + root.opponentPrefixScript.toString());
         }
         applyMCTS(game, action);
         if (root != null) {

@@ -153,38 +153,38 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
 
             // must use ability's id to check equal (rules can be diff due usage of dynamic values - alternative to card hints)
             List<UUID> needIds = new ArrayList<>();
-            String needInfo = this.processingNeed.stream()
-                    .peek(a -> needIds.add(a.getId()))
-                    .map(t -> "- " + t)
-                    .sorted()
-                    .collect(Collectors.joining("\n"));
+//            String needInfo = this.processingNeed.stream()
+//                    .peek(a -> needIds.add(a.getId()))
+//                    .map(t -> "- " + t)
+//                    .sorted()
+//                    .collect(Collectors.joining("\n"));
             List<UUID> doneIds = new ArrayList<>();
-            String doneInfo = this.processingDone.stream()
-                    .peek(a -> doneIds.add(a.getId()))
-                    .map(t -> "- " + t)
-                    .sorted()
-                    .collect(Collectors.joining("\n"));
-            String errorInfo = ""
-                    + "\n" + "Need: "
-                    + "\n" + (needInfo.isEmpty() ? "-" : needInfo)
-                    + "\n" + "Done: "
-                    + "\n" + (doneInfo.isEmpty() ? "-" : doneInfo);
+//            String doneInfo = this.processingDone.stream()
+//                    .peek(a -> doneIds.add(a.getId()))
+//                    .map(t -> "- " + t)
+//                    .sorted()
+//                    .collect(Collectors.joining("\n"));
+//            String errorInfo = ""
+//                    + "\n" + "Need: "
+//                    + "\n" + (needInfo.isEmpty() ? "-" : needInfo)
+//                    + "\n" + "Done: "
+//                    + "\n" + (doneInfo.isEmpty() ? "-" : doneInfo);
 
             if (this.enableIntegrityCheck4_EventMustProcessAllOldTriggers
                     && this.processingDone.size() < this.processingNeed.size()) {
-                throw new IllegalArgumentException("Triggers integrity failed: event processing miss some triggers" + errorInfo);
+                throw new IllegalArgumentException("Triggers integrity failed: event processing miss some triggers");
             }
 
             if (this.enableIntegrityCheck5_EventMustProcessInSameOrder
                     && this.processingDone.size() > 0
                     && this.processingDone.size() == this.processingNeed.size()
                     && !needIds.toString().equals(doneIds.toString())) {
-                throw new IllegalArgumentException("Triggers integrity failed: event processing used wrong order" + errorInfo);
+                throw new IllegalArgumentException("Triggers integrity failed: event processing used wrong order");
             }
 
             if (this.enableIntegrityCheck6_EventMustNotProcessNewTriggers
                     && this.processingDone.size() > this.processingNeed.size()) {
-                throw new IllegalArgumentException("Triggers integrity failed: event processing must not process new triggers" + errorInfo);
+                throw new IllegalArgumentException("Triggers integrity failed: event processing must not process new triggers");
             }
         }
 
