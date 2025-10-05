@@ -31,7 +31,7 @@ public class SelectBlockersNextAction implements MCTSNodeNextAction{
                 }
             }
             sim.resume();
-            children.add(new MCTSNode(node, sim, sim.getCombat()));
+            children.add(new MCTSNode(node, sim.getCombat()));
         }
 
         return children;

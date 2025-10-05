@@ -15,6 +15,7 @@ import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
+import mage.players.PlayerScript;
 import mage.target.Target;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
@@ -94,6 +95,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (ability == null)
             logger.fatal("null ability");
         activateAbility((ActivatedAbility) ability, game);
+        if(getPlayerHistory().prioritySequence.isEmpty()) {
+            logger.error("huhssss");
+        }
         if (ability instanceof PassAbility)
             return false;
         logLife(game);
@@ -112,43 +116,43 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         return true;
     }
     protected void calculateActions(Game game, NextAction action) {
-        boolean freshTree = false;
         if (root == null) {
-            Game sim = createMCTSGame(game);
+            Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
             root = new MCTSNode(playerId, sim);
-            root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
-            root.choiceAction = new ArrayList<>(choiceAction);
+            root.prefixScript = new PlayerScript(getPlayerHistory());
+            root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+            logger.info("prefix at root: " + root.prefixScript.toString());
+            logger.info("opponent prefix at root: " + root.opponentPrefixScript.toString());
         }
         applyMCTS(game, action);
-//        if(freshTree) {
-//            if(action == NextAction.CHOOSE_TARGET) {//TODO: fix matching logic so this conditional isn't needed
-//                logger.info("fresh tree");
-//                root = root.bestChild(game);//since replay is done from last priority skip through this replayed action
-//                root.emancipate();
-//            }
-//        }
-        //root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, choiceAction, playerId);
+
         if (root != null && root.bestChild(game) != null) {
             root = root.bestChild(game);
             root.emancipate();
+        } else {
+            logger.fatal("no root found");
         }
     }
 
     protected void getNextAction(Game game, NextAction nextAction) {
+        MCTSNode newRoot;
         if (root != null) {
-            MCTSNode newRoot;
-            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, choiceAction, playerId);
+            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             if (newRoot != null) {
                 if(newRoot.size()>0) {
                     logger.info("tree too large, starting fresh");
                     newRoot = null;
                 } else {
                     newRoot.emancipate();
+                    //even if no new tree is needed we still need to establish this game as the new anchor for MCTS
+                    newRoot.rootGame = createMCTSGame(game.getLastPriority());;
+                    newRoot.rootState = newRoot.rootGame.getState().copy();
                 }
-            } else
+            } else {
                 logger.info("unable to find matching state");
+            }
             root = newRoot;
         }
         calculateActions(game, nextAction);
@@ -166,8 +170,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             this.declareAttacker(attackerId, opponentId, game, false);
             sb.append(game.getPermanent(attackerId).getName()).append(',');
         }
+        getPlayerHistory().combatSequence.add(game.getCombat().copy());
         logger.info(sb.toString());
-        MCTSNode.logHitMiss();
     }
 
     @Override
@@ -196,8 +200,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 sb.append('|');
             }
         }
+        getPlayerHistory().combatSequence.add(game.getCombat().copy());
         logger.info(sb.toString());
-        MCTSNode.logHitMiss();
     }
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
@@ -216,7 +220,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return false;
         }
         getNextAction(game, NextAction.CHOOSE_TARGET);
-        Set<UUID> choice = root.chooseTargetAction.get(root.chooseTargetAction.size()-1);
+        Set<UUID> choice = root.chooseTargetAction;
         for(UUID targetId : choice) {
             Set<UUID> chosen = new HashSet<>();
             if(target.canTarget(targetId, source, game)) {
@@ -224,7 +228,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 chosen.add(targetId);
                 logger.info(String.format("Targeting %s", game.getObject(targetId).toString()));
             }
-            chooseTargetAction.add(chosen);
+            getPlayerHistory().targetSequence.add(chosen);
         }
         return target.isChosen(game);
     }
@@ -251,9 +255,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return false;
         }
         getNextAction(game, NextAction.MAKE_CHOICE);
-        String chosen = root.choiceAction.get(root.choiceAction.size()-1);
+        String chosen = root.choiceAction;
         logger.info(String.format("Choosing %s", chosen));
-        choiceAction.add(chosen);
+        getPlayerHistory().choiceSequence.add(chosen);
         choice.setChoice(chosen);
 
         return true;
@@ -282,7 +286,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
                 List<MCTSExecutor> tasks = new ArrayList<>();
                 for (int i = 0; i < poolSize; i++) {
-                    Game sim = createMCTSGame(game);
+                    Game sim = createMCTSGame(game.getLastPriority());
                     MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
                     player.setNextAction(action);
                     MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);
@@ -333,16 +337,16 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
                     int result;
                     if (!current.isTerminal()) {
-                        // Expansion
-                        current.expand();
+                        Game tempGame = current.getGame();
 
                         // Simulation
-                        current = current.select(this.playerId);
-                        result = current.simulate(this.playerId);
+                        result = current.simulate(this.playerId, game);
+                        // Expansion
+                        current.expand(game);
                         simCount++;
                     } else {
                         //logger.info("Terminal State Reached!");
-                        result = current.isWinner(this.playerId) ? 100000000 : -100000000;
+                        result = current.isWinner() ? 100000000 : -100000000;
                     }
                     // Backpropagation
                     current.backpropagate(result);
@@ -403,11 +407,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
      * @param game
      * @return a new game object with simulated players
      */
+
     protected Game createMCTSGame(Game game) {
-        return createMCTSGame(game, true);
-    }
-    protected Game createMCTSGame(Game game, boolean firstCall) {
-        Game mcts = game.getLastPriority().createSimulationForAI();
+        Game mcts = game.createSimulationForAI();
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
             Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
             MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId());
@@ -416,14 +418,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
         }
-//        if(firstCall) {
-//            mcts.setLastPriority(createMCTSGame(game.getLastPriority(), false));
-//            assert (mcts.getLastPriority().getPlayer(playerId) instanceof MCTSPlayer);
-//        } else {
-//            mcts.setLastPriority(mcts);
-//        }
-        mcts.setLastPriority(mcts);
-        mcts.resume();
+        mcts.setLastPriority(null);//never use lastPriortiy in sim games
+        mcts.pause();
         return mcts;
     }
     public static void shuffleUnknowns(Game mcts, UUID playerId) {

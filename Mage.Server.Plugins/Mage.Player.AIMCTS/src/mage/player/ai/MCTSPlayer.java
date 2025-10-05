@@ -1,40 +1,21 @@
 package mage.player.ai;
 
-import mage.ConditionalMana;
-import mage.MageObject;
-import mage.Mana;
-import mage.ObjectColor;
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
-import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.GenericManaCost;
-import mage.abilities.costs.mana.ManaCost;
-import mage.abilities.costs.mana.ManaCostsImpl;
-import mage.abilities.costs.mana.VariableManaCost;
-import mage.abilities.effects.Effect;
-import mage.abilities.mana.ActivatedManaAbilityImpl;
-import mage.abilities.mana.ManaOptions;
-import mage.cards.Card;
-import mage.cards.Cards;
 import mage.choices.Choice;
-import mage.choices.ChoiceColor;
 import mage.constants.Outcome;
-import mage.constants.Zone;
-import mage.game.ExileZone;
 import mage.game.Game;
-import mage.game.command.CommandObject;
-import mage.game.events.GameEvent;
+import mage.game.combat.Combat;
+import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
-import mage.game.stack.StackObject;
 import mage.players.Player;
+import mage.players.PlayerScript;
 import mage.target.Target;
-import mage.target.TargetCard;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.stream.Collectors;
 
 /**
  * AI: server side bot with monte carlo logic (experimental, the latest version)
@@ -48,11 +29,13 @@ public class MCTSPlayer extends ComputerPlayer {
 
     public boolean lastToAct = false;
     private NextAction nextAction;
-    public long dirichletSeed = 0;
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
 
-    public int chooseTargetCount = 0;
-    public int makeChoiceCount = 0;
+    //the script of actions this dummy player is supposed to follow to catch up to the latest decision
+    public PlayerScript actionScript = new PlayerScript();
+
+
+
     public static boolean PRINT_CHOOSE_DIALOGUES = true;
 
 
@@ -217,9 +200,21 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
-        chooseTargetAction.clear();
-        choiceAction.clear();
-        assert (game.getState().getValue(true, game).equals(game.getLastPriority().getState().getValue(true, game.getLastPriority())));
+        if(game.isPaused()) return false;
+        if(!actionScript.prioritySequence.isEmpty()) {
+            game.getState().setPriorityPlayerId(playerId);
+            //game.firePriorityEvent(playerId);
+            ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst();
+
+            boolean success = activateAbility(ability, game);
+            if(!success) {
+                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID MCTS NODE AT: " + ability.toString());
+                return false;
+                //do something here to alert the main process (parent resume call) but handle gracefully
+            }
+            return !(ability instanceof PassAbility);
+            //priority history is handled in base player activateAbility()
+        }
         game.pause();
         lastToAct = true;
         nextAction = NextAction.PRIORITY;
@@ -228,6 +223,17 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
+        if(game.isPaused()) return;
+        if(!actionScript.combatSequence.isEmpty()) {
+            Combat combat = actionScript.combatSequence.pollFirst();
+            UUID opponentId = game.getCombat().getDefenders().iterator().next();
+            for (UUID attackerId : combat.getAttackers()) {
+                if(game.getPermanent(attackerId) == null) continue;
+                this.declareAttacker(attackerId, opponentId, game, false);
+            }
+            getPlayerHistory().combatSequence.add(game.getCombat().copy());
+            return;
+        }
         game.pause();
         lastToAct = true;
         nextAction = NextAction.SELECT_ATTACKERS;
@@ -235,6 +241,29 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
+        if(game.isPaused()) return;
+        if(!actionScript.combatSequence.isEmpty()) {
+            Combat simulatedCombat = actionScript.combatSequence.pollFirst();
+            List<CombatGroup> currentGroups = game.getCombat().getGroups();
+            for (int i = 0; i < currentGroups.size(); i++) {
+                if (i < simulatedCombat.getGroups().size()) {
+                    CombatGroup currentGroup = currentGroups.get(i);
+                    CombatGroup simulatedGroup = simulatedCombat.getGroups().get(i);
+                    if(currentGroup.getAttackers().isEmpty()) {
+                        logger.info("Attacker not found - skipping");
+                        continue;
+                    }
+                    for (UUID blockerId : simulatedGroup.getBlockers()) {
+                        // blockers can be added automaticly by requirement effects, so we must add only missing blockers
+                        if (!currentGroup.getBlockers().contains(blockerId)) {
+                            this.declareBlocker(this.getId(), blockerId, currentGroup.getAttackers().get(0), game);
+                        }
+                    }
+                }
+            }
+            getPlayerHistory().combatSequence.add(game.getCombat().copy());
+            return;
+        }
         game.pause();
         lastToAct = true;
         nextAction = NextAction.SELECT_BLOCKERS;
@@ -263,10 +292,14 @@ public class MCTSPlayer extends ComputerPlayer {
         //for choosing targets of triggered abilities
         if (PRINT_CHOOSE_DIALOGUES)
             logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
-        if (chooseTargetCount < chooseTargetAction.size()) {
+        if (!actionScript.targetSequence.isEmpty()) {
             StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
-            for (UUID id : chooseTargetAction.get(chooseTargetCount)) {
-                if (!target.canTarget(getId(), id, source, game)) continue;
+            Set<UUID> targets = actionScript.targetSequence.pollFirst();
+            for (UUID id : targets) {
+                if (!target.canTarget(getId(), id, source, game)) {
+                    logger.error("target choice failed - skipping");
+                    continue;
+                }
                 target.addTarget(id, source, game);
                 if (sb != null) {
                     sb.append(String.format("tried target: %s ", game.getObject(id).toString()));
@@ -275,7 +308,7 @@ public class MCTSPlayer extends ComputerPlayer {
             if (sb != null) {
                 logger.info(sb.toString());
             }
-            chooseTargetCount++;
+            getPlayerHistory().targetSequence.add(targets);
             return true;
         }
         Set<UUID> possible = target.possibleTargets(getId(), game);
@@ -286,7 +319,6 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         game.pause();
         lastToAct = true;
-        //if(chooseTargetCount > 0) logger.info("MICRO DECISION CHAIN");
         nextAction = NextAction.CHOOSE_TARGET;
         return super.chooseTarget(outcome, target, source, game);//continue with default target until able to pause
     }
@@ -305,11 +337,11 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         //for choosing colors/types etc
         if (PRINT_CHOOSE_DIALOGUES) logger.info("CALLING MAKE CHOICE: " + choice.toString());
-        if (makeChoiceCount < choiceAction.size()) {
-            String chosen = choiceAction.get(makeChoiceCount);
+        if (!actionScript.choiceSequence.isEmpty()) {
+            String chosen = actionScript.choiceSequence.pollFirst();
             choice.setChoice(chosen);
+            getPlayerHistory().choiceSequence.add(chosen);
             if (PRINT_CHOOSE_DIALOGUES) logger.info(String.format("tried choice: %s ", chosen));
-            makeChoiceCount++;
             return true;
         }
         choiceOptions = new HashSet<>(choice.getChoices());

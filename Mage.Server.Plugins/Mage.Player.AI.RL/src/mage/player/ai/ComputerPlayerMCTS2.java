@@ -5,6 +5,7 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.player.ai.MCTSPlayer.NextAction;
+import mage.players.PlayerScript;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 
@@ -60,10 +61,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      * @param node The MCTSNode to evaluate.
      * @return The value of the game state as predicted by the neural network's value head.
      */
-    protected double evaluateState(MCTSNode node) {
-        MCTSPlayer myPlayer = (MCTSPlayer)node.getGame().getPlayer(node.playerId);
-        int microDecision = myPlayer.getNextAction()==MCTSPlayer.NextAction.CHOOSE_TARGET || myPlayer.getNextAction() == NextAction.MAKE_CHOICE ? 1 + myPlayer.chooseTargetCount + myPlayer.makeChoiceCount : 0;
-        Set<Integer> featureSet = encoder.processState(node.getGame(), node.playerId, microDecision);
+    protected double evaluateState(MCTSNode node, Game game) {
+        MCTSPlayer myPlayer = (MCTSPlayer)game.getPlayer(node.playerId);
+        //int microDecision = myPlayer.getNextAction()==MCTSPlayer.NextAction.CHOOSE_TARGET || myPlayer.getNextAction() == NextAction.MAKE_CHOICE ? 1 + myPlayer.chooseTargetCount + myPlayer.makeChoiceCount : 0;
+        int microDecision = 0;
+        Set<Integer> featureSet = encoder.processState(game, node.playerId, microDecision);
 
         int keep = 0;
         for (int i : featureSet) if (!StateEncoder.globalIgnore.contains(i)) keep++;
@@ -158,28 +160,23 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             // selection
             while (!current.isLeaf()) {
                 current = current.select(this.playerId);
-            }
-            if(current.expandNext) {
-                current.expand();
-                current.expandNext = false;
-
-                current = current.select(this.playerId);
-
+                //if(current.action != null)logger.info("selected: " + current.action.toString());
             }
             double result;
-            if(current == null) {
-                logger.error("Current node is null in search");
-                break;
+            //temporary reference to a game that represents this nodes state
+            Game tempGame = null;
+            if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
+                tempGame = current.getGame();
             }
             if (!current.isTerminal()) {
-                // rollout
-                result = evaluateState(current);
-                // lazy expand (mark for expansion)
-                current.expandNext = true;
-
+                // eval
+                result = evaluateState(current, tempGame);
+                //expand
+                current.expand(tempGame);
 
             } else {
-                result = current.isWinner(this.playerId) ? 1.0 : -1.0;
+                result = current.isWinner() ? 1.0 : -1.0;
+                logger.info("found terminal node in tree");
             }
             // backprop
             current.backpropagate(result);
@@ -241,9 +238,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if (child.getAction() != null) {
                 int idx = -1;
                 if(nextAction == NextAction.CHOOSE_TARGET) {
-                    idx = ActionEncoder.getMicroAction(game.getObject(child.chooseTargetAction.get(child.chooseTargetAction.size()-1).iterator().next()).getName());
+                    idx = ActionEncoder.getMicroAction(game.getObject(child.chooseTargetAction.iterator().next()).getName());
                 } else if(nextAction == NextAction.MAKE_CHOICE) {
-                    idx = ActionEncoder.getMicroAction(child.choiceAction.get(child.choiceAction.size() - 1));
+                    idx = ActionEncoder.getMicroAction(child.choiceAction);
                 } else {
                     logger.error("not a recognized micro action");
                 }
@@ -266,21 +263,18 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     @Override
     protected void calculateActions(Game game, NextAction action) {
         if (root == null) {
-            Game sim = createMCTSGame(game);
+            Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
+            //this creates a new root with its own saved state to replay from.
             root = new MCTSNode(playerId, sim);
-            root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
-            root.choiceAction = new ArrayList<>(choiceAction);
+            root.prefixScript = new PlayerScript(getPlayerHistory());
+            root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+            logger.info("prefix at root: " + root.prefixScript.toString());
+            logger.info("opponent prefix at root: " + root.opponentPrefixScript.toString());
         }
         applyMCTS(game, action);
         if (root != null) {
-            MCTSNode match = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), chooseTargetAction, choiceAction, playerId);
-            if(match != null) {
-                root = match;
-            } else {
-                logger.warn("MATCH FAILED");
-            }
             MCTSNode best = root.bestChild(game);
             if(best == null) return;
 
@@ -296,6 +290,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 //            }
             root = best;
             root.emancipate();
+        } else {
+            logger.error("no root found somehow?");
         }
     }
     private List<Integer> getChildVisits(List<MCTSExecutor> tasks) {

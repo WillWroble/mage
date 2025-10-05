@@ -21,19 +21,9 @@ public class PriorityNextAction implements MCTSNodeNextAction{
             abilities = MCTSNode.getPlayables(player, fullStateValue, game);
         int optionCount = 0;
         for (Ability ability: abilities) {
-            Game sim;
-            if(false && optionCount==abilities.size()-1) {
-                sim = game;//no copy necessary
-                for(Player p : sim.getPlayers().values()) {
-                    MCTSPlayer mctsPlayer = (MCTSPlayer) p;
-                    mctsPlayer.lastToAct = false;
-                    mctsPlayer.chooseTargetCount = 0;
-                    mctsPlayer.makeChoiceCount = 0;
-                }
-            } else {
-                sim = game.createSimulationForAI();
-                optionCount++;
-            }
+            Game sim = game.createSimulationForAI();
+            optionCount++;
+
             MCTSPlayer simPlayer = (MCTSPlayer) sim.getPlayer(player.getId());
             boolean success = simPlayer.activateAbility((ActivatedAbility)ability.copy(), sim);
 
@@ -43,7 +33,7 @@ public class PriorityNextAction implements MCTSNodeNextAction{
             }
             sim.resume();
             //ComputerPlayerMCTS.shuffleUnknowns(sim, node.targetPlayer);
-            children.add(new MCTSNode(node, sim, ability.copy()));
+            children.add(new MCTSNode(node, ability.copy()));
         }
 
         return children;

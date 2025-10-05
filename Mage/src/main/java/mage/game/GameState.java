@@ -91,7 +91,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     private int turnNum = 1;
     private int stepNum = 0;
     private UUID extraTurnId = null; // id of the current extra turn (null on normal turn or after game stopped)
-    private boolean gameOver;
+    public boolean gameOver;
     private boolean paused;
     private ContinuousEffects effects;
     private TriggeredAbilities triggers; // all normal triggers
@@ -233,6 +233,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     public void restoreForRollBack(GameState state) {
         restore(state);
         this.turn = state.turn;
+        this.gameOver = state.gameOver;
     }
 
     public void restore(GameState state) {
@@ -301,7 +302,7 @@ public class GameState implements Serializable, Copyable<GameState> {
         StringBuilder sb = threadLocalBuilder.get();
 
         sb.append(turn.getValue(turnNum));
-        sb.append(activePlayerId).append(activePlayerId).append(playerByOrderId);
+        sb.append(activePlayerId).append(priorityPlayerId).append(playerByOrderId);
 
         for (Player player : players.values()) {
             sb.append("player").append(player.getLife()).append("hand");
@@ -342,10 +343,10 @@ public class GameState implements Serializable, Copyable<GameState> {
         StringBuilder sb = threadLocalBuilder.get();
 
         sb.append(turn.getValue(turnNum));
-        sb.append(activePlayerId).append(activePlayerId).append(playerByOrderId);
+        sb.append(activePlayerId).append(priorityPlayerId).append(playerByOrderId);
 
         for (Player player : players.values()) {
-            sb.append("player").append("").append(player.getLife()).append("hand");
+            sb.append("player").append(player.isPassed()).append(player.getLife()).append("hand");
             if (useHidden) {
                 sb.append(player.getHand().getValue(game));
             } else {
@@ -401,10 +402,10 @@ public class GameState implements Serializable, Copyable<GameState> {
         StringBuilder sb = threadLocalBuilder.get();
 
         sb.append(turn.getValue(turnNum));
-        sb.append(activePlayerId).append(activePlayerId).append(playerByOrderId);
+        sb.append(activePlayerId).append(priorityPlayerId).append(playerByOrderId);
 
         for (Player player : players.values()) {
-            sb.append("player").append("").append(player.getLife()).append("hand");
+            sb.append("player").append(player.isPassed()).append(player.getLife()).append("hand");
             if (Objects.equals(playerId, player.getId())) {
                 sb.append(player.getHand().getValue(game));
             } else {

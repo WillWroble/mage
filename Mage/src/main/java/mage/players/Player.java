@@ -109,6 +109,8 @@ public interface Player extends MageItem, Copyable<Player> {
 
     Cards getSideboard();
 
+    PlayerScript getPlayerHistory();
+
     Graveyard getGraveyard();
 
     Abilities<Ability> getAbilities();

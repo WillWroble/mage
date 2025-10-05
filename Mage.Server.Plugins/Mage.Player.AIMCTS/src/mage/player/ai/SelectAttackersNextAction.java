@@ -26,7 +26,7 @@ public class SelectAttackersNextAction implements MCTSNodeNextAction{
                 simPlayer.declareAttacker(attackerId, defenderId, sim, false);
             }
             sim.resume();
-            children.add(new MCTSNode(node, sim, sim.getCombat()));
+            children.add(new MCTSNode(node, sim.getCombat()));
         }
 
         return children;

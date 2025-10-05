@@ -47,6 +47,7 @@ import mage.player.ai.simulators.CreatureSimulator;
 import mage.players.ManaPoolItem;
 import mage.players.Player;
 import mage.players.PlayerImpl;
+import mage.players.PlayerScript;
 import mage.players.net.UserData;
 import mage.players.net.UserGroup;
 import mage.target.*;
@@ -66,10 +67,8 @@ import java.util.Map.Entry;
 public class ComputerPlayer extends PlayerImpl {
     //for targeting microdecisions
     public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
-    public List<Set<UUID>> chooseTargetAction = new ArrayList<>();
     //for discrete choices
     public Set<String> choiceOptions = new HashSet<>();
-    public List<String> choiceAction = new ArrayList<>();
 
     private static final Logger log = Logger.getLogger(ComputerPlayer.class);
     private long lastThinkTime = 0; // msecs for last AI actions calc
@@ -127,9 +126,7 @@ public class ComputerPlayer extends PlayerImpl {
     public ComputerPlayer(final ComputerPlayer player) {
         super(player);
         chooseTargetOptions = new HashSet<>(player.chooseTargetOptions);
-        chooseTargetAction = new ArrayList<>(player.chooseTargetAction);
         choiceOptions = new HashSet<>(player.choiceOptions);
-        choiceAction = new ArrayList<>(player.choiceAction);
     }
 
     @Override
@@ -1352,9 +1349,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public void resetMicroActions() {
-        chooseTargetAction.clear();
         chooseTargetOptions.clear();
-        choiceAction.clear();
         choiceOptions.clear();
 
     }
@@ -3091,9 +3086,7 @@ public class ComputerPlayer extends PlayerImpl {
         // all human players converted to computer and analyse
         ComputerPlayer cPlayer = (ComputerPlayer)player;
         chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
-        chooseTargetAction = new ArrayList<>(cPlayer.chooseTargetAction);
         choiceOptions = new HashSet<>(cPlayer.choiceOptions);
-        choiceAction = new ArrayList<>(cPlayer.choiceAction);
         this.human = false;
     }
 

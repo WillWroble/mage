@@ -54,8 +54,8 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
      * @param node
      * @return
      */
-    protected double evaluateState(MCTSNode node) {
-        encoder.processMacroState(node.getGame(), getId());
+    protected double evaluateState(MCTSNode node, Game game) {
+        encoder.processMacroState(game, getId());
         encoder.addAction(getActionVec());
         encoder.stateScores.add(0.0);
         return 0;
@@ -112,15 +112,8 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
             Game sim = createMCTSGame(game);
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
-            player.dirichletSeed = seed;
             // Create an executor that overrides rollout() to use evaluateState().
-            MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime) {
-                @Override
-                protected double rollout(MCTSNode node) {
-                    // Instead of a full simulation, evaluate the leaf state with our value function.
-                    return evaluateState(node);
-                }
-            };
+            MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);
             tasks.add(exec);
         }
         //runs mcts sims until the root has been visited enough times
@@ -210,7 +203,7 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
             root = new MCTSNode(playerId, sim);
-            root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
+            //root.chooseTargetAction = new ArrayList<>(chooseTargetAction);
         }
         applyMCTS(game, action);
         if (root != null) {

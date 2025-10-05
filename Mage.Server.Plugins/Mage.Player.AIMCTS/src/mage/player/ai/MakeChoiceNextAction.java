@@ -19,12 +19,11 @@ public class MakeChoiceNextAction implements MCTSNodeNextAction {
             Game sim = game.getLastPriority().createSimulationForAI();
             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
             MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
-            simPlayer2.choiceAction.add(chosen);
+            //simPlayer2.choiceAction.add(chosen);
             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);
             sim.resume();
-            MCTSNode newNode = new MCTSNode(node, sim, node.getAction().copy());
-            newNode.choiceAction = new ArrayList<>(node.choiceAction);
-            newNode.choiceAction.add(chosen);
+            MCTSNode newNode = new MCTSNode(node, node.getAction().copy());
+            newNode.choiceAction = chosen;
             children.add(newNode);
         }
         return children;

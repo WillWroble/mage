@@ -25,27 +25,27 @@ public class MCTSExecutor implements Callable<Boolean> {
         this.thinkTime = thinkTime;
         this.simCount = 0;
         root = new MCTSNode(playerId, sim);
-        root.chooseTargetAction = new ArrayList<>(((MCTSPlayer) sim.getPlayer(playerId)).chooseTargetAction);
+        //root.chooseTargetAction = new ArrayList<>(((MCTSPlayer) sim.getPlayer(playerId)).chooseTargetAction);
     }
     public MCTSExecutor(Game sim, UUID playerId, int thinkTime, MCTSNode givenRoot) {
         this.playerId = playerId;
         this.thinkTime = thinkTime;
         this.simCount = 0;
         root = new MCTSNode(playerId, sim);
-        if(givenRoot != null) root.chooseTargetAction = new ArrayList<>(givenRoot.chooseTargetAction);
+        //if(givenRoot != null) root.chooseTargetAction = new ArrayList<>(givenRoot.chooseTargetAction);
     }
     public MCTSExecutor(UUID playerId, int thinkTime, MCTSNode givenRoot) {
         this.playerId = playerId;
         this.thinkTime = thinkTime;
         this.simCount = 0;
-        root = new MCTSNode(givenRoot);
+        //root = new MCTSNode(givenRoot);
     }
     public MCTSExecutor(MCTSExecutor exec) {
         this.playerId = exec.playerId;
         this.thinkTime = exec.thinkTime;
         this.simCount = exec.simCount;
         this.reachedTerminalState = exec.reachedTerminalState;
-        root = new MCTSNode(exec.root);
+        //root = new MCTSNode(exec.root);
     }
 
     @Override
@@ -73,10 +73,10 @@ public class MCTSExecutor implements Callable<Boolean> {
                 if (!current.isTerminal()) {
                     // Expansion:
                     result = rollout(current);
-                    current.expand();
+                    //current.expand();
                 } else {
                     reachedTerminalState = true;
-                    result = current.isWinner(this.playerId) ? 1 : -1;
+                    result = current.isWinner() ? 1 : -1;
                 }
                 // Backpropagation:
                 current.backpropagate(result);

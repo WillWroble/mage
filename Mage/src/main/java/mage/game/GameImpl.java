@@ -19,7 +19,6 @@ import mage.abilities.effects.common.continuous.BecomesFaceDownCreatureEffect;
 import mage.abilities.effects.keyword.FinalityCounterEffect;
 import mage.abilities.effects.keyword.ShieldCounterEffect;
 import mage.abilities.effects.keyword.StunCounterEffect;
-import mage.abilities.hint.common.DayNightHint;
 import mage.abilities.keyword.*;
 import mage.abilities.mana.DelayedTriggeredManaAbility;
 import mage.abilities.mana.TriggeredManaAbility;
@@ -46,9 +45,7 @@ import mage.game.combat.CombatGroup;
 import mage.game.command.*;
 import mage.game.command.dungeons.UndercityDungeon;
 import mage.game.command.emblems.EmblemOfCard;
-import mage.game.command.emblems.RadiationEmblem;
 import mage.game.command.emblems.TheRingEmblem;
-import mage.game.command.emblems.XmageHelperEmblem;
 import mage.game.events.*;
 import mage.game.events.TableEvent.EventType;
 import mage.game.mulligan.Mulligan;
@@ -97,6 +94,7 @@ public abstract class GameImpl implements Game {
     private Game lastPriority = this;
     private UUID lastPriorityPlayerId;
     public Ability lastPriorityAction;
+
     public static boolean drawHand = true;
 
     private static final int ROLLBACK_TURNS_MAX = 4;
@@ -1614,7 +1612,7 @@ public abstract class GameImpl implements Game {
         if (!state.isGameOver()) {
             logger.debug("END of gameId: " + this.getId());
             endTime = new Date();
-            state.endGame();
+            if(!isSimulation()) state.endGame();
 
             // inform players about face down cards
             state.getBattlefield().getAllPermanents()
@@ -1637,7 +1635,7 @@ public abstract class GameImpl implements Game {
 
             // cancel all player dialogs/feedbacks
             for (Player player : state.getPlayers().values()) {
-                player.abort();
+                if(!isSimulation()) player.abort();
             }
         }
     }
@@ -1738,7 +1736,11 @@ public abstract class GameImpl implements Game {
             player.getUserData().setUseFirstManaAbility(useFirstManaAbility);
         }
     }
-
+    private void clearHistory() {
+        for(Player player : state.getPlayers().values()) {
+            player.getPlayerHistory().clear();
+        }
+    }
     @Override
     public void playPriority(UUID activePlayerId, boolean resuming) {
         if (!this.isSimulation() && this.inCheckPlayableState()) {
@@ -1779,20 +1781,19 @@ public abstract class GameImpl implements Game {
                                 if (isPaused() || checkIfGameIsOver()) {
                                     return;
                                 }
-                                lastPriorityPlayerId = player.getId();
-                                lastPriority = this.copy();
+                                if(!isSimulation()) {
+                                    lastPriorityPlayerId = player.getId();
+                                    lastPriority = this.copy();
+                                }
+                                clearHistory();
                                 // resetPassed should be called if player performs any action
                                 if (player.priority(this)) {
-                                    assert (player.getLastActivated()!= null);
+                                    //assert (player.getLastActivated()!= null);
                                     if (executingRollback()) {
                                         return;
                                     }
                                     getState().handleSimultaneousEvent(this); // needed here to handle triggers e.g. from paying costs like sacrificing a creatures before LKIShort is cleared
                                     applyEffects();
-                                }
-                                for(UUID id : this.playerList) {
-                                    Player p = getPlayer(id);
-                                    p.resetMicroActions();//for MCTS
                                 }
                                 if (isPaused()) {
                                     return;

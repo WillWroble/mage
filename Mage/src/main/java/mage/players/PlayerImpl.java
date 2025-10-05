@@ -192,6 +192,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     protected UserData userData;
     protected MatchPlayer matchPlayer;
 
+
     protected List<Designation> designations = new ArrayList<>();
 
     // mana colors the player can handle like Phyrexian mana
@@ -199,6 +200,8 @@ public abstract class PlayerImpl implements Player, Serializable {
 
     // Used during available mana calculation to give back possible available net mana from triggered mana abilities (No need to copy)
     protected final List<List<Mana>> availableTriggeredManaList = new ArrayList<>();
+
+    private final PlayerScript playerHistory = new PlayerScript();
 
     protected PlayerImpl(String name, RangeOfInfluence range) {
         this(UUID.nameUUIDFromBytes(name.getBytes()));
@@ -305,6 +308,9 @@ public abstract class PlayerImpl implements Player, Serializable {
         this.phyrexianColors = player.getPhyrexianColors() != null ? player.phyrexianColors.copy() : null;
         this.designations = CardUtil.deepCopyObject(player.designations);
     }
+    public PlayerScript getPlayerHistory() {
+        return playerHistory;
+    }
     public Ability getLastActivated() {
         return lastActivated;
     }
@@ -328,11 +334,15 @@ public abstract class PlayerImpl implements Player, Serializable {
 
         this.passed = player.isPassed();
 
+        this.left = player.hasLeft();
+        this.loses = player.hasLost();
+        this.wins = player.hasWon();
+        this.quit = player.hasQuit();
+        this.draws = player.hasDrew();
+
+
         // Don't restore more global states. If restored they are probably cause for unintended draws (https://github.com/magefree/mage/issues/1205).
-//        this.wins = player.hasWon();
-//        this.loses = player.hasLost();
-//        this.left = player.hasLeft();
-//        this.quit = player.hasQuit();
+
         // Makes no sense to restore
 //        this.priorityTimeLeft = player.getPriorityTimeLeft();
 //        this.idleTimeout = player.hasIdleTimeout();
@@ -1612,6 +1622,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         }
         //logger.info("last activated: " + (lastActivated == null ? "null" : this.lastActivated.toString()));
         lastActivated = ability.copy();
+        playerHistory.prioritySequence.add(ability.copy());
         boolean result;
         if (ability instanceof PassAbility) {
             pass(game);
@@ -2592,6 +2603,7 @@ public abstract class PlayerImpl implements Player, Serializable {
 
     @Override
     public void pass(Game game) {
+        getPlayerHistory().prioritySequence.add(new PassAbility());
         this.passed = true;
         resetStoredBookmark(game);
     }

@@ -142,14 +142,15 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             ActionEncoder.indexCount = ActionEncoder.actionMap.size();
             ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
         } catch (IOException | ClassNotFoundException e) {
-            System.err.println("Warning: Failed to load persistent mappings. Encoders will be empty.");
+            logger.error("Warning: Failed to load persistent mappings. Encoders will be empty.");
             ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
         }
         try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
             MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
             StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
-            logger.info("global ignore list: " + StateEncoder.globalIgnore);
+            //logger.info("global ignore list: " + StateEncoder.globalIgnore);
         } catch (IOException e) {
+            logger.error("external ignore list not found");
             throw new RuntimeException(e);
         }
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
@@ -171,7 +172,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //seed = -7199640081568634458L; //fatal crash on mirrex token (SOLVED non-deterministic UUIDs)
         //seed = -2354711993304784775L; //fatal crash on cast no more lies (SOLVED UUID insensitive state)
         //seed = -1587950460155780201L; //null current game? (in MCTS loop)
-        seed = 4298526748592127280L;
+        //seed = 4298526748592127280L;
 
         StateEncoder threadEncoder = new StateEncoder();
 
@@ -228,6 +229,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
             logger.info("global ignore list: " + StateEncoder.globalIgnore);
         } catch (IOException e) {
+            logger.error("external ignore list not found");
             throw new RuntimeException(e);
         }
         Features.printOldFeatures = false;

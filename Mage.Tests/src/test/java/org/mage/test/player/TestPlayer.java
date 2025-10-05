@@ -169,6 +169,11 @@ public class TestPlayer implements Player {
     }
 
     @Override
+    public PlayerScript getPlayerHistory() {
+        return computerPlayer.getPlayerHistory();
+    }
+
+    @Override
     public Ability getLastActivated() {
         return computerPlayer.getLastActivated();
     }

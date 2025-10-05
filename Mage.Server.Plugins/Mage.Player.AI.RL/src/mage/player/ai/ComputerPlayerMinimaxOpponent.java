@@ -2,6 +2,7 @@ package mage.player.ai;
 
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
+import mage.abilities.common.PassAbility;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.events.GameEvent;
@@ -133,6 +134,9 @@ public class ComputerPlayerMinimaxOpponent extends ComputerPlayer7{
                 //ComputerPlayerMCTS.macroPlayerId = getId();
                 //ComputerPlayerMCTS.lastAction = ability.copy();
                 this.activateAbility((ActivatedAbility) ability, game);
+                if(getPlayerHistory().prioritySequence.isEmpty()) {
+                    System.out.println("huhssss");
+                }
                 if (ability.isUsesStack()) {
                     usedStack = true;
                 }
