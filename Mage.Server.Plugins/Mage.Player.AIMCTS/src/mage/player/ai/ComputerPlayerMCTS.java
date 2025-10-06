@@ -119,7 +119,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (root == null) {
             Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-            player.setNextAction(action);
+            player.setNextAction(action);//can remove this
             root = new MCTSNode(playerId, sim);
             root.prefixScript = new PlayerScript(getPlayerHistory());
             root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
@@ -141,7 +141,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (root != null) {
             newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             if (newRoot != null) {
-                if(newRoot.size()>0) {
+                if(newRoot.size()>1000) {
                     logger.info("tree too large, starting fresh");
                     newRoot = null;
                 } else {

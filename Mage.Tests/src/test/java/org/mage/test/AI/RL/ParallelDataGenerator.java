@@ -163,16 +163,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         Features.printOldFeatures = false;
         // --- End Setup ---
         long seed = System.nanoTime();
-        //seed = -8907919361237717361L; //sheltered by ghosts with kitsa
-        //seed = -5660463248622594094L; //skrelv in hand
-        //seed = 2745780631660485102L; //lost jitte bug
-        //seed = -5433610134761732485L; //malcolm with 4 chorus counters
-        //seed = -7047796267994671121L; //random state mismatch on kitsa
-        //seed = 334539798271200L; //fatal crash on choosetarget (SOLVED single target bug)
-        //seed = -7199640081568634458L; //fatal crash on mirrex token (SOLVED non-deterministic UUIDs)
-        //seed = -2354711993304784775L; //fatal crash on cast no more lies (SOLVED UUID insensitive state)
-        //seed = -1587950460155780201L; //null current game? (in MCTS loop)
-        //seed = 4298526748592127280L;
+        //seed = 751314143315900L; //opponent turn priority order bug
+
 
         StateEncoder threadEncoder = new StateEncoder();
 

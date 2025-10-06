@@ -1622,12 +1622,13 @@ public abstract class PlayerImpl implements Player, Serializable {
         }
         //logger.info("last activated: " + (lastActivated == null ? "null" : this.lastActivated.toString()));
         lastActivated = ability.copy();
-        playerHistory.prioritySequence.add(ability.copy());
         boolean result;
         if (ability instanceof PassAbility) {
             pass(game);
             return true;
         }
+        //needs to happen after pass since pass() logs ability separately
+        playerHistory.prioritySequence.add(ability.copy());
         Card card = game.getCard(ability.getSourceId());
         if (ability instanceof PlayLandAsCommanderAbility) {
 

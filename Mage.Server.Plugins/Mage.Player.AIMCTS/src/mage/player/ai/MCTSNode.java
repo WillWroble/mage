@@ -117,6 +117,9 @@ public class MCTSNode {
         if(this.terminal) return; //cant determine acting player after game has ended
 
         MCTSPlayer actingPlayer = (MCTSPlayer) game.getPlayer(playerId);
+        if(actingPlayer.scriptFailed) {//dont calc state value for failed scripts
+            return;
+        }
         if(actingPlayer.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {//priority point, use current state value
             this.stateValue = game.getState().getValue(game, targetPlayer);
             this.fullStateValue = game.getState().getValue(true, game);
@@ -159,12 +162,13 @@ public class MCTSNode {
         rootGame.resetShortLivingLKI();
         rootGame.getState().clearLookedAt();
         rootGame.getState().clearRevealed();
-        rootGame.getState().setPriorityPlayerId(null); // let engine recompute who gets priority
+        //rootGame.getState().setPriorityPlayerId(null); // let engine recompute who gets priority
         rootGame.applyEffects(); // rebuild layers/CEs
 
         for (Player p : rootGame.getPlayers().values()) {
             MCTSPlayer mp = (MCTSPlayer) p;
             mp.lastToAct = false;
+            mp.scriptFailed = false;
             mp.getPlayerHistory().clear();
             mp.actionScript.clear();
             mp.chooseTargetOptions.clear();

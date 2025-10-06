@@ -166,7 +166,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             //temporary reference to a game that represents this nodes state
             Game tempGame = null;
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
-                tempGame = current.getGame();
+                tempGame = current.getGame(); //can become terminal here
+                if(!current.isTerminal() && ((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed) {
+                    current.getParent().children.remove(current);
+                    continue;
+                }
             }
             if (!current.isTerminal()) {
                 // eval

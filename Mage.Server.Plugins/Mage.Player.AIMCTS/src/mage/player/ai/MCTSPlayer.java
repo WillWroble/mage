@@ -28,6 +28,8 @@ import java.util.*;
 public class MCTSPlayer extends ComputerPlayer {
 
     public boolean lastToAct = false;
+    //flag meaning the script given to this player wasn't followable
+    public boolean scriptFailed = false;
     private NextAction nextAction;
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
 
@@ -209,6 +211,9 @@ public class MCTSPlayer extends ComputerPlayer {
             boolean success = activateAbility(ability, game);
             if(!success) {
                 logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID MCTS NODE AT: " + ability.toString());
+                scriptFailed = true;
+                game.pause();
+                lastToAct = true;
                 return false;
                 //do something here to alert the main process (parent resume call) but handle gracefully
             }
