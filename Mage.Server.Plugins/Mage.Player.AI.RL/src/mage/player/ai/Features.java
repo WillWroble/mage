@@ -1,460 +1,296 @@
 package mage.player.ai;
 
-import org.apache.log4j.Logger;
-
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.io.Serializable;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.log4j.Logger;
+
 
 /**
- * This hierarchical structure represents the mapping of every possible relevant feature encountered from a game state to
- * an index on a 200000 dimension binary vector. The reduced form of this vector (~5000) will be used as input for both a policy and
- * value neural network. To see how game features are mapped look at StateEncoder.java this data structure only handles and stores the
- * mappings.
+ * Ephemeral, hashing-based Features tree (drop-in replacement).
+ * Key properties:
+ *  - Per-state, on-demand namespace nodes; GC after state.
+ *  - Occurrence-aware subfeatures (getSubFeatures) AND terminal features (addFeature),
+ *    each namespace tracks its own local counts.
+ *  - Categories are real child namespaces (cached in categoriesForChildren),
+ *    so occurrences within categories are tracked naturally.
+ *  - pooling upward honors callParent (per call) and passToParent (persistent per node).
+ *  - Numeric features are thermometer encoded (binary thresholds).
+ *  - Indices computed by hashing; no global feature dictionary / merge.
  *
- * @author willwroble
+ * Optional:
+ *  - If the encoder exposes a persistent "seen indices" set/bitmap, emitHere() will add to it.
+ *  - If StateEncoder.globalIgnore (e.g., ImmutableRoaringBitmap) is present, you can use it for logging/filtering.
  */
 public class Features implements Serializable {
-    private static final long serialVersionUID = 2L; // Version updated for the structural change
+    private static final long serialVersionUID = 4L;
+
+    // ---- Tuning knobs ----
+    private static final int  TABLE_SIZE        = 2_000_000;                // hash bins
+    private static final long GLOBAL_SEED       = 0x9E3779B185EBCA87L;      // fixed reproducible seed
+    private static final long OCC_CONST         = 0x165667B19E3779F9L;      // mix-in for occurrence separation
     private static final Logger logger = Logger.getLogger(Features.class);
-    public AtomicInteger localIndexCount; // a mutable, thread-safe counter
-    public int previousLocalIndexCount = 0;
-    public Set<Integer> ignoreList;
-    public int version = 0;
 
-    private final Map<String, Map<Integer, Features>> subFeatures;
-    private final Map<String, Map<Integer, Integer>> features;
-    private final Map<String, TreeMap<Integer, Map<Integer, Integer>>> numericFeatures; //name->value->occurrences
-    private final Map<String, Integer> occurrences;
-    private final Map<String, TreeMap<Integer, Integer>> numericOccurrences;
-    private final Map<String, Features> categoriesForChildren; //isn't reset between states, represents all possible categories for children
-    private final Set<Features> categories; //resets every state represents temporary category features fall under
-    public boolean passToParent = true;
-
-    private transient StateEncoder encoder;
-
-    private String featureName;
-    public Features parent;
-    public static boolean printOldFeatures = true;
+    // Compatibility flags (kept; you can wire them to logs if desired)
+    public static boolean printOldFeatures = false;
     public static boolean printNewFeatures = true;
 
+    // ---- Public fields preserved for compatibility ----
+    public boolean passToParent          = true;                 // persistent per-namespace guard for pooling
+    public Features parent;                                      // upward link
+    public String featureName = "root";                          // debug/compat
+
+    // ---- Internal per-node state ----
+    private transient StateEncoder encoder;                      // set once per state
+    private final long nsSeed;                                   // namespace seed for this node
+
+    // Occurrence counters:
+    private final Map<String,Integer> occSub   = new HashMap<>(); // for getSubFeatures(token)   → K
+    private final Map<String,Integer> occTerm  = new HashMap<>(); // for addFeature(name)        → K
+
+    // Category handling:
+    //  - categories active at THIS node (applies when emitting at this node).
+    //  - each category is a real Features node anchored to this node's parent.
+    private final Map<String, Features> categoriesForChildren = new HashMap<>();
+    private final List<Features> activeCategories;               // inherited list of active category nodes
+
+    // ---- Constructors ----
+
+    /** Root constructor (legacy-compatible) */
     public Features() {
-        //constructor
-        subFeatures = new HashMap<>();
-        features = new HashMap<>();
-        occurrences = new HashMap<>();
-        numericFeatures = new HashMap<>();
-        numericOccurrences = new HashMap<>();
-        categoriesForChildren = new HashMap<>();
-        categories = new HashSet<>();
-        ignoreList = new HashSet<>();
-        localIndexCount = new AtomicInteger(0);
-        parent = null;
-        featureName = "root";
+        this.featureName = "root";
+        this.parent = null;
+        this.encoder = null;
+        this.nsSeed = GLOBAL_SEED;
+        this.activeCategories = new ArrayList<>();
     }
-
-    public Features(Features p, String name) {
-        this();
-        // Manually set fields instead of calling this(), to avoid creating a new AtomicInteger
-        parent = p;
-        featureName = name;
-        encoder = p.encoder;
-        localIndexCount = p.localIndexCount;
-    }
-
+    /** Legacy root/name/encoder/atomic ctor (compat) */
     public Features(String name, StateEncoder e, AtomicInteger i) {
-        this();
-        featureName = name;
-        encoder = e;
-        localIndexCount = i;
+        this.featureName = name;
+        this.parent = null;
+        this.encoder = e;
+        this.nsSeed = GLOBAL_SEED;
+        this.activeCategories = new ArrayList<>();
     }
 
-    public void setEncoder(StateEncoder encoder) {
-        this.encoder = encoder;
-        for (String n : subFeatures.keySet()) {
-            for (Integer i : subFeatures.get(n).keySet()) {
-                subFeatures.get(n).get(i).setEncoder(encoder);
-            }
+    /** Internal child builder used by getSubFeatures(name, passToParent). */
+    private Features(Features parent, String childToken, boolean childPassToParent, boolean emitNamespaceBit) {
+        this.parent = parent;
+        this.encoder = parent.encoder;
+        this.featureName = childToken;
+
+        int k = parent.bumpSubOccurrence(childToken);
+        if (emitNamespaceBit) {
+            parent.emitHereOcc(childToken); // "namespace is a feature" with terminal-occurrence semantics
         }
-        for (String n : categoriesForChildren.keySet()) {
-            categoriesForChildren.get(n).setEncoder(encoder);
-        }
+        this.nsSeed = deriveChildSeed(parent.nsSeed, childToken, k);
+        this.activeCategories = new ArrayList<>(parent.activeCategories); // inherit active categories
+        this.passToParent = childPassToParent;
     }
+
+    /** Internal constructor to materialize a category node with an explicit seed (no subclass). */
+    private Features(Features anchorParent, String catName, long explicitSeed, boolean isCategory) {
+        this.parent = anchorParent;            // anchor at the parent of the scope that activated it
+        this.encoder = (anchorParent != null ? anchorParent.encoder : null);
+        this.featureName = (isCategory ? "CAT:" + catName : catName);
+        this.nsSeed = explicitSeed;
+        this.activeCategories = (anchorParent != null ? new ArrayList<>(anchorParent.activeCategories) : new ArrayList<>());
+    }
+
+    // ---- Public API (drop-in) ----
+
+    public void setEncoder(StateEncoder encoder) { this.encoder = encoder; }
+
+    /** Category accessor (compat). Usually you call addCategory(name) then emit under this scope/children. */
     public Features getCategory(String name) {
-        if(name.isEmpty()) return null;
-        if (categoriesForChildren.containsKey(name)) { //already contains category
-            return categoriesForChildren.get(name);
-        } else { //completely new
-            Features parentCategory = null;
-            if (parent != null) parentCategory = parent.getCategory(name); //categories can have a parent
-            Features newCat;
-            if (parentCategory != null) {
-                newCat = new Features(parentCategory, name + "_" + featureName);
-            } else {
-                newCat = new Features(name + "_" + featureName, encoder, localIndexCount);
-            }
-            categoriesForChildren.put(name, newCat);
-            return newCat;
+        if (name == null || name.isEmpty()) return null;
+        // Follow old semantics: category namespace anchored at THIS node's parent.
+        Features anchor = (this.parent != null ? this.parent : this);
+        Features cat = anchor.categoriesForChildren.get(name);
+        if (cat == null) {
+            long catSeed = mix64(anchor.nsSeed ^ hash64("CAT:" + name, anchor.nsSeed));
+            cat = new Features(anchor, name, catSeed, /*isCategory=*/true);
+            anchor.categoriesForChildren.put(name, cat);
         }
+        return cat;
     }
 
-    /**
-     * gets subfeatures at name or creates them if they dont exist
-     *
-     * @param name
-     * @return subfeature at name (never returns null)
-     */
-    public Features getSubFeatures(String name) {
-        return getSubFeatures(name, true);
+    /** Subfeature accessor (occurrence-aware); emits the subfeature token as a feature at the parent (old behavior). */
+    public Features getSubFeatures(String name) { return getSubFeatures(name, true); }
+
+    public Features getSubFeatures(String name, boolean passToParentForChild) {
+        if (name == null || name.isEmpty()) return null;
+        return new Features(this, name, passToParentForChild, /*emitNamespaceBit*/true);
     }
 
-    public Features getSubFeatures(String name, boolean passToParent) {
-        if(name.isEmpty()) return null;
-        //added as normal binary feature
-        addFeature(name);
-
-        int n = occurrences.get(name);
-        if (subFeatures.containsKey(name)) { //already contains feature
-            if (subFeatures.get(name).containsKey(n)) { //contains count too
-                return subFeatures.get(name).get(n);
-            } else { //new count
-                Map<Integer, Features> map = subFeatures.get(name);
-                Features newSub = new Features(this, name + "_" + Integer.toString(n));
-                map.put(n, newSub);
-                return newSub;
-            }
-        } else { //completely new
-            Map<Integer, Features> newMap = new HashMap<>();
-            Features newSub = new Features(this, name + "_1");
-            newMap.put(1, newSub);
-            subFeatures.put(name, newMap);
-            newSub.passToParent = passToParent;
-            return newSub;
-        }
-    }
-
-    /**
-     * similar to a subfeature a category will pool features within itself. however
-     * unlike subfeatures a feature can inherit multiple categories(ie card type and color).
-     * you can think of subfeatures as abstract classes and categories as interfaces
-     * this function creates/finds the category with the given name and adds it as a
-     * category for this feature to pass up to, similar to the parent
-     * Categories should always be added before features
-     *
-     * @param name
-     */
+    /** Add a category: categories are features too, and activate pooling for this subtree. */
     public void addCategory(String name) {
-        if(name.isEmpty()) return;
-        addFeature(name); //first add as feature since every category is also a feature
-        Features categoryFeature = parent.getCategory(name);
-        categories.add(categoryFeature);
+        if (name == null || name.isEmpty()) return;
+        // Emit the category as a terminal feature here (with occurrence counting)
+        emitHereOcc(name);
+
+        // Activate or reuse the category node anchored at this node's parent
+        Features cat = getCategory(name);
+        // Add to THIS node's active list if not present
+        boolean present = false;
+        for (Features c : activeCategories) {
+            if (c == cat) { present = true; break; }
+        }
+        if (!present) activeCategories.add(cat);
     }
 
-    public void addFeature(String name) {
-        addFeature(name, true);
-    }
+    public void addFeature(String name) { addFeature(name, true); }
 
+    /**
+     * Binary feature; terminal occurrences are tracked per node:
+     *   1st/2nd/3rd call to the same 'name' under the same namespace produce distinct buckets.
+     * pools to ancestors if (callParent && passToParent at each ancestor).
+     */
     public void addFeature(String name, boolean callParent) {
-        if(name.isEmpty()) return;
-        //usually add feature to parent/categories
-        if (parent != null && callParent && passToParent) {
-            parent.addFeature(name);
-            for (Features c : categories) {
-                c.addFeature(name);
+        if (name == null || name.isEmpty()) return;
+
+        emitHereOcc(name); // emit at THIS, with terminal-occurrence separation
+
+        if (callParent && this.passToParent) {
+            Features anc = this.parent;
+            while (anc != null) {
+                anc.emitHereOcc(name);          // ancestor tracks its own terminal occurrences
+                if (!anc.passToParent) break;   // stop pooling if ancestor blocks
+                anc = anc.parent;
             }
         }
-
-        if (features.containsKey(name)) { //has feature
-            int count = occurrences.get(name) + 1;
-            occurrences.put(name, count);
-            if (features.get(name).containsKey(count)) { //already contains feature at this count
-                if (printOldFeatures)
-                    logger.info(String.format("Index %d is already reserved for feature %s at %d times in %s", features.get(name).get(count), name, count, featureName));
-            } else { //contains feature but different count
-                features.get(name).put(count, localIndexCount.getAndIncrement()); //  FIXED: Use atomic increment
-                if (printNewFeatures)
-                    logger.info(String.format("Feature %s exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s",
-                            name, count, localIndexCount.get() - 1, count, featureName));
-            }
-        } else { //completely new feature
-            occurrences.put(name, 1);
-            Map<Integer, Integer> n = new HashMap<>();
-            n.put(1, localIndexCount.getAndIncrement());
-            features.put(name, n);
-            if (printNewFeatures)
-                logger.info(String.format("New feature %s discovered in %s, reserving index %d for this feature", name, featureName, n.get(1)));
-        }
-        encoder.featureVector.add(features.get(name).get(occurrences.get(name)));
     }
 
-    public void addNumericFeature(String name, int num) {
-        addNumericFeature(name, num, true);
-    }
+    public void addNumericFeature(String name, int num) { addNumericFeature(name, num, true); }
 
-    public void addNumericFeature(String name, int num, boolean callParent) {
-        if(name.isEmpty()) return;
-        //usually add feature to parent/categories
-        if (parent != null && callParent && passToParent) {
-            parent.addNumericFeature(name, num);
-            for(int i = 0; i < num; i++) {
-                //parent.addFeature(name + "_SUM", false);
-            }
-            for(Features c : categories) {
-                c.addFeature(name);
-                //keep track of numerical sum for categories
-                for(int i = 0; i < num; i++) {
-                    //c.addFeature(name + "_SUM", false);
+    /** Numeric feature with per-threshold occurrence counting (thermometer).
+     *  Example: value=3 emits keys name:1, name:2, name:3
+     *  Each threshold key tracks its own terminal occurrence (so multiple entities
+     *  contributing to the same threshold produce distinct buckets).
+     */
+    public void addNumericFeature(String name, int k, boolean callParent) {
+        if (name == null || name.isEmpty()) return;
+        k = Math.max(0, k);
+        for (int i = 0; i <= k; i++) {
+            final String key = name + "<" + i + ">";
+
+            // emit here with per-threshold terminal occurrence separation
+            this.emitHereOcc(key);
+
+            // pool to ancestors if requested, honoring passToParent at each hop
+            if (callParent && this.passToParent) {
+                Features anc = this.parent;
+                while (anc != null) {
+                    anc.emitHereOcc(key);          // ancestor tracks occurrences for this threshold separately
+                    if (!anc.passToParent) break;
+                    anc = anc.parent;
                 }
             }
         }
-
-        //also adds copy to number right below this one which will recursively increment the occurrences of each lesser feature
-        //Integer nextHighest = numericFeatures.get(name).floorKey(num-1);
-        if (num > 0) addNumericFeature(name, num - 1, false);
-
-        if (numericFeatures.containsKey(name)) {
-            if (numericFeatures.get(name).containsKey(num)) {
-                int count = numericOccurrences.get(name).get(num) + 1;
-                numericOccurrences.get(name).put(num, count);
-
-                if (numericFeatures.get(name).get(num).containsKey(count)) { //already contains feature at this count
-                    if (printOldFeatures)
-                        logger.info(String.format("Index %d is already reserved for numeric feature %s with %d at %d times in %s", numericFeatures.get(name).get(num).get(count), name, num, count, featureName));
-                } else { //contains feature and num but different count
-                    numericFeatures.get(name).get(num).put(count, localIndexCount.getAndIncrement());
-                    if (printNewFeatures)
-                        logger.info(String.format("Numeric feature %s with %d exists but has not occurred %d times, reserving index %d for the %d occurrence of this feature in %s",
-                                name, num, count, localIndexCount.get() - 1, count, featureName));
-                }
-            } else { //contains category but not this number
-                Map<Integer, Map<Integer, Integer>> map = numericFeatures.get(name);
-                Map<Integer, Integer> subMap = new HashMap<>();
-                subMap.put(1, localIndexCount.getAndIncrement());
-                map.put(num, subMap);
-                numericOccurrences.get(name).put(num, 1);
-                if (printNewFeatures)
-                    logger.info(String.format("Numeric feature %s exists but has not occurred with %d, reserving index %d for this feature at %d in %s",
-                            name, num, localIndexCount.get() - 1, num, featureName));
-            }
-        } else { //completely new feature category
-            TreeMap<Integer, Map<Integer, Integer>> newMap = new TreeMap<>();
-            Map<Integer, Integer> subMap = new HashMap<>();
-            subMap.put(1, localIndexCount.getAndIncrement());
-            newMap.put(num, subMap);
-            numericFeatures.put(name, newMap);
-            TreeMap<Integer, Integer> newTreeMap = new TreeMap<>();
-            newTreeMap.put(num, 1);
-            numericOccurrences.put(name, newTreeMap);
-            if (printNewFeatures)
-                logger.info(String.format("New numeric feature %s discovered with %d in %s, reserving index %d for this feature at %d", name,
-                        num, featureName, localIndexCount.get() - 1, num));
-        }
-        encoder.featureVector.add(numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num)));
     }
 
+    /** Clears per-state runtime data on this node (call on root at start of processState). */
     public void stateRefresh() {
-        categories.clear();
-        occurrences.replaceAll((k, v) -> 0);
-        for (String c : numericOccurrences.keySet()) {
-            numericOccurrences.get(c).replaceAll((k, v) -> 0);
-        }
-        for (String n : subFeatures.keySet()) {
-            for (int i : subFeatures.get(n).keySet()) {
-                subFeatures.get(n).get(i).stateRefresh();
+        this.occSub.clear();
+        this.occTerm.clear();
+        this.activeCategories.clear();
+        this.categoriesForChildren.clear();
+        // encoder/seed/passToParent unchanged; children from previous state are unreferenced and GC'd.
+    }
+
+    // ---- Internals ----
+
+    /** Emit at THIS node, with terminal-occurrence separation and category mirroring. */
+    private void emitHereOcc(String key) {
+        if (encoder == null || encoder.featureVector == null) return;
+
+        // Terminal occurrence number under THIS namespace:
+        int k = bumpTermOccurrence(key);
+        long seed = (k == 1 ? nsSeed : mix64(nsSeed ^ (OCC_CONST * (long) k)));
+
+        // Emit main
+        int idx = indexFor(seed, key);
+        addIndex(idx, key, k);
+
+        // Mirror into active category nodes (each with its own terminal occurrence counters)
+        if (!activeCategories.isEmpty()) {
+            for (int i = 0; i < activeCategories.size(); i++) {
+                Features cat = activeCategories.get(i);
+                cat.emitHereOcc(key); // note: cat handles its own occurrence separation
             }
-        }
-        for (String n : categoriesForChildren.keySet()) {
-            categoriesForChildren.get(n).stateRefresh();
         }
     }
 
-    /**
-     * copies the index of a feature to a new index between lists of state vectors
-     * @param copyTo
-     * @param copyFrom
-     * @param indexTo
-     * @param indexFrom
-     */
-    private void copyIndex(List<Set<Integer>> copyTo, List<Set<Integer>> copyFrom, int indexTo, int indexFrom) {
-        for(int i = 0; i < copyFrom.size(); i++) {
-            if(copyFrom.get(i).contains(indexFrom)) {
-                copyTo.get(i).add(indexTo);
-            }
-        }
+    /** Bump occurrence for subfeature token used in getSubFeatures(token). */
+    private int bumpSubOccurrence(String token) {
+        Integer next = occSub.get(token);
+        int k = (next == null ? 1 : next + 1);
+        occSub.put(token, k);
+        return k;
     }
-    /**
-     * always discard f after merging
-     *
-     * @param f object to merge with
-     */
-    public synchronized void merge(Features f, List<Set<Integer>> newStateVectors) {
-        if (this == f) return;
-        List<Set<Integer>> oldStateVectors = f.encoder.stateVectors;
-        // Normal features
-        for (String n : f.features.keySet()) {
-            Map<Integer, Integer> thisOccurrenceMap = this.features.computeIfAbsent(n, k -> new HashMap<>());
-            this.occurrences.putIfAbsent(n, 0);
-            for (int i : f.features.get(n).keySet()) {
-                if (!thisOccurrenceMap.containsKey(i)) {
-                    thisOccurrenceMap.put(i, this.localIndexCount.getAndIncrement());
-                }
-                copyIndex(newStateVectors, oldStateVectors, thisOccurrenceMap.get(i), f.features.get(n).get(i));
-            }
-        }
 
-        // Numeric features
-        for (String n : f.numericFeatures.keySet()) {
-            TreeMap<Integer, Map<Integer, Integer>> thisNumericMap = this.numericFeatures.computeIfAbsent(n, k -> new TreeMap<>());
-            this.numericOccurrences.putIfAbsent(n, new TreeMap<>());
-            for (int num : f.numericFeatures.get(n).keySet()) {
-                Map<Integer, Integer> thisOccurrenceMap = thisNumericMap.computeIfAbsent(num, k -> new HashMap<>());
-                this.numericOccurrences.get(n).putIfAbsent(num, 0);
-                for (int i  : f.numericFeatures.get(n).get(num).keySet()) {
-                    if (!thisOccurrenceMap.containsKey(i)) {
-                        thisOccurrenceMap.put(i, this.localIndexCount.getAndIncrement());
-                    }
-                    copyIndex(newStateVectors, oldStateVectors, thisOccurrenceMap.get(i), f.numericFeatures.get(n).get(num).get(i));
+    /** Bump occurrence for terminal features emitted at THIS node. */
+    private int bumpTermOccurrence(String key) {
+        Integer next = occTerm.get(key);
+        int k = (next == null ? 1 : next + 1);
+        occTerm.put(key, k);
+        return k;
+    }
+
+    /** Append idx to encoder vector and update optional persistent seen sets/bitmaps. */
+        private void addIndex(int idx, String key, int k) {
+            encoder.featureVector.add(idx);
+
+            if (encoder.seenFeatures != null) {
+                if(!encoder.seenFeatures.contains(idx)) {
+                    encoder.seenFeatures.add(idx); // RoaringBitmap/IntSet-up to you
+                    if(Features.printNewFeatures) logger.info("new feature, " + key + "#" + k + " in " + featureName + ", at index: " + idx);
+                } else {
+                    if(Features.printOldFeatures) logger.info("seen feature, " + key + "#" + k + " in " + featureName + ", at index: " + idx);
                 }
             }
-        }
-        //subfeatures
-        for (String n : f.subFeatures.keySet()) {
-            Map<Integer, Features> thisSubMap = this.subFeatures.computeIfAbsent(n, k -> new HashMap<>());
-            for (int i : f.subFeatures.get(n).keySet()) {
-                Features thisSubFeature = thisSubMap.computeIfAbsent(i, k -> new Features(this, n + "_" + i));
-                thisSubFeature.merge(f.subFeatures.get(n).get(i), newStateVectors);
-            }
-        }
-        //category labels
-        for (String n : f.categoriesForChildren.keySet()) {
-            if (!this.categoriesForChildren.containsKey(n)) {
-                this.categoriesForChildren.put(n, this.getCategory(n));
-            }
-            this.categoriesForChildren.get(n).merge(f.categoriesForChildren.get(n), newStateVectors);
-        }
-    }
-    /**
-     * Creates a synchronized, deep copy of this Features object.
-     * By being synchronized, it ensures we get a clean snapshot and never
-     * copy the object while another thread is in the middle of merging.
-     * @return A new, completely independent deep copy of this object.
-     */
-    public synchronized Features createDeepCopy() {
-        try {
-            ByteArrayOutputStream byteOutput = new ByteArrayOutputStream();
-            ObjectOutputStream objectOutput = new ObjectOutputStream(byteOutput);
-            objectOutput.writeObject(this);
-            objectOutput.close();
 
-            ByteArrayInputStream byteInput = new ByteArrayInputStream(byteOutput.toByteArray());
-            ObjectInputStream objectInput = new ObjectInputStream(byteInput);
-            Features copy = (Features) objectInput.readObject();
-            objectInput.close();
-
-            return copy;
-        } catch (IOException | ClassNotFoundException e) {
-            throw new RuntimeException("Failed to create a deep copy of the Features object.", e);
         }
-    }
-    /**
-     * Prints the entire feature tree, hiding features on the ignore list by default.
-     */
-    public void printFeatureTree() {
-        // Default behavior: do not print ignored features.
-        printFeatureTree(false);
+
+    private static int indexFor(long nsSeed, String key) {
+        long h = hash64(key, nsSeed);
+        if (h < 0) h = -h;
+        return (int)(h % TABLE_SIZE);
     }
 
-    /**
-     * Prints the entire feature tree in a hierarchical format.
-     *
-     * @param showIgnored If true, all features will be printed. If false, features
-     * whose indices are in the ignoreList will not be printed.
-     */
-    public void printFeatureTree(boolean showIgnored) {
-        // Start the recursion, passing the root's ignoreList down the tree.
-        printTreeRecursive(this.featureName, showIgnored, this.ignoreList);
+    private static long deriveChildSeed(long parentSeed, String token, int occurrenceK) {
+        long s = mix64(parentSeed ^ hash64(token, parentSeed));
+        s = mix64(s ^ (OCC_CONST * (long) occurrenceK)); // separate CARD#1 vs CARD#2
+        return s;
     }
 
-    /**
-     * Helper function to recursively traverse and print the feature tree.
-     *
-     * @param prefix        The current hierarchical path of the feature.
-     * @param showIgnored   If false, features on the ignore list are skipped.
-     * @param masterIgnoreList The single ignoreList from the root object to check against.
-     */
-    private void printTreeRecursive(String prefix, boolean showIgnored, Set<Integer> masterIgnoreList) {
-        // The conditional check for printing.
-        final boolean shouldPrintAll = showIgnored;
-
-        // Print the direct "leaf" features of the current node
-        if (this.features != null) {
-            for (Map.Entry<String, Map<Integer, Integer>> featureEntry : this.features.entrySet()) {
-                String featureName = featureEntry.getKey();
-                Map<Integer, Integer> occurrenceMap = featureEntry.getValue();
-                for (Map.Entry<Integer, Integer> occurrenceEntry : occurrenceMap.entrySet()) {
-                    Integer occurrence = occurrenceEntry.getKey();
-                    Integer index = occurrenceEntry.getValue();
-                    if (shouldPrintAll || !masterIgnoreList.contains(index)) {
-                        System.out.println(prefix + "/" + featureName + "/" + occurrence + "=>" + index);
-                    }
-                }
-            }
+    // Hashing utilities
+    private static long hash64(String s, long seed) {
+        byte[] data = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        long h = mix64(seed ^ (data.length * 0x9E3779B185EBCA87L));
+        ByteBuffer bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        while (bb.remaining() >= 8) {
+            long k = bb.getLong();
+            h ^= mix64(k);
+            h = Long.rotateLeft(h, 27) * 0x9E3779B185EBCA87L + 0x165667B19E3779F9L;
         }
-
-        // Print the direct numeric "leaf" features of the current node
-        if (this.numericFeatures != null) {
-            for (Map.Entry<String, TreeMap<Integer, Map<Integer, Integer>>> numericEntry : this.numericFeatures.entrySet()) {
-                String featureName = numericEntry.getKey();
-                for (Map.Entry<Integer, Map<Integer, Integer>> valueEntry : numericEntry.getValue().entrySet()) {
-                    int numValue = valueEntry.getKey();
-                    for (Map.Entry<Integer, Integer> occurrenceEntry : valueEntry.getValue().entrySet()) {
-                        Integer occurrence = occurrenceEntry.getKey();
-                        Integer index = occurrenceEntry.getValue();
-                        if (shouldPrintAll || !masterIgnoreList.contains(index)) {
-                            System.out.println(prefix + "/" + featureName + "_val" + numValue + "/" + occurrence + "=>" + index);
-                        }
-                    }
-                }
-            }
+        long k = 0;
+        int rem = bb.remaining();
+        for (int i = 0; i < rem; i++) {
+            k ^= ((long) bb.get() & 0xFFL) << (8 * i);
         }
-
-        // Recurse into sub-features, passing the master list along
-        if (this.subFeatures != null) {
-            for (Map.Entry<String, Map<Integer, Features>> subEntry : this.subFeatures.entrySet()) {
-                String subFeatureName = subEntry.getKey();
-                Map<Integer, Features> occurrenceMap = subEntry.getValue();
-                for (Map.Entry<Integer, Features> occurrenceEntry : occurrenceMap.entrySet()) {
-                    Integer occurrence = occurrenceEntry.getKey();
-                    Features subFeatureInstance = occurrenceEntry.getValue();
-                    String newPrefix = prefix + "/" + subFeatureName + "/" + occurrence;
-                    subFeatureInstance.printTreeRecursive(newPrefix, showIgnored, masterIgnoreList);
-                }
-            }
-        }
-
-        // Recurse into categories, passing the master list along
-        if (this.categoriesForChildren != null) {
-            for (Map.Entry<String, Features> categoryEntry : this.categoriesForChildren.entrySet()) {
-                String categoryName = categoryEntry.getKey();
-                Features categoryFeature = categoryEntry.getValue();
-                String newPrefix = prefix + "/" + categoryName;
-                categoryFeature.printTreeRecursive(newPrefix, showIgnored, masterIgnoreList);
-            }
-        }
-    }
-    // Helper method to persist the Features mapping to a file
-    public void saveMapping(String filename) throws IOException {
-        try (ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(filename)))) {
-            oos.writeObject(this);
-        }
+        h ^= mix64(k);
+        h ^= h >>> 33; h *= 0xff51afd7ed558ccdL;
+        h ^= h >>> 33; h *= 0xc4ceb9fe1a85ec53L;
+        h ^= h >>> 33;
+        return h;
     }
 
-    // Helper method to load a Features mapping from a file
-    public static Features loadMapping(String filename) throws IOException, ClassNotFoundException {
-        try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(Paths.get(filename)))) {
-            return (Features) ois.readObject();
-        }
+    private static long mix64(long z) {
+        z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L;
+        z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL;
+        return z ^ (z >>> 31);
     }
 }

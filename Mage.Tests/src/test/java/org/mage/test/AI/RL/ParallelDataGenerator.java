@@ -14,6 +14,7 @@ import org.junit.Test;
 import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
+import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
 import java.io.*;
@@ -25,6 +26,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.WRITE;
+
 
 /**
  * A dedicated, parallelized test class for generating training and testing data sets.
@@ -35,28 +38,29 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 40;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 100;
     public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
     private static final int MAX_CONCURRENT_GAMES = 8;
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "MTGA_MonoU";
     private static final String DECK_B= "MTGA_MonoR";
-    private static final String DECK_A_PATH = "decks/" + DECK_A + ".dck";
-    private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
-    private static final String MCTS_MODEL_PATH = "models/" + DECK_A + "/Model1.onnx";//was 14.5
-    private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore2.roar";//was 14
     private static final boolean DONT_USE_NOISE = true;
     private static final boolean DONT_USE_POLICY = true;
     private static double DISCOUNT_FACTOR = 0.99;
     // ================================== FILE PATHS ==================================
-    private static final String MAPPING_FILE = "features_mapping.ser";
+    private static final String DECK_A_PATH = "decks/" + DECK_A + ".dck";
+    private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
+    private static final String MCTS_MODEL_PATH = "models/" + DECK_A + "/Model1.onnx";//was 14.5
+    private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore2.roar";//was 14
+    private static final String SEEN_FEATURES_PATH = "seenFeatures.roar";
     private static final String ACTIONS_FILE = "actionMappings/" + DECK_A + "/actions_mapping.ser";
     private static final String MICRO_ACTIONS_FILE = "micro_actions_mapping.ser";
     public static String TRAIN_OUT_FILE = "training.bin";
     public static String TEST_OUT_FILE = "testing.bin";
     // ================================== GLOBAL FIELDS ==================================
-    private Features finalFeatures;
+    //private Features finalFeatures;
+    private RoaringBitmap seenFeatures = new RoaringBitmap();
     private int initialRawSize;
     private int previousRawSize;
     private final AtomicInteger gameCount = new AtomicInteger(0);
@@ -84,38 +88,37 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
     }
 
-    @Test
-    public void print_mappings() {
-        //load base mapping
+    /**
+     * run once
+     */
+    private void loadAllFiles() {
         try {
-            finalFeatures = Features.loadMapping(MAPPING_FILE);
+            // Load mappings so the encoder works correctly
+            //finalFeatures = Features.loadMapping(MAPPING_FILE);
             ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
             ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
+            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
+            ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
         } catch (IOException | ClassNotFoundException e) {
-            System.err.println("failed to load persistent mappings.");
+            logger.error("Warning: Failed to load persistent mappings");
+            ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
         }
-        finalFeatures.printFeatureTree(false);
-        System.out.println("Ignore list size: " + finalFeatures.ignoreList.size());
-        System.out.println("Ignore list:");
-        System.out.println(finalFeatures.ignoreList.toString());
-        System.out.println("Action map:");
-        String[] aMap = new String[ActionEncoder.actionMap.size()];
-        for (String s : ActionEncoder.actionMap.keySet()) {
-            //System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
-            aMap[ActionEncoder.actionMap.get(s)] = s;
+        try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
+            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+            StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
+            //logger.info("global ignore list: " + StateEncoder.globalIgnore);
+        } catch (IOException e) {
+            logger.warn("external ignore list not found");
         }
-        for (int i = 0; i < aMap.length; i++) {
-            System.out.println(i + " => " + aMap[i]);
+        try (FileChannel ch = FileChannel.open(Paths.get(SEEN_FEATURES_PATH), READ)) {
+            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+            ImmutableRoaringBitmap imm = new ImmutableRoaringBitmap(mbb);
+            seenFeatures = imm.toRoaringBitmap();
+            logger.info("global seen features list: " + seenFeatures);
+        } catch (IOException e) {
+            logger.warn("external seen feature list not found");
         }
-        System.out.println("Micro Action map:");
-        String[] aMap2 = new String[ActionEncoder.microActionMap.size()];
-        for (String s : ActionEncoder.microActionMap.keySet()) {
-            //System.out.printf("[%s => %d] ", s, ActionEncoder.actionMap.get(s));
-            aMap2[ActionEncoder.microActionMap.get(s)] = s;
-        }
-        for (int i = 0; i < aMap2.length; i++) {
-            System.out.println(i + " => " + aMap2[i]);
-        }
+        initialRawSize = seenFeatures.getCardinality();
     }
     @Override
     protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
@@ -129,58 +132,34 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
      */
     @Test
     public void test_single_game() {
-        System.out.println("\n=========================================");
-        System.out.println("       RUNNING SINGLE DEBUG GAME         ");
-        System.out.println("=========================================");
+        logger.info("\n=========================================");
+        logger.info("       RUNNING SINGLE DEBUG GAME         ");
+        logger.info("=========================================");
         // --- Setup (required for the game to run) ---
-        finalFeatures = new Features(); // Start with fresh features for this run
-        try {
-            // Load mappings so the encoder works correctly
-            finalFeatures = Features.loadMapping(MAPPING_FILE);
-            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
-            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
-            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
-            ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
-        } catch (IOException | ClassNotFoundException e) {
-            logger.error("Warning: Failed to load persistent mappings. Encoders will be empty.");
-            ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
-        }
-        try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
-            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-            StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
-            //logger.info("global ignore list: " + StateEncoder.globalIgnore);
-        } catch (IOException e) {
-            logger.error("external ignore list not found");
-            throw new RuntimeException(e);
-        }
+        //finalFeatures = new Features(); // Start with fresh features for this run
+        loadAllFiles();
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
         ComputerPlayer.PRINT_DECISION_FALLBACKS = false;
         int maxTurn = 50;
         //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
-        MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
-        Features.printOldFeatures = false;
+        //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
+        //Features.printOldFeatures = false;
         // --- End Setup ---
         long seed = System.nanoTime();
         //seed = 751314143315900L; //opponent turn priority order bug
         //seed = -4411935635951101274L; //blocking bug
-        seed = 5401683921170803014L; //unable to find matching
+        //seed = 5401683921170803014L; //unable to find matching
 
 
         StateEncoder threadEncoder = new StateEncoder();
+        threadEncoder.seenFeatures = seenFeatures;
 
         // Use a thread-safe random number generator for the seed.
         logger.info("Using seed: " + seed);
         RandomUtil.setSeed(seed);
 
-        try {
-            threadEncoder.loadMapping(finalFeatures);
-            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
-            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
-        } catch (IOException | ClassNotFoundException e) {
-            System.err.println("failed to load persistent mappings.");
-        }
 
         configurePlayer(playerA, threadEncoder);
         configurePlayer(playerB, threadEncoder);
@@ -195,52 +174,32 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
         //addCard(Zone.HAND, playerA, "Combat Research", 7);
         execute();
+        saveRoaring(threadEncoder.seenFeatures, SEEN_FEATURES_PATH);
 
-        System.out.println("=========================================");
+        logger.info("=========================================");
     }
 
     @Test
     public void generateTrainingAndTestingData() {
 
         //load original mapping as starting point
-        finalFeatures = new Features();
+        //finalFeatures = new Features();
         initialRawSize = 0;
-        previousRawSize = 0;
-        //load base mapping
-        try {
-            finalFeatures = Features.loadMapping(MAPPING_FILE);
-            initialRawSize = finalFeatures.localIndexCount.get();
-            previousRawSize = finalFeatures.previousLocalIndexCount;
-            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
-            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
-            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
-            ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
-        } catch (IOException | ClassNotFoundException e) {
-            System.err.println("failed to load persistent mappings.");
-        }
-        try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
-            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-            StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
-            logger.info("global ignore list: " + StateEncoder.globalIgnore);
-        } catch (IOException e) {
-            logger.error("external ignore list not found");
-            throw new RuntimeException(e);
-        }
-        Features.printOldFeatures = false;
+        loadAllFiles();
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
         //Features.printNewFeatures = false;
 
-        System.out.println("\n=========================================");
-        System.out.println("    STARTING TESTING DATA GENERATION     ");
-        System.out.println("=========================================");
+        logger.info("\n=========================================");
+        logger.info("    STARTING TESTING DATA GENERATION     ");
+        logger.info("=========================================");
 
         List<LabeledState> testingStates = runSimulations(NUM_GAMES_TO_SIMULATE_TEST);
 
-        System.out.println("=========================================");
-        System.out.println("   STARTING TRAINING DATA GENERATION     ");
-        System.out.println("=========================================");
+        logger.info("=========================================");
+        logger.info("   STARTING TRAINING DATA GENERATION     ");
+        logger.info("=========================================");
 
 
         List<LabeledState> trainingStates = runSimulations(NUM_GAMES_TO_SIMULATE_TRAIN);
@@ -248,7 +207,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //save both data files at once
         processAndSaveData(trainingStates, testingStates);
 
-        System.out.println("\nData generation complete.");
+        //logger.info("\nData generation complete.");
     }
 
     private List<LabeledState> runSimulations(int numGames) {
@@ -304,54 +263,40 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         System.out.printf("Player A win rate: %.2f%% (%d/%d)\n", (100.0 * wins / numGames), wins, numGames);
         return allLabeledStates;
     }
-
-    public void print_labeled_states(List<LabeledState> labeledStates) {
-        for (LabeledState ls : labeledStates) {
-            StringBuilder sb1 = new StringBuilder();
-            for (int i = 0; i < 100; i++) {
-                sb1.append(ls.stateVector[i]);
-                sb1.append(" ");
-            }
-
-            System.out.printf("State: %s, Action: %s, Result: %s\n", sb1.toString(), Arrays.toString(ls.actionVector), ls.resultLabel);
-
-        }
-    }
-
     private void processAndSaveData(List<LabeledState> trainingStates, List<LabeledState> testingStates) {
         List<LabeledState> allStates = new ArrayList<>(trainingStates);
         allStates.addAll(testingStates);
         if (allStates.isEmpty()) {
-            System.out.println("No states were generated, skipping file save for " + ParallelDataGenerator.TRAIN_OUT_FILE);
+            logger.info("No states were generated, skipping file save for " + ParallelDataGenerator.TRAIN_OUT_FILE);
             return;
         }
         //print_labeled_states(trainingStates);
-        System.out.println("Processing " + allStates.size() + " states.");
-        System.out.println("Previous Index Count: " + previousRawSize);
-        System.out.println("Initial Index Count: " + initialRawSize);
-        System.out.println("Final Index Count: " + finalFeatures.localIndexCount.get());
-        Set<Integer> oldIgnoreList = new HashSet<>(finalFeatures.ignoreList);
-        Set<Integer> newIgnoreListA = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, 0, initialRawSize));
-        Set<Integer> newIgnoreListB = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, initialRawSize, finalFeatures.localIndexCount.get()));
-        System.out.println("Computed " + newIgnoreListB.size() + " features to ignore from this batch.");
+        logger.info("Processing " + allStates.size() + " states.");
+        logger.info("Initial feature count: " + initialRawSize);
+        //Set<Integer> oldIgnoreList = new HashSet<>(finalFeatures.ignoreList);
+        //Set<Integer> newIgnoreListA = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, 0, initialRawSize));
+        //Set<Integer> newIgnoreListB = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, initialRawSize, finalFeatures.localIndexCount.get()));
+        //logger.info("Computed " + newIgnoreListB.size() + " features to ignore from this batch.");
         //intersect
-        newIgnoreListA.retainAll(oldIgnoreList);
-        System.out.println("Computed " + (oldIgnoreList.size()-newIgnoreListA.size()) + " features to unignore");
+        //newIgnoreListA.retainAll(oldIgnoreList);
+        //logger.info("Computed " + (oldIgnoreList.size()-newIgnoreListA.size()) + " features to unignore");
         //union
-        newIgnoreListA.addAll(newIgnoreListB);
-        finalFeatures.ignoreList = newIgnoreListA;
-        System.out.println("Final combined ignore list size: " + finalFeatures.ignoreList.size());
+        //newIgnoreListA.addAll(newIgnoreListB);
+        //finalFeatures.ignoreList = newIgnoreListA;
+        //logger.info("Final combined ignore list size: " + finalFeatures.ignoreList.size());
 
-        //System.out.println("Compressing all states...");
-        for (LabeledState ls : allStates) {
-            //ls.compress(finalFeatures.ignoreList);
-        }
-        System.out.println("Final unique feature count: " + LabeledState.getUniqueFeaturesFromBatch(allStates));
-        System.out.println("Final Compressed Feature Vector Size: " + (finalFeatures.localIndexCount.get() - finalFeatures.ignoreList.size()));
+        //logger.info("Compressing all states...");
+        //for (LabeledState ls : allStates) {
+        //ls.compress(finalFeatures.ignoreList);
+        //}
+        logger.info("Final unique feature count from dataset: " + LabeledState.getUniqueFeaturesFromBatch(allStates));
+        logger.info("Global unique feature count: " + seenFeatures.getCardinality());
+        logger.info("Features added: " + (seenFeatures.getCardinality() - initialRawSize));
+        //logger.info("Final Compressed Feature Vector Size: " + (finalFeatures.localIndexCount.get() - finalFeatures.ignoreList.size()));
         persistLabeledStates(trainingStates, ParallelDataGenerator.TRAIN_OUT_FILE);
         persistLabeledStates(testingStates, ParallelDataGenerator.TEST_OUT_FILE);
         persistData();
-        System.out.println("Successfully saved data to " + ParallelDataGenerator.TRAIN_OUT_FILE + " and " + ParallelDataGenerator.TEST_OUT_FILE);
+        logger.info("Successfully saved data to " + ParallelDataGenerator.TRAIN_OUT_FILE + " and " + ParallelDataGenerator.TEST_OUT_FILE);
     }
     private GameResult runSingleGame() throws ExecutionException {
         long seed = ThreadLocalRandom.current().nextLong();
@@ -377,7 +322,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             TestPlayer playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
 
 
-            threadEncoder.loadMapping(finalFeatures);
+            //threadEncoder.loadMapping(finalFeatures);
+            threadEncoder.seenFeatures = seenFeatures.clone();
 
 
             configurePlayer(playerA, threadEncoder);
@@ -398,14 +344,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             game.start(playerA.getId());
 
             boolean playerAWon = playerA.hasWon();
-            List<Set<Integer>> newStateVectors = new ArrayList<>();
-            for (int i = 0; i < threadEncoder.stateVectors.size(); i++) {
-                newStateVectors.add(new HashSet<>());
-            }
             //merge to the final features
-            finalFeatures.merge(threadEncoder.getFeatures(), newStateVectors);
+            synchronized (seenFeatures) {
+                seenFeatures.or(threadEncoder.seenFeatures);
+            }
+            //finalFeatures.merge(threadEncoder.getFeatures(), newStateVectors);
             //update generated dataset with remapped one
-            threadEncoder.stateVectors = newStateVectors;
+            //threadEncoder.stateVectors = newStateVectors;
             if(playerA.hasWon()) winCount.incrementAndGet();
             logger.info("Game #" + gameCount.incrementAndGet() + " completed successfully");
             logger.info("Current WR: " + winCount.get()*1.0/gameCount.get());
@@ -464,14 +409,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     }
     public void persistData() {
         try {
-            finalFeatures.previousLocalIndexCount = initialRawSize;
-            finalFeatures.version++;
-            finalFeatures.saveMapping(MAPPING_FILE);
-            System.out.printf("Persisted feature mapping (and ignore list) to %s%n", MAPPING_FILE);
             saveObject(new HashMap<>(ActionEncoder.actionMap), ACTIONS_FILE);
-            System.out.printf("Persisted action mapping to %s%n", ACTIONS_FILE);
+            logger.info("Persisted action mapping to: " + ACTIONS_FILE);
             saveObject(new HashMap<>(ActionEncoder.microActionMap), MICRO_ACTIONS_FILE);
-            System.out.printf("Persisted micro action mapping to %s%n", MICRO_ACTIONS_FILE);
+            logger.info("Persisted micro action mapping to: " +  MICRO_ACTIONS_FILE);
+            saveRoaring(seenFeatures, SEEN_FEATURES_PATH);
+            logger.info("Persisted seen feature set to: "  + SEEN_FEATURES_PATH);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -480,7 +423,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private void persistLabeledStates(List<LabeledState> states, String filename) {
         try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(filename)))) {
             out.writeInt(states.size());
-            out.writeInt(finalFeatures.localIndexCount.get());
+            out.writeInt(2000000);//out.writeInt(finalFeatures.localIndexCount.get());
             out.writeInt(128); // Assuming policy vector size is constant
 
             for (LabeledState ls : states) {
@@ -494,6 +437,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static void saveObject(Object obj, String fileName) throws IOException {
         try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(fileName))) {
             out.writeObject(obj);
+        }
+    }
+    void saveRoaring(RoaringBitmap rb, String filePath) {
+        try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filePath))) {
+            rb.serialize(out);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 

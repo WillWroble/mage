@@ -38,6 +38,7 @@ import java.util.*;
 public class StateEncoder {
     public static int indexCount;
     public static volatile ImmutableRoaringBitmap globalIgnore;
+    public volatile RoaringBitmap seenFeatures;
     public static boolean perfectInfo = true;
     private Features features;
     public Set<Integer> featureVector = new HashSet<>();
@@ -342,7 +343,7 @@ public class StateEncoder {
         //game metadata
         features.addFeature(game.getTurnStepType().toString()); //phases
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
-        if(actingPlayerID==myPlayerID) features.addFeature("IsActingPlayer");
+        if(actingPlayerID==myPlayerID) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
 
@@ -397,22 +398,24 @@ public class StateEncoder {
         processState(game, actingPlayerID);
         stateVectors.add(new HashSet<>(featureVector));
     }
+    //deprecated
+
     // Persist the persistent feature mapping
-    public void persistMapping(String filename) throws IOException {
-
-        features.version = mappingVersion;
-        features.saveMapping(filename);
-    }
-
-    // Load the feature mapping from file
-    public void loadMapping(String filename) throws IOException, ClassNotFoundException {
-        features = Features.loadMapping(filename);
-        features.setEncoder(this);
-    }
-    // Load the feature mapping from object
-    public void loadMapping(Features f) {
-        features = f.createDeepCopy();
-        features.setEncoder(this);
-
-    }
+//    public void persistMapping(String filename) throws IOException {
+//
+//        features.version = mappingVersion;
+//        features.saveMapping(filename);
+//    }
+//
+//    // Load the feature mapping from file
+//    public void loadMapping(String filename) throws IOException, ClassNotFoundException {
+//        features = Features.loadMapping(filename);
+//        features.setEncoder(this);
+//    }
+//    // Load the feature mapping from object
+//    public void loadMapping(Features f) {
+//        features = f.createDeepCopy();
+//        features.setEncoder(this);
+//
+//    }
 }
