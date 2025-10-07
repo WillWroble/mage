@@ -113,6 +113,8 @@ public class GameState implements Serializable, Copyable<GameState> {
     private boolean hasDayNight = false;
     private boolean isDaytime = true;
     private boolean reverseTurnOrder = false;
+    //number of priority windows for either player since the start of the game
+    public int priorityCounter = 0;
 
     private int applyEffectsCounter; // Upcounting number of each applyEffects execution
 
@@ -145,6 +147,7 @@ public class GameState implements Serializable, Copyable<GameState> {
         this.companion = state.companion.copy();
         this.gameOver = state.gameOver;
         this.paused = state.paused;
+        this.priorityCounter = state.priorityCounter;
 
         this.activePlayerId = state.activePlayerId;
         this.priorityPlayerId = state.priorityPlayerId;
@@ -238,6 +241,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
     public void restore(GameState state) {
         // no needs in copy here cause GameState already copied on save and it will be used only one time here
+        this.priorityCounter = state.priorityCounter;
         this.activePlayerId = state.activePlayerId;
         this.playerList.setCurrent(state.activePlayerId);
         this.playerByOrderId = state.playerByOrderId;
@@ -303,6 +307,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
         sb.append(turn.getValue(turnNum));
         sb.append(activePlayerId).append(priorityPlayerId).append(playerByOrderId);
+        //sb.append("[").append(priorityCounter).append("]");
 
         for (Player player : players.values()) {
             sb.append("player").append(player.getLife()).append("hand");
@@ -344,6 +349,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
         sb.append(turn.getValue(turnNum));
         sb.append(activePlayerId).append(priorityPlayerId).append(playerByOrderId);
+        //sb.append("[").append(priorityCounter).append("]");
 
         for (Player player : players.values()) {
             sb.append("player").append(player.isPassed()).append(player.getLife()).append("hand");
@@ -403,6 +409,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
         sb.append(turn.getValue(turnNum));
         sb.append(activePlayerId).append(priorityPlayerId).append(playerByOrderId);
+        //sb.append("[").append(priorityCounter).append("]");
 
         for (Player player : players.values()) {
             sb.append("player").append(player.isPassed()).append(player.getLife()).append("hand");

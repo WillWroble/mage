@@ -34,6 +34,7 @@ public class DeclareBlockersStep extends Step {
     @Override
     public void beginStep(Game game, UUID activePlayerId) {
         super.beginStep(game, activePlayerId);
+        game.getState().priorityCounter++;
         game.getCombat().selectBlockers(game);
         if (!game.isPaused() && !game.executingRollback()) {
             game.getCombat().acceptBlockers(game);

@@ -279,14 +279,14 @@ public class ChoiceImpl implements Choice {
             String[] vals = this.getKeyChoices().keySet().toArray(new String[0]);
             if (vals.length > 0) {
                 int choiceNum = RandomUtil.nextInt(vals.length);
-                this.setChoiceByKey(vals[choiceNum], false);
+                this.setChoiceByKey(vals[0], false);
             }
         } else {
             // string mode
             String[] vals = this.getChoices().toArray(new String[0]);
             if (vals.length > 0) {
                 int choiceNum = RandomUtil.nextInt(vals.length);
-                this.setChoice(vals[choiceNum], false);
+                this.setChoice(vals[0], false);
             }
         }
     }

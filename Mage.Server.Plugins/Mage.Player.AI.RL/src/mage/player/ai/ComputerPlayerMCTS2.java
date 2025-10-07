@@ -180,7 +180,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
             } else {
                 result = current.isWinner() ? 1.0 : -1.0;
-                logger.info("found terminal node in tree");
+                logger.debug("found terminal node in tree");
             }
             // backprop
             current.backpropagate(result);

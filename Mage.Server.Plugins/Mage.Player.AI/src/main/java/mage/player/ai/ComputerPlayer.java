@@ -1897,7 +1897,7 @@ public class ComputerPlayer extends PlayerImpl {
     @Override
     public int announceXCost(int min, int max, String message, Game game, Ability ability, VariableCost variablCost) {
         log.debug("announceXCost");
-        int value = RandomUtil.nextInt(CardUtil.overflowInc(max, 1));
+        int value = game.getLocalRandom().nextInt(CardUtil.overflowInc(max, 1));
         if (value < min) {
             value = min;
         }
@@ -2044,7 +2044,7 @@ public class ComputerPlayer extends PlayerImpl {
     @Override
     public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
         if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("chooseTarget2: " + source.toString());
-        if (cards == null || cards.isEmpty()) {
+        if (true || cards == null || cards.isEmpty()) {
             return target.isRequired(source);
         }
 
@@ -2077,7 +2077,7 @@ public class ComputerPlayer extends PlayerImpl {
     public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
         if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("choose3: " + source.toString());
         log.debug("choose 2");
-        if (cards == null || cards.isEmpty()) {
+        if (true || cards == null || cards.isEmpty()) {
             return true;
         }
 
@@ -2209,7 +2209,7 @@ public class ComputerPlayer extends PlayerImpl {
             return min;
         }
         if (min < max && min == 0) {
-            return RandomUtil.nextInt(CardUtil.overflowInc(max, 1));
+            return game.getLocalRandom().nextInt(CardUtil.overflowInc(max, 1));
         }
         return min;
     }

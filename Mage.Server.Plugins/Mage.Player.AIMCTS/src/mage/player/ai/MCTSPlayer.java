@@ -202,15 +202,15 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
-        if(game.isPaused()) return false;
+        if(game.isPaused() || game.checkIfGameIsOver()) return false;
         if(!actionScript.prioritySequence.isEmpty()) {
             game.getState().setPriorityPlayerId(playerId);
             //game.firePriorityEvent(playerId);
-            ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst();
+            ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
 
             boolean success = activateAbility(ability, game);
             if(!success) {
-                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID MCTS NODE AT: " + ability.toString());
+                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString());
                 scriptFailed = true;
                 game.pause();
                 lastToAct = true;
@@ -228,9 +228,9 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
-        if(game.isPaused()) return;
+        if(game.isPaused() || game.checkIfGameIsOver()) return;
         if(!actionScript.combatSequence.isEmpty()) {
-            Combat combat = actionScript.combatSequence.pollFirst();
+            Combat combat = actionScript.combatSequence.pollFirst().copy();
             UUID opponentId = game.getCombat().getDefenders().iterator().next();
             for (UUID attackerId : combat.getAttackers()) {
                 if(game.getPermanent(attackerId) == null) continue;
@@ -246,9 +246,9 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
-        if(game.isPaused()) return;
+        if(game.isPaused() || game.checkIfGameIsOver()) return;
         if(!actionScript.combatSequence.isEmpty()) {
-            Combat simulatedCombat = actionScript.combatSequence.pollFirst();
+            Combat simulatedCombat = actionScript.combatSequence.pollFirst().copy();
             List<CombatGroup> currentGroups = game.getCombat().getGroups();
             for (int i = 0; i < currentGroups.size(); i++) {
                 if (i < simulatedCombat.getGroups().size()) {
@@ -292,11 +292,11 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        if (game.isPaused())
+        if (game.isPaused() || game.checkIfGameIsOver())
             return super.chooseTarget(outcome, target, source, game); //if game is already paused don't overwrite last decision
         //for choosing targets of triggered abilities
         if (PRINT_CHOOSE_DIALOGUES)
-            logger.info("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
+            logger.debug("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
         if (!actionScript.targetSequence.isEmpty()) {
             StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
             Set<UUID> targets = actionScript.targetSequence.pollFirst();
@@ -311,7 +311,7 @@ public class MCTSPlayer extends ComputerPlayer {
                 }
             }
             if (sb != null) {
-                logger.info(sb.toString());
+                logger.debug(sb.toString());
             }
             getPlayerHistory().targetSequence.add(targets);
             return true;
@@ -337,16 +337,16 @@ public class MCTSPlayer extends ComputerPlayer {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if (outcome == Outcome.PutManaInPool || game.isPaused()) {
+        if (outcome == Outcome.PutManaInPool || game.isPaused() || game.checkIfGameIsOver()) {
             return super.choose(outcome, choice, game);
         }
         //for choosing colors/types etc
-        if (PRINT_CHOOSE_DIALOGUES) logger.info("CALLING MAKE CHOICE: " + choice.toString());
+        if (PRINT_CHOOSE_DIALOGUES) logger.debug("CALLING MAKE CHOICE: " + choice.toString());
         if (!actionScript.choiceSequence.isEmpty()) {
             String chosen = actionScript.choiceSequence.pollFirst();
             choice.setChoice(chosen);
             getPlayerHistory().choiceSequence.add(chosen);
-            if (PRINT_CHOOSE_DIALOGUES) logger.info(String.format("tried choice: %s ", chosen));
+            if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried choice: %s ", chosen));
             return true;
         }
         choiceOptions = new HashSet<>(choice.getChoices());

@@ -50,6 +50,7 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
 //    void setMacroPlayerId(UUID id);
 //    void setLastAction(Ability ability);
     Random getLocalRandom();
+    void setLocalRandom(Random random);
     Game getLastPriority();
     UUID getLastPriorityPlayerId();
     Ability getLastPriorityAction();
@@ -275,6 +276,8 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     Combat getCombat();
 
     GameState getState();
+
+    void setState(Object s);
 
     String getWinner();
 

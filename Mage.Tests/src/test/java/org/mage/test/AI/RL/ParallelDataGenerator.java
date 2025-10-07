@@ -35,10 +35,10 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 50;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 40;
     public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 4;
+    private static final int MAX_CONCURRENT_GAMES = 8;
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "MTGA_MonoU";
     private static final String DECK_B= "MTGA_MonoR";
@@ -164,6 +164,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         // --- End Setup ---
         long seed = System.nanoTime();
         //seed = 751314143315900L; //opponent turn priority order bug
+        //seed = -4411935635951101274L; //blocking bug
+        seed = 5401683921170803014L; //unable to find matching
 
 
         StateEncoder threadEncoder = new StateEncoder();

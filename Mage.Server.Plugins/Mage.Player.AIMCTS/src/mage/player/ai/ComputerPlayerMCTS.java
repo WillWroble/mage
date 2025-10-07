@@ -17,6 +17,7 @@ import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
+import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
@@ -149,6 +150,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                     //even if no new tree is needed we still need to establish this game as the new anchor for MCTS
                     newRoot.rootGame = createMCTSGame(game.getLastPriority());;
                     newRoot.rootState = newRoot.rootGame.getState().copy();
+                    newRoot.rootRandom = RandomUtil.deepCopy(newRoot.rootGame.getLocalRandom());
                 }
             } else {
                 logger.info("unable to find matching state");

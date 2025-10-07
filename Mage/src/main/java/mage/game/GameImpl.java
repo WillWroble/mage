@@ -111,7 +111,7 @@ public abstract class GameImpl implements Game {
     protected AtomicInteger totalErrorsCount = new AtomicInteger(); // for debug only: error stats
 
     protected final UUID id;
-    private final Random gameLocalRandom; //for deterministic UUID generation
+    private Random gameLocalRandom; //for deterministic UUID generation
 
     protected boolean ready;
     protected transient TableEventSource tableEventSource = new TableEventSource();
@@ -254,11 +254,22 @@ public abstract class GameImpl implements Game {
         this.stackObjectsCheck = game.stackObjectsCheck;
          */
     }
+
+    /**
+     * get the random number generator local to this game for deterministic UUID names
+     * @return random object
+     */
     @Override
     public Random getLocalRandom() {
         return gameLocalRandom;
     }
-
+    /**
+     * set the random number generator local to this game for deterministic UUID names
+     */
+    @Override
+    public void setLocalRandom(Random random) {
+        this.gameLocalRandom = random;
+    }
     /**
      * @return the game object from right before the last priority
      */
@@ -289,18 +300,6 @@ public abstract class GameImpl implements Game {
     public void setLastPriority(Game game) {
         lastPriority = game;
     }
-//    @Override
-//    public void setMacroState(Game game) {
-//        macroState = game;
-//    }
-//    @Override
-//    public void setMacroPlayerId(UUID id) {
-//        macroPlayerId = id;
-//    }
-//    @Override
-//    public void setLastAction(Ability ability) {
-//        lastAction = ability;
-//    }
     @Override
     public boolean isSimulation() {
         return simulation;
@@ -990,6 +989,13 @@ public abstract class GameImpl implements Game {
     @Override
     public GameState getState() {
         return state;
+    }
+
+    @Override
+    public void setState(Object s) {
+        if(s instanceof GameState) {
+            state = (GameState) s;
+        }
     }
 
     @Override
@@ -1779,6 +1785,7 @@ public abstract class GameImpl implements Game {
                                     lastPriority = this.copy();
                                 }
                                 clearHistory();
+                                state.priorityCounter++;
                                 // resetPassed should be called if player performs any action
                                 if (player.priority(this)) {
                                     //assert (player.getLastActivated()!= null);

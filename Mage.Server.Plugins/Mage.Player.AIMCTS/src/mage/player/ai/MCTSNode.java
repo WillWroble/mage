@@ -13,6 +13,7 @@ import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.players.Player;
 import mage.players.PlayerScript;
+import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 import java.util.Random;
 import org.apache.commons.math3.distribution.GammaDistribution;
@@ -61,6 +62,8 @@ public class MCTSNode {
     public Game rootGame;
     //the fixed saved state of the root so it can be reset after use.
     public GameState rootState;
+    //used to make deterministic UUIDs
+    public Random rootRandom;
     //prefix scripts represent the sequence of actions that need to be taken since the last priority to represent this microstate
     public PlayerScript prefixScript = new PlayerScript();
     public PlayerScript opponentPrefixScript = new PlayerScript();
@@ -73,6 +76,7 @@ public class MCTSNode {
     public MCTSNode(UUID targetPlayer, Game game) {
         rootGame = game;
         rootState = game.getState().copy();
+        rootRandom = RandomUtil.deepCopy(game.getLocalRandom());
         //rootState.pause();
         this.targetPlayer = targetPlayer;
         this.stateValue = game.getState().getValue(game, targetPlayer);
@@ -121,6 +125,7 @@ public class MCTSNode {
             return;
         }
         if(actingPlayer.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {//priority point, use current state value
+            game.getState().priorityCounter--;
             this.stateValue = game.getState().getValue(game, targetPlayer);
             this.fullStateValue = game.getState().getValue(true, game);
         } else {//micro point, use previous state value
@@ -139,10 +144,12 @@ public class MCTSNode {
             }
         }
         if(game.checkIfGameIsOver()) {
-            logger.info("TERMINAL STATE\n");
+            logger.info("TERMINAL STATE");
+            terminal = true;
+            winner = isWinner(game, targetPlayer);
             return;
         }
-        logger.error("this should not happen");
+        logger.warn("this should not happen");
     }
 
     /**
@@ -155,16 +162,18 @@ public class MCTSNode {
         }
         GameState state = rootState.copy();
 
-        rootGame.getState().restoreForRollBack(state);
+        //rootGame.getState().restoreForRollBack(state);
+        rootGame.setState(state);
         rootGame.getPlayerList().setCurrent(state.getPlayerByOrderId());
+        //set rng for determinism
+        rootGame.setLocalRandom(RandomUtil.deepCopy(rootRandom));
         // Clear ephemeral caches / rebuild effects
         rootGame.resetLKI();
         rootGame.resetShortLivingLKI();
-        rootGame.getState().clearLookedAt();
-        rootGame.getState().clearRevealed();
-        //rootGame.getState().setPriorityPlayerId(null); // let engine recompute who gets priority
+        //rootGame.getState().clearLookedAt();
+        //rootGame.getState().clearRevealed();
         rootGame.applyEffects(); // rebuild layers/CEs
-
+        //for sanity
         for (Player p : rootGame.getPlayers().values()) {
             MCTSPlayer mp = (MCTSPlayer) p;
             mp.lastToAct = false;
@@ -220,9 +229,10 @@ public class MCTSNode {
         List<MCTSNode> children = new ArrayList<>();
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
             List<Ability> playables = player.getPlayableOptions(game);
+            //Set<Ability> playablesSet = new HashSet<>(playables);
             for(Ability playable : playables) {
                 logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + playable.toString());
-                MCTSNode node = new MCTSNode(this, playable);
+                MCTSNode node = new MCTSNode(this, playable.copy());
                 children.add(node);
             }
         } else if(nextAction == MCTSPlayer.NextAction.SELECT_ATTACKERS) {
@@ -241,12 +251,17 @@ public class MCTSNode {
             List<List<List<UUID>>> blocks = player.getBlocks(game);
             for (List<List<UUID>> block : blocks) {
                 Combat newCombat = game.getCombat().copy();
-                List<CombatGroup> groups = game.getCombat().getGroups();
+                List<CombatGroup> groups = newCombat.getGroups();
                 for (int i = 0; i < groups.size(); i++) {
-                    if(groups.get(i).getAttackers().isEmpty()) continue;//failsafe
+                    CombatGroup group = groups.get(i);
+                    if(group.getAttackers().isEmpty()) {//failsafe
+                        logger.warn("empty attacking group");
+                        continue;
+                    }
                     if (i < block.size()) {
                         for (UUID blockerId : block.get(i)) {
-                            newCombat.addBlockingGroup(blockerId, groups.get(i).getAttackers().get(0), player.getId(), game);
+                            group.addBlocker(blockerId, player.getId(), game);
+                            newCombat.addBlockingGroup(blockerId, group.getAttackers().get(0), player.getId(), game);
                         }
                     }
                 }
