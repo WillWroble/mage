@@ -1,5 +1,6 @@
 package org.mage.test.AI.RL;
 
+import ai.onnxruntime.OrtException;
 import mage.cards.decks.Deck;
 import mage.cards.decks.DeckCardLists;
 import mage.cards.decks.importer.DeckImporter;
@@ -38,7 +39,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 100;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 40;
     public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
     private static final int MAX_CONCURRENT_GAMES = 8;
@@ -51,8 +52,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // ================================== FILE PATHS ==================================
     private static final String DECK_A_PATH = "decks/" + DECK_A + ".dck";
     private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
-    private static final String MCTS_MODEL_PATH = "models/" + DECK_A + "/Model1.onnx";//was 14.5
-    private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore2.roar";//was 14
+    private static final String MCTS_MODEL_PATH = "models/" + DECK_A + "/Model2.onnx";//was 14.5
+    private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";//was 14
     private static final String SEEN_FEATURES_PATH = "seenFeatures.roar";
     private static final String ACTIONS_FILE = "actionMappings/" + DECK_A + "/actions_mapping.ser";
     private static final String MICRO_ACTIONS_FILE = "micro_actions_mapping.ser";
@@ -65,6 +66,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private int previousRawSize;
     private final AtomicInteger gameCount = new AtomicInteger(0);
     private final AtomicInteger winCount = new AtomicInteger(0);
+    //private NeuralNetEvaluator neuralNetEvaluator;
+    private RemoteModelEvaluator remoteModelEvaluator;
     //end
 
     /**
@@ -118,6 +121,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         } catch (IOException e) {
             logger.warn("external seen feature list not found");
         }
+        try {
+            remoteModelEvaluator = new RemoteModelEvaluator();
+        } catch (Exception e) {
+            logger.warn("Failed to establish connection to network model");
+            throw new RuntimeException(e);
+        }
         initialRawSize = seenFeatures.getCardinality();
     }
     @Override
@@ -126,6 +135,15 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         playerA = createPlayer(game, "PlayerA", DECK_A_PATH);
         playerB = createPlayer(game, "PlayerB", DECK_B_PATH);
         return game;
+    }
+    @Test
+    public void train_4_250() {
+        NUM_GAMES_TO_SIMULATE_TRAIN=250;
+        NUM_GAMES_TO_SIMULATE_TEST=0;
+        for(int i = 0; i<4; i++) {
+            TRAIN_OUT_FILE = ("training"+i+".bin");
+            generateTrainingAndTestingData();
+        }
     }
     /**
      * New test function to run a single game for debugging purposes without saving any data.
@@ -364,7 +382,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private void configurePlayer(TestPlayer player, StateEncoder encoder) {
         if (player.getComputerPlayer() instanceof ComputerPlayerMCTS2) {
             ((ComputerPlayerMCTS2) player.getComputerPlayer()).setEncoder(encoder);
-            ((ComputerPlayerMCTS2) player.getComputerPlayer()).initNN(MCTS_MODEL_PATH);
+            //((ComputerPlayerMCTS2) player.getComputerPlayer()).initNN(MCTS_MODEL_PATH);
+            ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluator;//shared reference
         } else if (player.getComputerPlayer() instanceof ComputerPlayer8) {
             ((ComputerPlayer8) player.getComputerPlayer()).setEncoder(encoder);
         } else if (player.getComputerPlayer() instanceof ComputerPlayerPureMCTS) {

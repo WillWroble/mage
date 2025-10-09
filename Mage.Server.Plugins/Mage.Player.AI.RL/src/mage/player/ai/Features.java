@@ -213,7 +213,6 @@ public class Features implements Serializable {
         // Emit main
         int idx = indexFor(seed, key);
         addIndex(idx, key, k);
-
         // Mirror into active category nodes (each with its own terminal occurrence counters)
         if (!activeCategories.isEmpty()) {
             for (int i = 0; i < activeCategories.size(); i++) {

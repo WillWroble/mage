@@ -24,6 +24,10 @@ import static java.lang.Math.*;
 /**
  *
  * @author BetaSteward_at_googlemail.com
+ * @author willwroble@gmail.com
+ *
+ * this refactored MCTS is effectively stateless by using action replay scripts to derive states on demand from the root.
+ *
  */
 public class MCTSNode {
 
@@ -162,12 +166,11 @@ public class MCTSNode {
         }
         GameState state = rootState.copy();
 
-        //rootGame.getState().restoreForRollBack(state);
         rootGame.setState(state);
         rootGame.getPlayerList().setCurrent(state.getPlayerByOrderId());
         //set rng for determinism
         rootGame.setLocalRandom(RandomUtil.deepCopy(rootRandom));
-        // Clear ephemeral caches / rebuild effects
+        // clear ephemeral caches / rebuild effects
         rootGame.resetLKI();
         rootGame.resetShortLivingLKI();
         //rootGame.getState().clearLookedAt();
@@ -188,7 +191,7 @@ public class MCTSNode {
     public MCTSNode select(UUID targetPlayerId) {
         if(children.isEmpty()) {
             logger.error("no children available for selection");
-            return this;
+            return null;
         }
         // Single‐child shortcut
         if (children.size() == 1) {
@@ -202,25 +205,24 @@ public class MCTSNode {
         double bestVal = Double.NEGATIVE_INFINITY;
 
         double sqrtN = Math.sqrt(visits);
-        synchronized (children) {
-            for (MCTSNode child : children) {
-                // value term: 0 if unvisited, else average reward
-                double q = (child.visits > 0)
-                        ? (child.getScoreRatio())
-                        : 0.0;
-                double passBonus = child.getAction() instanceof PassAbility ? 0.05 : 0;
-                // exploration term still blows up when visits==0
-                double u = selectionCoefficient * (child.prior) * (sqrtN / (1 + child.visits));
 
-                // combined PUCT
-                double val = sign * q + u;
+        for (MCTSNode child : children) {
+            // value term: 0 if unvisited, else average reward
+            double q = (child.visits > 0)
+                    ? (child.getScoreRatio())
+                    : 0.0;
+            // exploration term
+            double u = selectionCoefficient * (child.prior) * (sqrtN / (1 + child.visits));
 
-                if (val > bestVal) {
-                    bestVal = val;
-                    best = child;
-                }
+            // combined PUCT
+            double val = sign * q + u;
+
+            if (val > bestVal) {
+                bestVal = val;
+                best = child;
             }
         }
+
         // best should never be null once visits>0 on the root
         assert best != null;
         return best;
@@ -229,10 +231,9 @@ public class MCTSNode {
         List<MCTSNode> children = new ArrayList<>();
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
             List<Ability> playables = player.getPlayableOptions(game);
-            //Set<Ability> playablesSet = new HashSet<>(playables);
             for(Ability playable : playables) {
                 logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + playable.toString());
-                MCTSNode node = new MCTSNode(this, playable.copy());
+                MCTSNode node = new MCTSNode(this, playable);
                 children.add(node);
             }
         } else if(nextAction == MCTSPlayer.NextAction.SELECT_ATTACKERS) {
@@ -253,6 +254,7 @@ public class MCTSNode {
                 Combat newCombat = game.getCombat().copy();
                 List<CombatGroup> groups = newCombat.getGroups();
                 for (int i = 0; i < groups.size(); i++) {
+                    //group = attacker
                     CombatGroup group = groups.get(i);
                     if(group.getAttackers().isEmpty()) {//failsafe
                         logger.warn("empty attacking group");
@@ -296,7 +298,6 @@ public class MCTSNode {
             logger.fatal("next action is null");
         }
         MCTSPlayer.NextAction nextAction = player.getNextAction();
-        //children.addAll(MCTSNextActionFactory.createNextAction(player.getNextAction()).performNextAction(this, player, game, fullStateValue));
         children.addAll(createChildren(nextAction, player, game));
         logger.debug(children.size() + " children expanded");
         for (MCTSNode node : children) {
@@ -337,7 +338,7 @@ public class MCTSNode {
                     idx = ActionEncoder.getAction(node.getAction());
                 }
                 double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
-                node.prior = raw;     // assume you’ve added `public double prior;` to MCTSNode
+                node.prior = raw;
                 sumExp += raw;
             }
 
@@ -373,9 +374,6 @@ public class MCTSNode {
 
                 // 4) mark done
                 dirichletSeed = 0;
-            }
-            if (!children.isEmpty()) {
-                game = null;
             }
         }
     }
@@ -427,6 +425,7 @@ public class MCTSNode {
         //derive temp from value
         double temperature = (1-abs(this.initialScore));
 
+        //normal selection
         if (ComputerPlayerMCTS.NO_NOISE || temperature < 0.01) {
             MCTSNode best = null;
             double bestCount = -1;
@@ -439,6 +438,7 @@ public class MCTSNode {
             return best;
         }
 
+        //temp based sampling selection
         List<Double> logProbs = new ArrayList<>();
         double maxLogProb = Double.NEGATIVE_INFINITY;
         for (MCTSNode node : children) {
@@ -466,7 +466,6 @@ public class MCTSNode {
         for (int i = 0; i < children.size(); i++) {
             cumulativeProbability += probabilities.get(i);
             if (randomValue <= cumulativeProbability) {
-                //assert(children.get(i).chooseTargetAction.size() < chooseTargetAction.size()+2);
                 return children.get(i);
             }
         }

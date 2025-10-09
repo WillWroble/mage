@@ -29,7 +29,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final int MAX_TREE_NODES = 800;//per thread
 
     public static boolean SHOW_THREAD_INFO = false;
-    public transient NeuralNetEvaluator nn;
+    public transient RemoteModelEvaluator nn;
 
 
 
@@ -68,12 +68,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Set<Integer> featureSet = encoder.processState(game, node.playerId, microDecision);
 
         int keep = 0;
-        for (int i : featureSet) if (!StateEncoder.globalIgnore.contains(i)) keep++;
-        long[] onnxIndices = new long[keep];
+        for (int i : featureSet)  {
+            keep++;
+        }
+        long[] nnIndices = new long[keep];
         int k = 0;
-        for (int i : featureSet) if (!StateEncoder.globalIgnore.contains(i)) onnxIndices[k++] = i;
+        for (int i : featureSet)  {
+            nnIndices[k++] = i;
+        }
 
-        NeuralNetEvaluator.InferenceResult out = nn.infer(onnxIndices);
+        RemoteModelEvaluator.InferenceResult out = nn.infer(nnIndices);
 
         node.policy = out.policy; //combat decisions don't get priors but get filtered out in expand()
         node.initialScore = out.value;
@@ -87,13 +91,13 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     public void setBuffer(ReplayBuffer buf) {
         buffer = buf;
     }
-    public void initNN(String path) {
-        try {
-            nn = new NeuralNetEvaluator(path);
-        } catch (OrtException e) {
-            throw new RuntimeException(e);
-        }
-    }
+//    public void initNN(String path) {
+//        try {
+//            nn = new NeuralNetEvaluator(path);
+//        } catch (OrtException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
     public double diffVisits(List<Integer> children) {
         int max = -1;
@@ -162,7 +166,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 current = current.select(this.playerId);
                 //if(current.action != null)logger.info("selected: " + current.action.toString());
             }
-            double result;
             //temporary reference to a game that represents this nodes state
             Game tempGame = null;
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
@@ -172,6 +175,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     continue;
                 }
             }
+            double result;
             if (!current.isTerminal()) {
                 // eval
                 result = evaluateState(current, tempGame);
@@ -206,38 +210,20 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         MCTSNode.logHitMiss();
     }
     double[] getActionVec() {
-        double tau = 1.0;            // your temperature hyperparam
-        int    A   = 128;
-        double[] out = new double[A];
+        double[] out = new double[128];
         Arrays.fill(out, 0.0);
-        double sum = 0;
-        // 1) accumulate visits^(1/tau)
         for (MCTSNode child : root.children) {
             if (child.getAction() != null) {
                 int idx = ActionEncoder.getAction(child.getAction());
-                double v = child.visits;
-                // apply temperature
-                double vt = Math.pow(v, 1.0 / tau);
-                out[idx] += vt;
-                sum += vt;
-            }
-        }
-
-        // 2) normalize into a proper distribution
-        if (sum > 0) {
-            for (int i = 0; i < A; i++) {
-                out[i] = out[i] / sum;
+                int v = child.visits;//un normalized counts
+                out[idx%128] += v;
             }
         }
         return out;
     }
     double[] getMicroActionVec(NextAction nextAction, Game game) {
-        double tau = 1.0;            // your temperature hyperparam
-        int    A   = 128;
-        double[] out = new double[A];
+        double[] out = new double[128];
         Arrays.fill(out, 0.0);
-        double sum = 0;
-        // 1) accumulate visits^(1/tau)
         for (MCTSNode child : root.children) {
             if (child.getAction() != null) {
                 int idx = -1;
@@ -250,16 +236,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 }
                 double v = child.visits;
                 // apply temperature
-                double vt = Math.pow(v, 1.0 / tau);
-                out[idx%128] += vt;
-                sum += vt;
-            }
-        }
-
-        // 2) normalize into a proper distribution
-        if (sum > 0) {
-            for (int i = 0; i < A; i++) {
-                out[i] = out[i] / sum;
+                out[idx%128] += v;
             }
         }
         return out;

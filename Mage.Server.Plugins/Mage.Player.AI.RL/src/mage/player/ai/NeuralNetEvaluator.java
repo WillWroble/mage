@@ -1,13 +1,13 @@
 package mage.player.ai;
 
 import ai.onnxruntime.OrtEnvironment;
+import ai.onnxruntime.OrtException;
 import ai.onnxruntime.OrtSession;
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OnnxValue;
-import ai.onnxruntime.OrtException;
 
-import java.nio.LongBuffer; // For int64 tensors
-import java.util.HashMap; // For multiple inputs
+import java.nio.LongBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -16,7 +16,10 @@ import java.util.concurrent.Executors;
 
 /**
  * Lightweight ONNX Runtime wrapper for policy/value inference.
- * Adapted for models expecting sparse indices and offsets (e.g., from EmbeddingBag).
+ * SERIALIZES all session.run() calls behind a lock to prevent native memory blowups
+ * with very large EmbeddingBag models.
+ *
+ * Drop-in replacement: same public API as before.
  */
 public class NeuralNetEvaluator implements AutoCloseable {
 
@@ -32,41 +35,57 @@ public class NeuralNetEvaluator implements AutoCloseable {
     private final OrtEnvironment env;
     private final OrtSession session;
     private final ExecutorService executor;
+
+    // Serialize all session.run(...) calls across threads
+    private final Object runLock = new Object();
+
     public static boolean USE_GPU = false;
 
+    // IO names (match your exported ONNX)
+    private final String onnxIndicesInputName = "indices";
+    private final String onnxOffsetsInputName = "offsets";
+    private final String onnxPolicyOutputName = "policy";
+    private final String onnxValueOutputName = "value";
 
-    // You'll need to get these names by inspecting your exported ONNX model
-    // (e.g., using a tool like Netron)
-    private final String onnxIndicesInputName = "indices"; // Placeholder name
-    private final String onnxOffsetsInputName = "offsets"; // Placeholder name
-    private final String onnxPolicyOutputName = "policy";  // Assuming this remains the same
-    private final String onnxValueOutputName = "value";    // Assuming this remains the same
-
+    // Reused offsets tensor for single-sample EmbeddingBag-style inputs
+    private final OnnxTensor sharedOffsetsTensor;
+    private static final long[] OFFSETS_1 = new long[]{0};
+    private static final long[] OFFSETS_SHAPE = new long[]{1};
 
     public NeuralNetEvaluator(String onnxPath) throws OrtException {
-        this(onnxPath,
-                Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+        this(onnxPath, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
     }
 
     public NeuralNetEvaluator(String onnxPath, int threads) throws OrtException {
         this.env = OrtEnvironment.getEnvironment();
+
+        // Pre-create reusable offsets tensor
+        this.sharedOffsetsTensor = OnnxTensor.createTensor(env, LongBuffer.wrap(OFFSETS_1), OFFSETS_SHAPE);
+
+        // Session options: single-threaded, sequential, minimal allocator caching
         OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-        opts.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT);
-        opts.setIntraOpNumThreads(1); // Good for when executor handles parallelism
-        opts.setInterOpNumThreads(1); // Good for when executor handles parallelism
-        if(USE_GPU) {
+        opts.setExecutionMode(OrtSession.SessionOptions.ExecutionMode.SEQUENTIAL);
+        opts.setIntraOpNumThreads(1);
+        opts.setInterOpNumThreads(1);
+        opts.setMemoryPatternOptimization(false);
+
+        // Reduce native CPU memory arena caching if available (ignore if not supported)
+        try { opts.setCPUArenaAllocator(false); } catch (Throwable ignored) {}
+        try { opts.addConfigEntry("session.enable_cpu_mem_arena", "0"); } catch (Throwable ignored) {}
+
+        if (USE_GPU) {
             try {
-                // This line is the key. It tells ONNX to use the CUDA provider.
-                opts.addCUDA(0); // 0 is the device ID for your first GPU
+                opts.addCUDA(0); // device 0
                 System.out.println("INFO: ONNX Runtime configured to use GPU (CUDA).");
             } catch (OrtException e) {
-                // This will happen if the GPU library is missing or CUDA drivers are not installed.
                 System.err.println("WARNING: Failed to initialize CUDA provider. Falling back to CPU. Error: " + e.getMessage());
             }
         }
 
         this.session = env.createSession(onnxPath, opts);
-        this.executor = Executors.newFixedThreadPool(Math.max(1, threads));
+
+        // Keep API compatibility for async calls; runLock still serializes actual runs
+        this.executor = Executors.newSingleThreadExecutor();
     }
 
     /**
@@ -74,20 +93,12 @@ public class NeuralNetEvaluator implements AutoCloseable {
      * @param activeGlobalIndices Array of active global feature indices for the state.
      * @return InferenceResult containing policy and value.
      */
-    public InferenceResult infer(long[] activeGlobalIndices) { // Changed signature
-        // For single sample inference, offsets tensor is just [0]
-        long[] offsets = new long[]{0};
-
-        // The shape of the indices tensor is [num_active_indices]
-        long[] indicesShape = new long[]{activeGlobalIndices.length};
-        // The shape of the offsets tensor is [batch_size], which is 1 here
-        long[] offsetsShape = new long[]{1};
-
+    public InferenceResult infer(long[] activeGlobalIndices) {
+        final long[] indicesShape = new long[]{activeGlobalIndices.length};
 
         Map<String, OnnxTensor> inputs = null;
         OrtSession.Result outputs = null;
         OnnxTensor indicesTensor = null;
-        OnnxTensor offsetsTensor = null;
 
         try {
             indicesTensor = OnnxTensor.createTensor(
@@ -95,17 +106,16 @@ public class NeuralNetEvaluator implements AutoCloseable {
                     LongBuffer.wrap(activeGlobalIndices),
                     indicesShape
             );
-            offsetsTensor = OnnxTensor.createTensor(
-                    env,
-                    LongBuffer.wrap(offsets),
-                    offsetsShape
-            );
 
             inputs = new HashMap<>();
             inputs.put(onnxIndicesInputName, indicesTensor);
-            inputs.put(onnxOffsetsInputName, offsetsTensor);
+            inputs.put(onnxOffsetsInputName, sharedOffsetsTensor);
 
-            outputs = session.run(inputs);
+            // >>> Only one session.run() at a time <<<
+            synchronized (runLock) {
+                outputs = session.run(inputs);
+            }
+            // <<< ------------------------------- >>>
 
             // Policy tensor
             Optional<OnnxValue> optP = outputs.get(onnxPolicyOutputName);
@@ -113,7 +123,7 @@ public class NeuralNetEvaluator implements AutoCloseable {
                 throw new RuntimeException("Missing '" + onnxPolicyOutputName + "' output from ONNX model");
             }
             OnnxTensor policyTensor = (OnnxTensor) optP.get();
-            float[] policy = ((float[][]) policyTensor.getValue())[0]; // Assumes policy output shape [1, policy_dim]
+            float[] policy = ((float[][]) policyTensor.getValue())[0]; // shape [1, A]
 
             // Value tensor
             Optional<OnnxValue> optV = outputs.get(onnxValueOutputName);
@@ -122,38 +132,30 @@ public class NeuralNetEvaluator implements AutoCloseable {
             }
             OnnxTensor valueTensor = (OnnxTensor) optV.get();
             float[] valueArray = (float[]) valueTensor.getValue();
-            // Access the first (and only) element of the 1D array.
             float value = valueArray[0];
 
             return new InferenceResult(policy, value);
-        } catch (OrtException e) {
+        } catch (Exception e) {
             throw new RuntimeException("ONNX inference failed", e);
         } finally {
-            // Ensure tensors are closed to free native memory
-            if (indicesTensor != null) indicesTensor.close();
-            if (offsetsTensor != null) offsetsTensor.close();
-            if (outputs != null) outputs.close();
-            // The 'inputs' map itself doesn't need explicit closing if its OnnxTensor values are closed.
+            // Free native memory promptly
+            if (indicesTensor != null) try { indicesTensor.close(); } catch (Exception ignore) {}
+            if (outputs != null) try { outputs.close(); } catch (Exception ignore) {}
         }
     }
 
     /**
-     * Performs asynchronous inference using sparse feature indices.
-     * @param activeGlobalIndices Array of active global feature indices for the state.
-     * @return CompletableFuture<InferenceResult> containing policy and value.
+     * Asynchronous wrapper; still serialized due to runLock.
      */
-    public CompletableFuture<InferenceResult> inferAsync(long[] activeGlobalIndices) { // Changed signature
+    public CompletableFuture<InferenceResult> inferAsync(long[] activeGlobalIndices) {
         return CompletableFuture.supplyAsync(() -> infer(activeGlobalIndices), executor);
     }
 
     @Override
     public void close() throws OrtException {
         if (session != null) session.close();
-        // OrtEnvironment.getEnvironment() is a singleton; closing it here might affect other users.
-        // Usually, you close it when the application is shutting down if you obtained it via getEnvironment().
-        // If you created it with OrtEnvironment.create(), then you must close it.
-        // For simplicity, let's assume it's fine if only this class uses it.
-        // env.close(); // Be cautious with closing the shared environment.
+        if (sharedOffsetsTensor != null) try { sharedOffsetsTensor.close(); } catch (Exception ignore) {}
         if (executor != null) executor.shutdown();
+        // Do not close env here; it's a shared singleton returned by getEnvironment().
     }
 }
