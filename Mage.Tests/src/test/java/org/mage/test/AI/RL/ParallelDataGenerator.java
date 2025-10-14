@@ -1,6 +1,9 @@
 package org.mage.test.AI.RL;
 
 import ai.onnxruntime.OrtException;
+import mage.abilities.Ability;
+import mage.abilities.ActivatedAbility;
+import mage.cards.Card;
 import mage.cards.decks.Deck;
 import mage.cards.decks.DeckCardLists;
 import mage.cards.decks.importer.DeckImporter;
@@ -39,10 +42,10 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 40;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
     public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 8;
+    private static final int MAX_CONCURRENT_GAMES = 6;
     // =============================== DECK AND AI SETTINGS ===============================
     private static final String DECK_A = "MTGA_MonoU";
     private static final String DECK_B= "MTGA_MonoR";
@@ -52,7 +55,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // ================================== FILE PATHS ==================================
     private static final String DECK_A_PATH = "decks/" + DECK_A + ".dck";
     private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
-    private static final String MCTS_MODEL_PATH = "models/" + DECK_A + "/Model2.onnx";//was 14.5
     private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";//was 14
     private static final String SEEN_FEATURES_PATH = "seenFeatures.roar";
     private static final String ACTIONS_FILE = "actionMappings/" + DECK_A + "/actions_mapping.ser";
@@ -89,6 +91,36 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         public boolean didPlayerAWin() {
             return didPlayerAWin;
         }
+    }
+
+    /**
+     * note is only priority actions
+     * @param deckName
+     * @throws GameException
+     */
+    public void getAllActionsFromDeckList(String deckName) throws GameException {
+        logger.debug("Loading deck...");
+        DeckCardLists list;
+        if (loadedDecks.containsKey(deckName)) {
+            list = loadedDecks.get(deckName);
+        } else {
+            list = DeckImporter.importDeckFromFile(deckName, true);
+            loadedDecks.put(deckName, list);
+        }
+        Deck deck = Deck.load(list, false, false, loadedCardInfo);
+        logger.debug("Done!");
+        if (deck.getMaindeckCards().size() < 40) {
+            throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
+        }
+        List<Card> sortedCards = new ArrayList<>(deck.getCards());
+        sortedCards.sort(Comparator.comparing(Card::getName));
+        for(Card card : sortedCards) {
+            for(Ability aa : card.getAbilities()) {
+                ActionEncoder.getAction(aa);
+            }
+        }
+
+        //game.loadCards(deck.getCards(), player.getId());
     }
 
     /**
@@ -169,6 +201,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //seed = 751314143315900L; //opponent turn priority order bug
         //seed = -4411935635951101274L; //blocking bug
         //seed = 5401683921170803014L; //unable to find matching
+        //seed = 1405302846091300L; //chooseTarget() and chooseUse() are used
 
 
         StateEncoder threadEncoder = new StateEncoder();

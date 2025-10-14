@@ -42,7 +42,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
 
     public enum NextAction {
-        PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, MAKE_CHOICE
+        PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE
     }
 
     public MCTSPlayer(UUID id) {
@@ -229,6 +229,10 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
+        if(ComputerPlayerMCTS.SIMULATE_ATTACKERS_ONE_AT_A_TIME) {
+            selectAttackersOneAtATime(game, attackingPlayerId);
+            return;
+        }
         if(!actionScript.combatSequence.isEmpty()) {
             Combat combat = actionScript.combatSequence.pollFirst().copy();
             UUID opponentId = game.getCombat().getDefenders().iterator().next();
@@ -247,6 +251,10 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
+        if(ComputerPlayerMCTS.SIMULATE_BLOCKERS_ONE_AT_A_TIME) {
+            selectBlockersOneAtATime(source, game, defendingPlayerId);
+            return;
+        }
         if(!actionScript.combatSequence.isEmpty()) {
             Combat simulatedCombat = actionScript.combatSequence.pollFirst().copy();
             List<CombatGroup> currentGroups = game.getCombat().getGroups();
@@ -359,5 +367,21 @@ public class MCTSPlayer extends ComputerPlayer {
         return super.choose(outcome, choice, game);
     }
 
+    @Override
+    public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
+        if(game.isPaused() || game.checkIfGameIsOver()) {
+            return false;
+        }
+        if(!actionScript.useSequence.isEmpty()) {
+            Boolean chosen =  actionScript.useSequence.pollFirst();
+            getPlayerHistory().useSequence.add(chosen);
+            if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried use: %s ", chosen));
+            return chosen;
+        }
+        game.pause();
+        lastToAct = true;
+        nextAction = NextAction.CHOOSE_USE;
+        return false;
+    }
 }
 

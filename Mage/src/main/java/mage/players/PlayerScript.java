@@ -14,21 +14,27 @@ public class PlayerScript {
     public ArrayDeque<Set<UUID>> targetSequence;
     //for discrete choices
     public ArrayDeque<String> choiceSequence;
+    //binary decisions
+    public ArrayDeque<Boolean> useSequence;
     //for priority abilities
     public ArrayDeque<Ability> prioritySequence;
     //for combat decisions
     public ArrayDeque<Combat> combatSequence;
 
 
+
     public PlayerScript() {
         prioritySequence = new ArrayDeque<>();
         combatSequence = new ArrayDeque<>();
+        useSequence = new ArrayDeque<>();
         targetSequence = new ArrayDeque<>();
         choiceSequence = new ArrayDeque<>();
+
     }
-    public PlayerScript(List<Ability> prio, List<Combat> com, List<Set<UUID>> target, List<String> choice) {
+    public PlayerScript(List<Ability> prio, List<Combat> com, List<Set<UUID>> target, List<String> choice, List<Boolean> use) {
         prioritySequence = new ArrayDeque<>(prio);
         combatSequence = new ArrayDeque<>(com);
+        useSequence = new ArrayDeque<>(use);
         targetSequence = new ArrayDeque<>(target);
         choiceSequence = new ArrayDeque<>(choice);
     }
@@ -36,6 +42,7 @@ public class PlayerScript {
     public PlayerScript(PlayerScript playerScript) {
         prioritySequence = new ArrayDeque<>(playerScript.prioritySequence);
         combatSequence = new  ArrayDeque<>(playerScript.combatSequence);
+        useSequence = new ArrayDeque<>(playerScript.useSequence);
         targetSequence = new ArrayDeque<>(playerScript.targetSequence);
         choiceSequence = new ArrayDeque<>(playerScript.choiceSequence);
     }
@@ -43,13 +50,16 @@ public class PlayerScript {
     public PlayerScript append(PlayerScript playerScript) {
         this.targetSequence.addAll(playerScript.targetSequence);
         this.choiceSequence.addAll(playerScript.choiceSequence);
+        this.useSequence.addAll(playerScript.useSequence);
         this.prioritySequence.addAll(playerScript.prioritySequence);
         this.combatSequence.addAll(playerScript.combatSequence);
+
         return this;
     }
     public void clear() {
         this.targetSequence.clear();
         this.choiceSequence.clear();
+        this.useSequence.clear();
         this.prioritySequence.clear();
         this.combatSequence.clear();
     }
@@ -61,11 +71,13 @@ public class PlayerScript {
 
         return dequeEquals(targetSequence, that.targetSequence, Objects::equals)
                 && dequeEquals(choiceSequence,  that.choiceSequence,  Objects::equals)
+                && dequeEquals(useSequence, that.useSequence, Objects::equals)
                 // Use a stable key for Ability/Combat instead of reference equality
                 && dequeEquals(prioritySequence, that.prioritySequence,
                 (a,b) -> Objects.equals(abilityKey(a), abilityKey(b)))
                 && dequeEquals(combatSequence,   that.combatSequence,
                 (a,b) -> Objects.equals(combatKey(a), combatKey(b)));
+
     }
 
     private static <T> boolean dequeEquals(Deque<T> a, Deque<T> b, java.util.function.BiPredicate<T,T> eq) {
@@ -94,6 +106,7 @@ public class PlayerScript {
         int h = 1;
         h = 31*h + hashDeque(targetSequence, Objects::hashCode);
         h = 31*h + hashDeque(choiceSequence,  Objects::hashCode);
+        h = 31*h + hashDeque(useSequence,  Objects::hashCode);
         h = 31*h + hashDeque(prioritySequence, ab -> Objects.hash(abilityKey(ab)));
         h = 31*h + hashDeque(combatSequence,   cb -> Objects.hash(combatKey(cb)));
         return h;
@@ -109,6 +122,7 @@ public class PlayerScript {
     public String toString() {
         return "PlayerScript{targets=" + targetSequence
                 + ", choices=" + choiceSequence
+                + ", uses=" + useSequence
                 + ", priority=" + prioritySequence
                 + ", combat=" + combatSequence + "}";
     }

@@ -38,6 +38,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final boolean USE_MULTIPLE_THREADS = true;
     public static boolean NO_NOISE = false;
     public static boolean NO_POLICY = false;
+    public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
+    public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     public static double POLICY_PRIOR_TEMP = 1.5;
 
@@ -162,6 +164,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
+        if(ComputerPlayerMCTS.SIMULATE_ATTACKERS_ONE_AT_A_TIME) {
+            selectAttackersOneAtATime(game, attackingPlayerId);
+            return;
+        }
         StringBuilder sb = new StringBuilder();
         sb.append(game.getTurn().getValue(game.getTurnNum())).append(" player ").append(name).append(" attacking with: ");
         getNextAction(game, NextAction.SELECT_ATTACKERS);
@@ -178,6 +184,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
+        if(ComputerPlayerMCTS.SIMULATE_BLOCKERS_ONE_AT_A_TIME) {
+            selectBlockersOneAtATime(source, game, defendingPlayerId);
+            return;
+        }
         StringBuilder sb = new StringBuilder();
         sb.append(game.getTurn().getValue(game.getTurnNum())).append(" player ").append(name).append(" blocking: ");
         getNextAction(game, NextAction.SELECT_BLOCKERS);
@@ -263,6 +273,16 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         choice.setChoice(chosen);
 
         return true;
+    }
+    @Override
+    public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
+        logger.info("base choose use " + message);
+
+        getNextAction(game, NextAction.CHOOSE_USE);
+        Boolean chosen = root.useAction;
+        logger.info("use " + message + ": " + chosen);
+        getPlayerHistory().useSequence.add(chosen);
+        return chosen;
     }
     protected double totalThinkTime = 0;
     protected long totalSimulations = 0;

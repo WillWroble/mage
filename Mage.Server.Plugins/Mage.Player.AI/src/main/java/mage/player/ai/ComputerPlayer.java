@@ -2135,6 +2135,24 @@ public class ComputerPlayer extends PlayerImpl {
         }
     }
 
+    /**
+     * this is a special version of Select Attackers that breaks it down into a sequence of binary decisions to better utilize MCTS AI for large attacks
+     * @param game
+     * @param attackingPlayerId
+     */
+    public void selectAttackersOneAtATime(Game game, UUID attackingPlayerId) {
+        log.debug("selectAttackersOneAtATime");
+        UUID opponentId = game.getCombat().getDefenders().iterator().next();
+        List<Permanent> availableAttackers = getAvailableAttackers(game);
+        availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
+        for(Permanent attacker : availableAttackers) {
+            boolean willAttack = chooseUse(null, "attack with: " + attacker.getName() + "?", null, game);
+            if(willAttack) {
+                this.declareAttacker(attacker.getId(), opponentId, game, false);
+            }
+        }
+    }
+
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         log.debug("selectBlockers");
@@ -2147,6 +2165,28 @@ public class ComputerPlayer extends PlayerImpl {
         for (int i = 0; i < groups.size(); i++) {
             for (CreatureSimulator creature : sim.groups.get(i).blockers) {
                 groups.get(i).addBlocker(creature.id, playerId, game);
+            }
+        }
+    }
+
+    /**
+     * for each possible blocker, decides: should I block with this creature? (chooseUse) then decides which attacker to block (chooseTarget)
+     * @param source
+     * @param game
+     * @param defendingPlayerId
+     */
+    public void selectBlockersOneAtATime(Ability source, Game game, UUID defendingPlayerId) {
+        log.debug("selectBlockersOneAtATime");
+        List<Permanent> blockers = getAvailableBlockers(game);
+        blockers.sort(Comparator.comparing(Permanent::getId));
+        for(Permanent blocker : blockers) {
+            boolean willBlock = chooseUse(null, "block with: " + blocker.getName() + "?", null, game);
+            if(willBlock) {//now choose which creature to block
+                Target attackerTarget = new TargetAttackingCreature();
+                chooseTarget(Outcome.Neutral, attackerTarget, null, game);
+                UUID attackerId = attackerTarget.getFirstTarget();
+                declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
+                //this.declareAttacker(attacker.getId(), opponentId, game, false);
             }
         }
     }

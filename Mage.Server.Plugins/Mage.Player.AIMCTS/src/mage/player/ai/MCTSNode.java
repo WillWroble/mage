@@ -49,6 +49,7 @@ public class MCTSNode {
     public Ability action;
     public Set<UUID>chooseTargetAction;
     public String choiceAction;
+    public Boolean useAction;
     public Combat combat;
 
     private String stateValue;
@@ -236,7 +237,7 @@ public class MCTSNode {
                 MCTSNode node = new MCTSNode(this, playable);
                 children.add(node);
             }
-        } else if(nextAction == MCTSPlayer.NextAction.SELECT_ATTACKERS) {
+        } else if(nextAction == MCTSPlayer.NextAction.SELECT_ATTACKERS) { //choose each attacker as its own seperate decsi
             List<List<UUID>> attacks = player.getAttacks(game);
             UUID defenderId = game.getOpponents(player.getId()).iterator().next();
             for (List<UUID> attack: attacks) {
@@ -286,6 +287,15 @@ public class MCTSNode {
                 node.choiceAction = choice;
                 children.add(node);
             }
+        } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
+            MCTSNode nodeTrue = new MCTSNode(this, action);
+            MCTSNode nodeFalse = new MCTSNode(this, action);
+            nodeTrue.useAction = true;
+            nodeFalse.useAction = false;
+            children.add(nodeTrue);
+            children.add(nodeFalse);
+            logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: true");
+            logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: false");
         } else {
             logger.error("unknown nextAction");
         }
@@ -410,6 +420,8 @@ public class MCTSNode {
                     }
                 } else if(node.choiceAction != null) {
                     sb.append(String.format("[%s score: %.3f count: %d] ", node.choiceAction, node.getScoreRatio(), node.visits));
+                } else if(node.useAction != null) {
+                    sb.append(String.format("[%s score: %.3f count: %d] ", node.useAction, node.getScoreRatio(), node.visits));
                 } else {
                     sb.append(String.format("[%s score: %.3f count: %d] ", node.action, node.getScoreRatio(), node.visits));
                 }
@@ -773,6 +785,12 @@ public class MCTSNode {
                 myScript.choiceSequence.add(choiceAction);
             } else {
                 opponentScript.choiceSequence.add(choiceAction);
+            }
+        } else if(useAction != null) {
+            if(parent.playerId.equals(targetPlayer)) {
+                myScript.useSequence.add(useAction);
+            } else {
+                opponentScript.useSequence.add(useAction);
             }
         } else if(combat != null) {
             if(parent.playerId.equals(targetPlayer)) {
