@@ -130,6 +130,5 @@ public class MCTS2Tests extends CardTestPlayerBaseAI {
     @After
     public void show_data() {
         System.out.printf("USING SEED: %d\n", seed);
-        System.out.printf("FINAL ACTION VECTOR SIZE: %d\n", ActionEncoder.indexCount);
     }
 }

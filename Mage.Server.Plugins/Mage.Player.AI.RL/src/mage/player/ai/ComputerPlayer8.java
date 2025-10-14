@@ -119,7 +119,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     }
     double [] getActionVec(Ability a) {
         double[] out = new double[128];
-        out[ActionEncoder.getAction(a)] = 1.0;
+        out[ActionEncoder.getActionIndex(a, false)] = 1.0;
         return out;
     }
     @Override

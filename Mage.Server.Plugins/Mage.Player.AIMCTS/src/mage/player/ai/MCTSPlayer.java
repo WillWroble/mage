@@ -330,6 +330,17 @@ public class MCTSPlayer extends ComputerPlayer {
         if(chooseTargetOptions.isEmpty()) {
             return false; //fizzle
         }
+        if(chooseTargetOptions.size() == 1) {//skip when one option available
+            Set<UUID> onlyOption = chooseTargetOptions.iterator().next();
+            for (UUID id : onlyOption) {
+                if (!target.canTarget(getId(), id, source, game)) {
+                    logger.error("target choice failed - skipping");
+                    continue;
+                }
+                target.addTarget(id, source, game);
+            }
+            return true;
+        }
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;

@@ -25,7 +25,7 @@ import java.util.UUID;
  */
 public class CreateTokenEffect extends OneShotEffect {
 
-    private final List<Token> tokens = new ArrayList<>();
+    public final List<Token> tokens = new ArrayList<>();
     private final DynamicValue amount;
     private final boolean tapped;
     private final boolean attacking;

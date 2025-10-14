@@ -1,6 +1,5 @@
 package mage.player.ai;
 
-import ai.onnxruntime.OrtException;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
@@ -214,7 +213,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Arrays.fill(out, 0.0);
         for (MCTSNode child : root.children) {
             if (child.getAction() != null) {
-                int idx = ActionEncoder.getAction(child.getAction());
+                int idx = ActionEncoder.getActionIndex(child.getAction(), true);
                 int v = child.visits;//un normalized counts
                 out[idx%128] += v;
             }
@@ -228,9 +227,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if (child.getAction() != null) {
                 int idx = -1;
                 if(nextAction == NextAction.CHOOSE_TARGET) {
-                    idx = ActionEncoder.getMicroAction(game.getObject(child.chooseTargetAction.iterator().next()).getName());
+                    idx = ActionEncoder.getTargetIndex(game.getObject(child.chooseTargetAction.iterator().next()).getName());
                 } else if(nextAction == NextAction.MAKE_CHOICE) {
-                    idx = ActionEncoder.getMicroAction(child.choiceAction);
+                    idx = ActionEncoder.getTargetIndex(child.choiceAction);
                 } else {
                     logger.error("not a recognized micro action");
                 }

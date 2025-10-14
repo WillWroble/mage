@@ -1,8 +1,9 @@
 package org.mage.test.AI.RL;
 
-import ai.onnxruntime.OrtException;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
+import mage.abilities.effects.Effect;
+import mage.abilities.effects.common.CreateTokenEffect;
 import mage.cards.Card;
 import mage.cards.decks.Deck;
 import mage.cards.decks.DeckCardLists;
@@ -12,6 +13,7 @@ import mage.game.*;
 import mage.game.match.Match;
 import mage.game.match.MatchOptions;
 import mage.game.mulligan.MulliganType;
+import mage.game.permanent.token.Token;
 import mage.player.ai.*;
 import mage.util.RandomUtil;
 import org.junit.Test;
@@ -30,7 +32,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.nio.file.StandardOpenOption.READ;
-import static java.nio.file.StandardOpenOption.WRITE;
 
 
 /**
@@ -42,7 +43,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 50;
     public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
     private static final int MAX_CONCURRENT_GAMES = 6;
@@ -57,15 +58,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
     private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";//was 14
     private static final String SEEN_FEATURES_PATH = "seenFeatures.roar";
-    private static final String ACTIONS_FILE = "actionMappings/" + DECK_A + "/actions_mapping.ser";
-    private static final String MICRO_ACTIONS_FILE = "micro_actions_mapping.ser";
     public static String TRAIN_OUT_FILE = "training.bin";
     public static String TEST_OUT_FILE = "testing.bin";
     // ================================== GLOBAL FIELDS ==================================
     //private Features finalFeatures;
     private RoaringBitmap seenFeatures = new RoaringBitmap();
     private int initialRawSize;
-    private int previousRawSize;
     private final AtomicInteger gameCount = new AtomicInteger(0);
     private final AtomicInteger winCount = new AtomicInteger(0);
     //private NeuralNetEvaluator neuralNetEvaluator;
@@ -98,7 +96,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
      * @param deckName
      * @throws GameException
      */
-    public void getAllActionsFromDeckList(String deckName) throws GameException {
+    public void createAllActionsFromDeckList(String deckName, Map<String, Integer> actionMap) throws GameException {
         logger.debug("Loading deck...");
         DeckCardLists list;
         if (loadedDecks.containsKey(deckName)) {
@@ -112,31 +110,87 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         if (deck.getMaindeckCards().size() < 40) {
             throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
         }
+        //pass is always 0
+        actionMap.put("Pass", 0);
+        int index = 1;
         List<Card> sortedCards = new ArrayList<>(deck.getCards());
         sortedCards.sort(Comparator.comparing(Card::getName));
         for(Card card : sortedCards) {
-            for(Ability aa : card.getAbilities()) {
-                ActionEncoder.getAction(aa);
+            List<Ability> sortedAbilities = new ArrayList<>(card.getAbilities());
+            sortedAbilities.sort(Comparator.comparing(Ability::toString));
+            for(Ability aa : sortedAbilities) {
+                if(aa instanceof ActivatedAbility) {
+                    String name = aa.toString();
+                    if (!actionMap.containsKey(name)) {
+                        actionMap.put(name, index++);
+                        logger.info("mapping " + name + " to " + (index - 1));
+                    }
+                }
             }
         }
-
-        //game.loadCards(deck.getCards(), player.getId());
+    }
+    public void createAllTargetsFromDeckLists(String deckNameA, String deckNameB) throws GameException {
+        String[] decks = new String[] {deckNameA, deckNameB};
+        ActionEncoder.targetMap.put("PlayerA", 0);
+        ActionEncoder.targetMap.put("PlayerB", 1);
+        int index = 2;
+        logger.debug("Loading decks...");
+        for(String deckName : decks) {
+            DeckCardLists list;
+            if (loadedDecks.containsKey(deckName)) {
+                list = loadedDecks.get(deckName);
+            } else {
+                list = DeckImporter.importDeckFromFile(deckName, true);
+                loadedDecks.put(deckName, list);
+            }
+            Deck deck = Deck.load(list, false, false, loadedCardInfo);
+            logger.debug("Done!");
+            if (deck.getMaindeckCards().size() < 40) {
+                throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
+            }
+            List<Card> sortedCards = new ArrayList<>(deck.getCards());
+            sortedCards.sort(Comparator.comparing(Card::getName));
+            for (Card card : sortedCards) {
+                if(!ActionEncoder.targetMap.containsKey(card.getName())) {
+                    ActionEncoder.targetMap.put(card.getName(), index++);
+                    logger.info("mapping " + card.getName() + " to " + (index - 1));
+                }
+                //check for tokens
+                List<Ability> sortedAbilities = new ArrayList<>(card.getAbilities());
+                sortedAbilities.sort(Comparator.comparing(Ability::toString));
+                for (Ability ta : sortedAbilities) {
+                    List<Effect>  sortedEffects = new ArrayList<>(ta.getEffects());
+                    sortedEffects.sort(Comparator.comparing(Effect::toString));
+                    for (Effect effect : sortedEffects) {
+                        if (effect instanceof CreateTokenEffect) {
+                            CreateTokenEffect createTokenEffect = (CreateTokenEffect) effect;
+                            List<Token> sortedTokens = new ArrayList<>(createTokenEffect.tokens);
+                            sortedTokens.sort(Comparator.comparing(Token::getName));
+                            for (Token token : sortedTokens) {
+                                String name = token.getName();
+                                if (!ActionEncoder.targetMap.containsKey(token.getName())) {
+                                    ActionEncoder.targetMap.put(name, index++);
+                                    logger.info("mapping " + name + " to " + (index - 1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
      * run once
      */
     private void loadAllFiles() {
+        //create the action map from the provided decklists
         try {
-            // Load mappings so the encoder works correctly
-            //finalFeatures = Features.loadMapping(MAPPING_FILE);
-            ActionEncoder.actionMap = (Map<String, Integer>) loadObject(ACTIONS_FILE);
-            ActionEncoder.microActionMap = (Map<String, Integer>) loadObject(MICRO_ACTIONS_FILE);
-            ActionEncoder.indexCount = ActionEncoder.actionMap.size();
-            ActionEncoder.microIndexCount = ActionEncoder.microActionMap.size();
-        } catch (IOException | ClassNotFoundException e) {
-            logger.error("Warning: Failed to load persistent mappings");
-            ActionEncoder.actionMap = new HashMap<>(); // Ensure it's not null
+            createAllActionsFromDeckList(DECK_A_PATH, ActionEncoder.playerActionMap);
+            createAllActionsFromDeckList(DECK_B_PATH, ActionEncoder.opponentActionMap);
+            createAllTargetsFromDeckLists(DECK_A_PATH, DECK_B_PATH);
+        } catch (GameException e) {
+            logger.error("Could not load Deck files!", e);
         }
         try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
             MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
@@ -202,6 +256,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //seed = -4411935635951101274L; //blocking bug
         //seed = 5401683921170803014L; //unable to find matching
         //seed = 1405302846091300L; //chooseTarget() and chooseUse() are used
+        seed = 1489032704055400L;
 
 
         StateEncoder threadEncoder = new StateEncoder();
@@ -324,22 +379,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //print_labeled_states(trainingStates);
         logger.info("Processing " + allStates.size() + " states.");
         logger.info("Initial feature count: " + initialRawSize);
-        //Set<Integer> oldIgnoreList = new HashSet<>(finalFeatures.ignoreList);
-        //Set<Integer> newIgnoreListA = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, 0, initialRawSize));
-        //Set<Integer> newIgnoreListB = new HashSet<>(FeatureMerger.computeIgnoreListFromLS(allStates, initialRawSize, finalFeatures.localIndexCount.get()));
-        //logger.info("Computed " + newIgnoreListB.size() + " features to ignore from this batch.");
-        //intersect
-        //newIgnoreListA.retainAll(oldIgnoreList);
-        //logger.info("Computed " + (oldIgnoreList.size()-newIgnoreListA.size()) + " features to unignore");
-        //union
-        //newIgnoreListA.addAll(newIgnoreListB);
-        //finalFeatures.ignoreList = newIgnoreListA;
-        //logger.info("Final combined ignore list size: " + finalFeatures.ignoreList.size());
-
-        //logger.info("Compressing all states...");
-        //for (LabeledState ls : allStates) {
-        //ls.compress(finalFeatures.ignoreList);
-        //}
         logger.info("Final unique feature count from dataset: " + LabeledState.getUniqueFeaturesFromBatch(allStates));
         logger.info("Global unique feature count: " + seenFeatures.getCardinality());
         logger.info("Features added: " + (seenFeatures.getCardinality() - initialRawSize));
@@ -441,33 +480,11 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         return results;
 
     }
-
-    //region Helper Methods
-    public Set<Integer> combine_ignore_lists(Set<Integer> oldList, Set<Integer> newList) {
-        Set<Integer> updatedIgnoreList = new HashSet<>();
-        int boundaryForOldFeatures = previousRawSize;
-
-        for (int i = 0; i < boundaryForOldFeatures; i++) {
-            if (oldList.contains(i) && newList.contains(i)) {
-                updatedIgnoreList.add(i);
-            }
-        }
-        for (Integer featureIndexInNewList : newList) {
-            if (featureIndexInNewList >= boundaryForOldFeatures) {
-                updatedIgnoreList.add(featureIndexInNewList);
-            }
-        }
-        return updatedIgnoreList;
-    }
     public void persistData() {
         try {
-            saveObject(new HashMap<>(ActionEncoder.actionMap), ACTIONS_FILE);
-            logger.info("Persisted action mapping to: " + ACTIONS_FILE);
-            saveObject(new HashMap<>(ActionEncoder.microActionMap), MICRO_ACTIONS_FILE);
-            logger.info("Persisted micro action mapping to: " +  MICRO_ACTIONS_FILE);
             saveRoaring(seenFeatures, SEEN_FEATURES_PATH);
             logger.info("Persisted seen feature set to: "  + SEEN_FEATURES_PATH);
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -485,12 +502,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             e.printStackTrace();
         }
     }
-
-    private static void saveObject(Object obj, String fileName) throws IOException {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(fileName))) {
-            out.writeObject(obj);
-        }
-    }
     void saveRoaring(RoaringBitmap rb, String filePath) {
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filePath))) {
             rb.serialize(out);
@@ -498,13 +509,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             e.printStackTrace();
         }
     }
-
-    private static Object loadObject(String fileName) throws IOException, ClassNotFoundException {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(fileName))) {
-            return in.readObject();
-        }
-    }
-
     //endregion
     @Override
     public List<String> getFullSimulatedPlayers() {

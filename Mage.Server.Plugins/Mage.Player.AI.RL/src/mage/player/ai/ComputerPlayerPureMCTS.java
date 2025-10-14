@@ -179,7 +179,7 @@ public class ComputerPlayerPureMCTS extends ComputerPlayerMCTS {
         // 1) accumulate visits^(1/tau)
         for (MCTSNode child : root.children) {
             if (child.getAction() != null) {
-                int idx = ActionEncoder.getAction(child.getAction());
+                int idx = ActionEncoder.getActionIndex(child.getAction(), true);
                 double v = child.visits;
                 // apply temperature
                 double vt = Math.pow(v, 1.0 / tau);

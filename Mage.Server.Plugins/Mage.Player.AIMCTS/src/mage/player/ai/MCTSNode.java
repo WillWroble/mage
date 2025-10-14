@@ -5,7 +5,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import mage.constants.Zone;
 import mage.abilities.Ability;
-import mage.abilities.common.PassAbility;
 import mage.cards.Card;
 import mage.game.Game;
 import mage.game.GameState;
@@ -325,11 +324,11 @@ public class MCTSNode {
                     continue;
                 int idx = -1;//ActionEncoder.getAction(node.getAction());
                 if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-                    idx = ActionEncoder.getMicroAction(game.getObject(node.chooseTargetAction.iterator().next()).getName());
+                    idx = ActionEncoder.getTargetIndex(game.getObject(node.chooseTargetAction.iterator().next()).getName());
                 } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
-                    idx = ActionEncoder.getMicroAction(node.choiceAction);
+                    idx = ActionEncoder.getTargetIndex(node.choiceAction);
                 } else {
-                    idx = ActionEncoder.getAction(node.getAction());
+                    idx = ActionEncoder.getActionIndex(node.getAction(), playerId.equals(targetPlayer));
                 }
                 maxLogit = Math.max(maxLogit, policy[idx]);
             }
@@ -341,11 +340,11 @@ public class MCTSNode {
                     continue;
                 int idx = -1;//ActionEncoder.getAction(node.action);
                 if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-                    idx = ActionEncoder.getMicroAction(game.getObject(node.chooseTargetAction.iterator().next()).getName());
+                    idx = ActionEncoder.getTargetIndex(game.getObject(node.chooseTargetAction.iterator().next()).getName());
                 } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
-                    idx = ActionEncoder.getMicroAction(node.choiceAction);
+                    idx = ActionEncoder.getTargetIndex(node.choiceAction);
                 } else {
-                    idx = ActionEncoder.getAction(node.getAction());
+                    idx = ActionEncoder.getActionIndex(node.getAction(), playerId.equals(targetPlayer));
                 }
                 double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
                 node.prior = raw;
