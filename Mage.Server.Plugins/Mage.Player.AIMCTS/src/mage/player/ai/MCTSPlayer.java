@@ -35,6 +35,8 @@ public class MCTSPlayer extends ComputerPlayer {
 
     //the script of actions this dummy player is supposed to follow to catch up to the latest decision
     public PlayerScript actionScript = new PlayerScript();
+    //additional text for state encoder that describes the decision the player is currently making
+    public String decisionText;
 
 
 
@@ -220,6 +222,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
         }
+        decisionText = "priority";
         game.pause();
         lastToAct = true;
         nextAction = NextAction.PRIORITY;
@@ -243,6 +246,7 @@ public class MCTSPlayer extends ComputerPlayer {
             getPlayerHistory().combatSequence.add(game.getCombat().copy());
             return;
         }
+        decisionText = "select attackers";
         game.pause();
         lastToAct = true;
         nextAction = NextAction.SELECT_ATTACKERS;
@@ -277,6 +281,7 @@ public class MCTSPlayer extends ComputerPlayer {
             getPlayerHistory().combatSequence.add(game.getCombat().copy());
             return;
         }
+        decisionText = "select blockers";
         game.pause();
         lastToAct = true;
         nextAction = NextAction.SELECT_BLOCKERS;
@@ -305,12 +310,22 @@ public class MCTSPlayer extends ComputerPlayer {
         //for choosing targets of triggered abilities
         if (PRINT_CHOOSE_DIALOGUES)
             logger.debug("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
+        Set<UUID> possible = target.possibleTargets(getId(), game);
+        if(possible.size() == 1) {
+            //if only one possible just choose it and leave
+            target.addTarget(possible.iterator().next(), source, game);
+            return true;
+        }
         if (!actionScript.targetSequence.isEmpty()) {
             StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
             Set<UUID> targets = actionScript.targetSequence.pollFirst();
             for (UUID id : targets) {
                 if (!target.canTarget(getId(), id, source, game)) {
-                    logger.error("target choice failed - skipping");
+                    logger.error("target choice " + game.getObject(id).toString() + " failed - skipping.");
+                    logger.error("possible targets: ");
+                    for (UUID tid : target.possibleTargets(getId(), game)) {
+                        logger.error(game.getObject(tid).toString());
+                    }
                     continue;
                 }
                 target.addTarget(id, source, game);
@@ -324,23 +339,12 @@ public class MCTSPlayer extends ComputerPlayer {
             getPlayerHistory().targetSequence.add(targets);
             return true;
         }
-        Set<UUID> possible = target.possibleTargets(getId(), game);
         chooseTargetOptions.clear();
         getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
         if(chooseTargetOptions.isEmpty()) {
             return false; //fizzle
         }
-        if(chooseTargetOptions.size() == 1) {//skip when one option available
-            Set<UUID> onlyOption = chooseTargetOptions.iterator().next();
-            for (UUID id : onlyOption) {
-                if (!target.canTarget(getId(), id, source, game)) {
-                    logger.error("target choice failed - skipping");
-                    continue;
-                }
-                target.addTarget(id, source, game);
-            }
-            return true;
-        }
+        decisionText = source.toString();
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;
@@ -372,6 +376,7 @@ public class MCTSPlayer extends ComputerPlayer {
         if(choiceOptions.isEmpty()) {
             return false; //fizzle
         }
+        decisionText = choice.toString();
         game.pause();
         lastToAct = true;
         nextAction = NextAction.MAKE_CHOICE;
@@ -389,6 +394,7 @@ public class MCTSPlayer extends ComputerPlayer {
             if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried use: %s ", chosen));
             return chosen;
         }
+        decisionText = message;
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_USE;

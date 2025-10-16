@@ -35,8 +35,8 @@ public class SimulateMCTS extends ParallelDataGenerator {
             testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
             return testPlayer;
         } else {
-            TestComputerPlayer7 t7 = new TestComputerPlayer7(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(t7);
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestPlayer testPlayer = new TestPlayer(t8);
             testPlayer.setAIPlayer(true);
             return testPlayer;
         }

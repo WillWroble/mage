@@ -1,7 +1,6 @@
 package mage.player.ai;
 
 import java.io.*;
-import java.util.BitSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -27,12 +26,15 @@ public class LabeledState implements Serializable {
      * @param actionVec    vec of the action distribution
      * @param label        scalar outcome label
      */
-    public LabeledState(Set<Integer> stateIndices, double[] actionVec, double label) {
+    public LabeledState(Set<Integer> stateIndices, int[] actionVec, double label) {
         // clone to ensure immutability
-        this.stateVector = stateIndices.stream()                       // 1. Get a Stream<Integer>
-                .mapToInt(Integer::intValue)    // 2. Convert to IntStream (unboxes Integer to int)
+        this.stateVector = stateIndices.stream()
+                .mapToInt(Integer::intValue)
                 .toArray();
-        this.actionVector = actionVec;
+        this.actionVector= new double[actionVec.length];
+        for (int i = 0; i < actionVec.length; i++) {
+            this.actionVector[i] = (double) actionVec[i]; // Explicit cast
+        }
         this.resultLabel = label;
     }
     public void compress(Set<Integer> ignoreList) {

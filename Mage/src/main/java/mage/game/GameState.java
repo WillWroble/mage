@@ -35,6 +35,7 @@ import mage.players.Players;
 import mage.target.Target;
 import mage.util.CardUtil;
 import mage.util.Copyable;
+import mage.util.RandomUtil;
 import mage.util.ThreadLocalStringBuilder;
 import mage.watchers.Watcher;
 import mage.watchers.Watchers;
@@ -71,6 +72,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     private final Map<UUID, LookedAt> lookedAt = new HashMap<>();
     private final Revealed companion;
 
+    public Random gameLocalRandom = new Random(); //for deterministic UUID generation
     private SpecialActions specialActions;
     private Watchers watchers;
     private Turn turn;
@@ -139,6 +141,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     protected GameState(final GameState state) {
+        this.gameLocalRandom = RandomUtil.deepCopy(state.gameLocalRandom);
         this.players = state.players.copy();
         this.playerList = state.playerList.copy();
         this.choosingPlayerId = state.choosingPlayerId;

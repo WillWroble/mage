@@ -830,7 +830,7 @@ public abstract class PlayerImpl implements Player, Serializable {
                         + (this.maxHandSize == 1
                         ? " hand card" : " hand cards"));
             }
-            discard(hand.size() - this.maxHandSize, false, false, null, game);
+            discard(hand.size() - this.maxHandSize, false, false, new DiscardToHandsizeAbility(), game);
         }
     }
 

@@ -43,7 +43,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 50;
+    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
     public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
     private static final int MAX_GAME_TURNS = 50;
     private static final int MAX_CONCURRENT_GAMES = 6;
@@ -190,7 +190,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             createAllActionsFromDeckList(DECK_B_PATH, ActionEncoder.opponentActionMap);
             createAllTargetsFromDeckLists(DECK_A_PATH, DECK_B_PATH);
         } catch (GameException e) {
-            logger.error("Could not load Deck files!", e);
+            logger.error("could not load Deck files!", e);
         }
         try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
             MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
@@ -203,7 +203,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
             ImmutableRoaringBitmap imm = new ImmutableRoaringBitmap(mbb);
             seenFeatures = imm.toRoaringBitmap();
-            logger.info("global seen features list: " + seenFeatures);
+            logger.info("global seen features list size: " + seenFeatures.getCardinality());
         } catch (IOException e) {
             logger.warn("external seen feature list not found");
         }
@@ -256,7 +256,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //seed = -4411935635951101274L; //blocking bug
         //seed = 5401683921170803014L; //unable to find matching
         //seed = 1405302846091300L; //chooseTarget() and chooseUse() are used
-        seed = 1489032704055400L;
+        //seed = 1489032704055400L; //illegal block targets
 
 
         StateEncoder threadEncoder = new StateEncoder();
@@ -438,9 +438,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             synchronized (seenFeatures) {
                 seenFeatures.or(threadEncoder.seenFeatures);
             }
-            //finalFeatures.merge(threadEncoder.getFeatures(), newStateVectors);
-            //update generated dataset with remapped one
-            //threadEncoder.stateVectors = newStateVectors;
             if(playerA.hasWon()) winCount.incrementAndGet();
             logger.info("Game #" + gameCount.incrementAndGet() + " completed successfully");
             logger.info("Current WR: " + winCount.get()*1.0/gameCount.get());
@@ -458,8 +455,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluator;//shared reference
         } else if (player.getComputerPlayer() instanceof ComputerPlayer8) {
             ((ComputerPlayer8) player.getComputerPlayer()).setEncoder(encoder);
-        } else if (player.getComputerPlayer() instanceof ComputerPlayerPureMCTS) {
-            ((ComputerPlayerPureMCTS) player.getComputerPlayer()).setEncoder(encoder);
+        } else  {
+            logger.warn("unexpected player type" + player.getComputerPlayer().getClass().getName());
         }
     }
 
@@ -470,7 +467,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
         for (int i = 0; i < N; i++) {
             Set<Integer> state = encoder.stateVectors.get(i);
-            double[] action = encoder.actionVectors.get(i);
+            int[] action = encoder.actionVectors.get(i);
             double normScore = encoder.stateScores.get(i);
             double terminal = didPlayerAWin ? +1.0 : -1.0;
             double discount = Math.pow(DISCOUNT_FACTOR, (N - i - 1));

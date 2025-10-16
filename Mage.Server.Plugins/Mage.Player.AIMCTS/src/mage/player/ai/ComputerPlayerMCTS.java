@@ -32,27 +32,30 @@ import java.util.stream.Collectors;
  */
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
+    //these aren't used for RL, see ComputerPlayerMCTS2
     protected static final int THINK_MIN_RATIO = 100; //was originally 40
     protected static final int THINK_MAX_RATIO = 140; //was 80
     protected static final double THINK_TIME_MULTIPLIER = 1.0;
     protected static final boolean USE_MULTIPLE_THREADS = true;
+    //these flags should be set in ParallelDataGenerator.java
     public static boolean NO_NOISE = false;
     public static boolean NO_POLICY = false;
+    //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)
     public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
     public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
+    //mcts tree doesn't save states if true; makes search slower but more memory efficient
+    public static boolean USE_STATELESS_NODES =  false;
+    //dirichlet noise is applied once to the priors of the root node; this represents how much of those priors should be noise
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
+    //how spiky the dirichlet noise will be
     public static double POLICY_PRIOR_TEMP = 1.5;
 
     public transient MCTSNode root;
     protected int maxThinkTime;
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
     public int poolSize = 2;
-    //public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
-    //public ArrayList<Set<UUID>> chosenChooseTargetActions = new ArrayList<>();
     protected transient ExecutorService threadPoolSimulations = null;
-    //public static Game macroState;
-    //public static UUID macroPlayerId;
-    //public static Ability lastAction;
+
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
         human = false;
@@ -149,10 +152,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                     newRoot = null;
                 } else {
                     newRoot.emancipate();
-                    //even if no new tree is needed we still need to establish this game as the new anchor for MCTS
-                    newRoot.rootGame = createMCTSGame(game.getLastPriority());;
-                    newRoot.rootState = newRoot.rootGame.getState().copy();
-                    newRoot.rootRandom = RandomUtil.deepCopy(newRoot.rootGame.getLocalRandom());
+                    if(USE_STATELESS_NODES) { //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
+                        newRoot.rootGame = createMCTSGame(game.getLastPriority());
+                        newRoot.rootState = newRoot.rootGame.getState().copy();
+                    }
                 }
             } else {
                 logger.info("unable to find matching state");

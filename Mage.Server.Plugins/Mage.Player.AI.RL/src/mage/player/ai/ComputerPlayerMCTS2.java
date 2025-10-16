@@ -20,17 +20,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
     private transient StateEncoder encoder = null;
-    private transient ReplayBuffer buffer = null;
-    private static final int MAX_MCTS_CYCLES = 6;//number of additional cycles the search is allowed to run
     private static final int BASE_THREAD_TIMEOUT = 4;//seconds
-    private static final int MIN_TREE_VISITS_PER_CHILD = 100;//per child per thread
     private static final int MAX_TREE_VISITS = 300;//per thread
     private static final int MAX_TREE_NODES = 800;//per thread
 
     public static boolean SHOW_THREAD_INFO = false;
     public transient RemoteModelEvaluator nn;
-
-
 
 
 
@@ -62,15 +57,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      */
     protected double evaluateState(MCTSNode node, Game game) {
         MCTSPlayer myPlayer = (MCTSPlayer)game.getPlayer(node.playerId);
-        //int microDecision = myPlayer.getNextAction()==MCTSPlayer.NextAction.CHOOSE_TARGET || myPlayer.getNextAction() == NextAction.MAKE_CHOICE ? 1 + myPlayer.chooseTargetCount + myPlayer.makeChoiceCount : 0;
-        int microDecision = 0;
-        Set<Integer> featureSet = encoder.processState(game, node.playerId, microDecision);
 
-        int keep = 0;
-        for (int i : featureSet)  {
-            keep++;
-        }
-        long[] nnIndices = new long[keep];
+        Set<Integer> featureSet = encoder.processState(game, node.playerId, myPlayer.decisionText);
+        node.stateVector = featureSet;
+
+
+        long[] nnIndices = new long[featureSet.size()];
         int k = 0;
         for (int i : featureSet)  {
             nnIndices[k++] = i;
@@ -79,7 +71,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         RemoteModelEvaluator.InferenceResult out = nn.infer(nnIndices);
 
         node.policy = out.policy; //combat decisions don't get priors but get filtered out in expand()
-        node.initialScore = out.value;
+        node.networkScore = out.value;
 
         return out.value;
     }
@@ -87,17 +79,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     public void setEncoder(StateEncoder enc) {
         encoder = enc;
     }
-    public void setBuffer(ReplayBuffer buf) {
-        buffer = buf;
-    }
-//    public void initNN(String path) {
-//        try {
-//            nn = new NeuralNetEvaluator(path);
-//        } catch (OrtException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-
     public double diffVisits(List<Integer> children) {
         int max = -1;
         int max2 = -1;//second highest
@@ -208,35 +189,38 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         MCTSNode.logHitMiss();
     }
-    double[] getActionVec() {
-        double[] out = new double[128];
-        Arrays.fill(out, 0.0);
-        for (MCTSNode child : root.children) {
+    int[] getActionVec(MCTSNode node) {
+        return getActionVec(node, true);
+    }
+    int[] getActionVec(MCTSNode node, boolean isPlayer) {
+        int[] out = new int[128];
+        Arrays.fill(out, 0);
+        for (MCTSNode child : node.children) {
             if (child.getAction() != null) {
-                int idx = ActionEncoder.getActionIndex(child.getAction(), true);
+                int idx = ActionEncoder.getActionIndex(child.getAction(), isPlayer);
                 int v = child.visits;//un normalized counts
                 out[idx%128] += v;
             }
         }
         return out;
     }
-    double[] getMicroActionVec(NextAction nextAction, Game game) {
-        double[] out = new double[128];
-        Arrays.fill(out, 0.0);
-        for (MCTSNode child : root.children) {
-            if (child.getAction() != null) {
-                int idx = -1;
-                if(nextAction == NextAction.CHOOSE_TARGET) {
-                    idx = ActionEncoder.getTargetIndex(game.getObject(child.chooseTargetAction.iterator().next()).getName());
-                } else if(nextAction == NextAction.MAKE_CHOICE) {
-                    idx = ActionEncoder.getTargetIndex(child.choiceAction);
-                } else {
-                    logger.error("not a recognized micro action");
-                }
-                double v = child.visits;
-                // apply temperature
-                out[idx%128] += v;
-            }
+    int[] getTargetActionVec(MCTSNode node, Game game) {
+        int[] out = new int[128];
+        Arrays.fill(out, 0);
+        for (MCTSNode child : node.children) {
+            int idx = ActionEncoder.getTargetIndex(game.getObject(child.chooseTargetAction.iterator().next()).getName());
+            int v = child.visits;
+            out[idx%128] += v;
+        }
+        return out;
+    }
+    int[] getUseActionVec(MCTSNode node) {
+        int[] out = new int[128];
+        Arrays.fill(out, 0);
+        for (MCTSNode child : node.children) {
+            int idx = child.useAction ? 1 : 0;
+            int v = child.visits;
+            out[idx] += v;
         }
         return out;
     }
@@ -259,15 +243,20 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if(best == null) return;
 
             if (action == NextAction.PRIORITY) {
-                encoder.processMacroState(game, getId());
-                encoder.addAction(getActionVec());
+                encoder.stateVectors.add(root.stateVector);
+                encoder.addAction(getActionVec(root));
                 encoder.stateScores.add(root.getScoreRatio());
             }
-//            else if(action == NextAction.CHOOSE_TARGET || action == NextAction.MAKE_CHOICE) {
-//                encoder.processMicroState(game, getId(), 1+chooseTargetAction.size() + choiceAction.size());
-//                encoder.addAction(getMicroActionVec(action, game));
-//                encoder.stateScores.add(root.getScoreRatio());
-//            }
+            else if(action == NextAction.CHOOSE_TARGET) {
+                encoder.stateVectors.add(root.stateVector);
+                encoder.addAction(getTargetActionVec(root, game));
+                encoder.stateScores.add(root.getScoreRatio());
+            }
+            else if(action == NextAction.CHOOSE_USE) {
+                encoder.stateVectors.add(root.stateVector);
+                encoder.addAction(getUseActionVec(root));
+                encoder.stateScores.add(root.getScoreRatio());
+            }
             root = best;
             root.emancipate();
         } else {

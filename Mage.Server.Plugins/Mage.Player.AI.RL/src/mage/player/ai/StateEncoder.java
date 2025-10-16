@@ -14,6 +14,8 @@ import mage.constants.CardType;
 import mage.constants.SubType;
 import mage.constants.Zone;
 import mage.counters.Counters;
+import mage.game.Exile;
+import mage.game.ExileZone;
 import mage.game.Game;
 import mage.game.Graveyard;
 import mage.game.permanent.Battlefield;
@@ -48,15 +50,11 @@ public class StateEncoder {
     public List<Set<Integer>> microStateVectors = new ArrayList<>();
 
     public List<Double> stateScores = new ArrayList<>();
-    public List<double[]> actionVectors = new ArrayList<>();
-    public int initialRawSize = 0;//original max index
-    public int mappingVersion = 0;
+    public List<int[]> actionVectors = new ArrayList<>();
 
     public Set<Integer> ignoreList;
 
     public StateEncoder() {
-        //using statics for convenience for now
-        //indexCount = 0;
         features = new Features();
         features.setEncoder(this);
         ignoreList = new HashSet<>();
@@ -69,7 +67,7 @@ public class StateEncoder {
     }
     public Features getFeatures() {return features;}
     public synchronized UUID getMyPlayerID() {return myPlayerID;}
-    public synchronized void addAction(double[] actionVec) { actionVectors.add(actionVec); }
+    public synchronized void addAction(int[] actionVec) { actionVectors.add(actionVec); }
 
     public void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
         if(f == null) return;
@@ -141,7 +139,7 @@ public class StateEncoder {
             if(!st.name().isEmpty()) f.addFeature(st.name());
         }
 
-        //add cost removing because this never changes, see getManaCoststoPay in abilities
+        //removing static cost because this never changes, see getManaCostsToPay in abilities (maybe add back later for abstraction for the network)
         //ManaCosts<ManaCost> mc = c.getManaCost();
         //processManaCosts(mc, game, f, true);
 
@@ -190,49 +188,34 @@ public class StateEncoder {
         if(p.isCreature(game)) {
             if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
             if(p.canBlockAny(game)) f.addFeature("CanBlock");
+            if(p.isAttacking()) {
+                f.addFeature("Attacking");
+                for(UUID blockerId : game.getCombat().findGroup(p.getId()).getBlockers()) {
+                    Permanent blocker  = game.getPermanent(blockerId);
+                    f.addFeature(blocker.getName() + " Blocking");
+                }
+            }
             f.addNumericFeature("Damage", p.getDamage());
             f.addNumericFeature("Power", p.getPower().getValue());
             f.addNumericFeature("Toughness", p.getToughness().getValue());
         }
     }
-    public void processCardInGraveyard(Card c, Game game, Features f) {
+    public void processCardInZone(Card c, Zone z, Game game, Features f) {
         if(f == null) return;
         //process as card
         processCard(c, game, f);
         //process abilities in gy
         //static abilities
-        for (StaticAbility sa : c.getAbilities(game).getStaticAbilities(Zone.GRAVEYARD)) {
+        for (StaticAbility sa : c.getAbilities(game).getStaticAbilities(z)) {
             f.addFeature(sa.getRule());
         }
         //activated abilities
-        for(ActivatedAbility aa : c.getAbilities(game).getActivatedAbilities(Zone.GRAVEYARD)) {
+        for(ActivatedAbility aa : c.getAbilities(game).getActivatedAbilities(z)) {
             Features aaFeatures = f.getSubFeatures(aa.getRule());
             processActivatedAbility(aa, game, aaFeatures);
         }
         //triggered abilities
-        for(TriggeredAbility ta : c.getAbilities(game).getTriggeredAbilities(Zone.GRAVEYARD)) {
-            Features taFeatures = f.getSubFeatures(ta.getRule());
-            processTriggeredAbility(ta, game, taFeatures);
-
-        }
-
-    }
-    public void processCardInHand(Card c, Game game, Features f) {
-        if(f == null) return;
-        //process as card
-        processCard(c, game, f);
-        //process abilities in hand
-        //static abilities
-        for (StaticAbility sa : c.getAbilities(game).getStaticAbilities(Zone.HAND)) {
-            f.addFeature(sa.getRule());
-        }
-        //activated abilities
-        for(ActivatedAbility aa : c.getAbilities(game).getActivatedAbilities(Zone.HAND)) {
-            Features aaFeatures = f.getSubFeatures(aa.getRule());
-            processActivatedAbility(aa, game, aaFeatures);
-        }
-        //triggered abilities
-        for(TriggeredAbility ta : c.getAbilities(game).getTriggeredAbilities(Zone.HAND)) {
+        for(TriggeredAbility ta : c.getAbilities(game).getTriggeredAbilities(z)) {
             Features taFeatures = f.getSubFeatures(ta.getRule());
             processTriggeredAbility(ta, game, taFeatures);
 
@@ -247,13 +230,13 @@ public class StateEncoder {
     public void processGraveyard(Graveyard gy, Game game, Features f) {
         for (Card c : gy.getCards(game)) {
             Features graveCardFeatures = f.getSubFeatures(c.getName());
-            processCardInGraveyard(c, game, graveCardFeatures);
+            processCardInZone(c, Zone.GRAVEYARD, game, graveCardFeatures);
         }
     }
     public void processHand(Cards hand, Game game, Features f) {
         for (Card c : hand.getCards(game)) {
             Features handCardFeatures = f.getSubFeatures(c.getName());
-            processCardInHand(c, game, handCardFeatures);
+            processCardInZone(c, Zone.HAND, game, handCardFeatures);
         }
     }
     public void processStackObject(StackObject so, int stackPosition, Game game, Features f) {
@@ -283,6 +266,19 @@ public class StateEncoder {
             i++;
             Features soFeatures = f.getSubFeatures(so.toString());
             processStackObject(so, i, game, soFeatures);
+        }
+    }
+    public void processExileZone(ExileZone exileZone, Game game, Features f) {
+        for (Card c : exileZone.getCards(game)) {
+            Features graveCardFeatures = f.getSubFeatures(c.getName());
+            processCardInZone(c, Zone.EXILED, game, graveCardFeatures);
+        }
+    }
+    public void processExile(Exile exile, Game game, Features f) {
+
+        for (ExileZone ez : exile.getExileZones()) {
+            Features exileZoneFeatures = f.getSubFeatures(ez.getName());
+            processExileZone(ez, game, exileZoneFeatures);
         }
     }
     public void processManaPool(ManaPool mp, Game game,  Features f) {
@@ -329,16 +325,20 @@ public class StateEncoder {
             Cards hand = myPlayer.getHand();
             features.addNumericFeature("CardsInHand", hand.size());
         }
+        Features exileFeatures = features.getSubFeatures("Exile");
+        processExile(game.getExile(), game, exileFeatures);
         //switch back
         opponentID = myPlayerID;
         myPlayerID = temp;
 
     }
-    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, int microCounter) {
+    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, String decisionsText) {
         features.stateRefresh();
         featureVector.clear();
 
         Player myPlayer = game.getPlayer(myPlayerID);
+        //decision state
+        features.addFeature(decisionsText);
 
         //game metadata
         features.addFeature(game.getTurnStepType().toString()); //phases
@@ -374,48 +374,21 @@ public class StateEncoder {
             Cards hand = myPlayer.getHand();
             features.addNumericFeature("OpponentCardsInHand", hand.size());
         }
-        //TODO: add exile
+        Features exileFeatures = features.getSubFeatures("Exile");
+        processExile(game.getExile(), game, exileFeatures);
 
         //lastly do opponent
         processOpponentState(game, actingPlayerID);
 
-        //micro counter
-        features.addNumericFeature("Micro Counter", microCounter);
-
-        //mapping version
-        //features.addNumericFeature("Mapping Version", features.version);
-        return featureVector;
+        return new HashSet<>(featureVector);
 
     }
     public void processState(Game game, UUID actingPlayerID) {
-        processState(game, actingPlayerID, 0);
+        processState(game, actingPlayerID, "priority");
     }
-    public void processMicroState(Game game, UUID actingPlayerID, int microCounter) {
-        processState(game, actingPlayerID, microCounter);
-        stateVectors.add(new HashSet<>(featureVector));
-    }
+
     public synchronized void processMacroState(Game game, UUID actingPlayerID) {
         processState(game, actingPlayerID);
         stateVectors.add(new HashSet<>(featureVector));
     }
-    //deprecated
-
-    // Persist the persistent feature mapping
-//    public void persistMapping(String filename) throws IOException {
-//
-//        features.version = mappingVersion;
-//        features.saveMapping(filename);
-//    }
-//
-//    // Load the feature mapping from file
-//    public void loadMapping(String filename) throws IOException, ClassNotFoundException {
-//        features = Features.loadMapping(filename);
-//        features.setEncoder(this);
-//    }
-//    // Load the feature mapping from object
-//    public void loadMapping(Features f) {
-//        features = f.createDeepCopy();
-//        features.setEncoder(this);
-//
-//    }
 }

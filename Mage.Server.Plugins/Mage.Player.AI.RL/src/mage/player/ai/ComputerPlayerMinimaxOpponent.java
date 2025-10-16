@@ -6,11 +6,18 @@ import mage.abilities.common.PassAbility;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.events.GameEvent;
+import mage.players.Player;
 import mage.target.Target;
+import org.apache.log4j.Logger;
 
 import java.util.UUID;
 
+/**
+ * completely detached minimax opponent that doesn't create any data
+ */
 public class ComputerPlayerMinimaxOpponent extends ComputerPlayer7{
+
+    protected static final Logger logger = Logger.getLogger(ComputerPlayerMinimaxOpponent.class);
 
     public ComputerPlayerMinimaxOpponent(ComputerPlayer7 player) {
         super(player);
@@ -130,12 +137,9 @@ public class ComputerPlayerMinimaxOpponent extends ComputerPlayer7{
                         }
                     }
                 }
-                //ComputerPlayerMCTS.macroState = ComputerPlayerMCTS.createCompleteMCTSGame(game);
-                //ComputerPlayerMCTS.macroPlayerId = getId();
-                //ComputerPlayerMCTS.lastAction = ability.copy();
                 this.activateAbility((ActivatedAbility) ability, game);
                 if(getPlayerHistory().prioritySequence.isEmpty()) {
-                    System.out.println("huhssss");
+                    logger.error("No active player history after priority");
                 }
                 if (ability.isUsesStack()) {
                     usedStack = true;

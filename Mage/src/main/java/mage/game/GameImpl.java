@@ -111,7 +111,7 @@ public abstract class GameImpl implements Game {
     protected AtomicInteger totalErrorsCount = new AtomicInteger(); // for debug only: error stats
 
     protected final UUID id;
-    private Random gameLocalRandom; //for deterministic UUID generation
+    //private Random gameLocalRandom; //for deterministic UUID generation
 
     protected boolean ready;
     protected transient TableEventSource tableEventSource = new TableEventSource();
@@ -173,7 +173,6 @@ public abstract class GameImpl implements Game {
 
     public GameImpl(MultiplayerAttackOption attackOption, RangeOfInfluence range, Mulligan mulligan, int minimumDeckSize, int startingLife, int startingHandSize) {
         this.id = UUID.randomUUID();
-        this.gameLocalRandom = new Random();
         this.range = range;
         this.mulligan = mulligan;
         this.attackOption = attackOption;
@@ -196,7 +195,6 @@ public abstract class GameImpl implements Game {
         this.checkPlayableState = game.checkPlayableState;
 
         this.id = game.id;
-        this.gameLocalRandom = RandomUtil.deepCopy(game.gameLocalRandom);
         this.totalErrorsCount.set(game.totalErrorsCount.get());
 
         this.ready = game.ready;
@@ -261,14 +259,14 @@ public abstract class GameImpl implements Game {
      */
     @Override
     public Random getLocalRandom() {
-        return gameLocalRandom;
+        return getState().gameLocalRandom;
     }
     /**
      * set the random number generator local to this game for deterministic UUID names
      */
     @Override
     public void setLocalRandom(Random random) {
-        this.gameLocalRandom = random;
+        this.getState().gameLocalRandom = random;
     }
     /**
      * @return the game object from right before the last priority
@@ -2234,7 +2232,7 @@ public abstract class GameImpl implements Game {
             }
         } else {
             TriggeredAbility newAbility = ability.copy();
-            UUID localID = new UUID(gameLocalRandom.nextLong(), gameLocalRandom.nextLong());
+            UUID localID = new UUID(state.gameLocalRandom.nextLong(), state.gameLocalRandom.nextLong());
             newAbility.setId(localID);
             if (newAbility.getSourceObjectZoneChangeCounter() == 0) {
                 newAbility.setSourceObjectZoneChangeCounter(getState().getZoneChangeCounter(ability.getSourceId()));

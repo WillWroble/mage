@@ -5,19 +5,20 @@ import mage.abilities.ActivatedAbility;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.events.GameEvent;
+import mage.players.Player;
 import mage.target.Target;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
+/**
+ * minimax player that logs priority decisions (as one hot vectors) and state values (as minimax derived score of root normalized to -1,1)
+ * against a RL MCTS player will use that players search tree to create blended visit distributions instead of one hots and also use their MCTS derived value score for the root node (if states match)
+ */
 public class ComputerPlayer8 extends ComputerPlayer7{
     private static final Logger log = LoggerFactory.getLogger(ComputerPlayer8.class);
-    //public static boolean saveMinimaxScore = true;
     private transient StateEncoder encoder;
-    public ComputerPlayer8(ComputerPlayer7 player) {
-        super(player);
-    }
 
     public ComputerPlayer8(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
@@ -117,9 +118,9 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         }
         return false;
     }
-    double [] getActionVec(Ability a) {
-        double[] out = new double[128];
-        out[ActionEncoder.getActionIndex(a, false)] = 1.0;
+    int [] getActionVec(Ability a) {
+        int[] out = new int[128];
+        out[ActionEncoder.getActionIndex(a, name.equals("PlayerA"))] = 1;
         return out;
     }
     @Override
@@ -131,20 +132,36 @@ public class ComputerPlayer8 extends ComputerPlayer7{
             boolean usedStack = false;
             while (actions.peek() != null) {
                 Ability ability = actions.poll();
-                // example: ===> SELECTED ACTION for PlayerA: Play Swamp
-                System.out.println(String.format("===> SELECTED ACTION for %s: %s",
-                        getName(),
-                        getAbilityAndSourceInfo(game, ability, true)
-                ));
-                if(!getPlayable(game, true).isEmpty()) {//only log decision states
-                    log.info("logged: {} for PlayerB", ability.toString());
-                    //save action vector
-                    encoder.addAction(getActionVec(ability));
-                    //save state vector
-                    encoder.processMacroState(game, getId());
-                    //add scores
-                    double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
-                    encoder.stateScores.add(perspectiveFactor * Math.tanh(root.score * 1.0 / 20000));
+                log.info("===> SELECTED ACTION for {}: {}", getName(), getAbilityAndSourceInfo(game, ability, true));
+
+                Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+                if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
+                    ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
+                    MCTSNode root = mcts2.root;
+                    root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+                    if (root != null) {
+                        log.info("found matching root with {} visits", root.visits);
+                        root.emancipate();
+                        int[] visits = mcts2.getActionVec(root, false);
+                        visits[ActionEncoder.getActionIndex(ability, false)] += 100; //add 100 virtual visits of the actual action to the MCTS distribution
+                        //save blended action vector
+                        encoder.addAction(visits);
+                        //save state vector (from tree root)
+                        encoder.stateVectors.add(root.stateVector);
+                        //save (MCTS) score
+                        encoder.stateScores.add(root.score);
+                    }
+                } else {
+                    if (!getPlayable(game, true).isEmpty()) {//only log decision states
+                        log.info("logged: {} for PlayerB", ability.toString());
+                        //save action vector
+                        encoder.addAction(getActionVec(ability));
+                        //save state vector
+                        encoder.processMacroState(game, getId());
+                        //add scores
+                        double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
+                        encoder.stateScores.add(perspectiveFactor * Math.tanh(root.score * 1.0 / 20000));
+                    }
                 }
                 if (!ability.getTargets().isEmpty()) {
                     for (Target target : ability.getTargets()) {

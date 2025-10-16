@@ -44,10 +44,7 @@ import mage.game.tournament.Tournament;
 import mage.player.ai.simulators.CombatGroupSimulator;
 import mage.player.ai.simulators.CombatSimulator;
 import mage.player.ai.simulators.CreatureSimulator;
-import mage.players.ManaPoolItem;
-import mage.players.Player;
-import mage.players.PlayerImpl;
-import mage.players.PlayerScript;
+import mage.players.*;
 import mage.players.net.UserData;
 import mage.players.net.UserGroup;
 import mage.target.*;
@@ -2183,10 +2180,9 @@ public class ComputerPlayer extends PlayerImpl {
             boolean willBlock = chooseUse(null, "block with: " + blocker.getName() + "?", null, game);
             if(willBlock) {//now choose which creature to block
                 Target attackerTarget = new TargetAttackingCreature();
-                chooseTarget(Outcome.Neutral, attackerTarget, null, game);
+                chooseTarget(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game);
                 UUID attackerId = attackerTarget.getFirstTarget();
                 declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
-                //this.declareAttacker(attacker.getId(), opponentId, game, false);
             }
         }
     }
