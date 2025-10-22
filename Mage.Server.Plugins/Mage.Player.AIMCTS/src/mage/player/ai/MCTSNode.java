@@ -135,15 +135,9 @@ public class MCTSNode {
             return;
         }
 
-        if(actingPlayer.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {//priority point, use current state value
-            this.stateValue = game.getState().getValue(game, targetPlayer);
-            this.fullStateValue = game.getState().getValue(true, game);
-            if(!ComputerPlayerMCTS.USE_STATELESS_NODES) this.rootState = game.getState();
-        } else {//micro point, use previous state value
-            this.stateValue = parent.stateValue;
-            this.fullStateValue = parent.fullStateValue;
-            if(!ComputerPlayerMCTS.USE_STATELESS_NODES) this.rootState = parent.rootState;
-        }
+        this.stateValue = game.getLastDecisionPoint().getState().getValue(game, targetPlayer);
+        this.fullStateValue = game.getLastDecisionPoint().getState().getValue(true, game);
+        if(!ComputerPlayerMCTS.USE_STATELESS_NODES) this.rootState = game.getLastDecisionPoint().getState();
 
     }
     private void setPlayer(Game game) {
@@ -838,7 +832,7 @@ public class MCTSNode {
         PlayerScript myScript = new PlayerScript();
         PlayerScript opponentScript = new PlayerScript();
         GameState rootState = getActionSequence(myScript, opponentScript);
-        Game rootGame = resetRootGame(rootState.copy());
+        Game rootGame = resetRootGame(rootState);//no need to copy, root state is always a copy
         //set base player actions
         MCTSPlayer myPlayer = (MCTSPlayer) rootGame.getPlayer(targetPlayer);
         myPlayer.actionScript = myScript;

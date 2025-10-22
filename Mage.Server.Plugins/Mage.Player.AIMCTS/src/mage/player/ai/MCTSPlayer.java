@@ -6,7 +6,6 @@ import mage.abilities.costs.mana.GenericManaCost;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
-import mage.game.GameImpl;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
@@ -228,8 +227,7 @@ public class MCTSPlayer extends ComputerPlayer {
             pass(game);
             return false;
         }
-        game.setLastPriority(playerId);
-        //((GameImpl)game).clearHistory();
+        game.setLastDecisionPoint(playerId);
         decisionText = "priority";
         game.pause();
         lastToAct = true;

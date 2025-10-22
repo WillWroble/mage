@@ -1,9 +1,5 @@
 package mage.player.ai;
 
-import mage.abilities.Ability;
-import mage.abilities.ActivatedAbility;
-import mage.abilities.common.PassAbility;
-import mage.abilities.mana.ManaAbility;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
@@ -246,7 +242,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     @Override
     protected void calculateActions(Game game, NextAction action) {
         if (root == null) {
-            Game sim = createMCTSGame(game.getLastPriority());
+            Game sim = createMCTSGame(game.getLastDecisionPoint());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);
             //this creates a new root with its own saved state to replay from.

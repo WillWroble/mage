@@ -12,14 +12,12 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
 import mage.game.Game;
-import mage.game.GameImpl;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
-import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
@@ -104,7 +102,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             pass(game);
             return false;
         }
-        game.setLastPriority(playerId);
+        game.setLastDecisionPoint(playerId);
         getNextAction(game, NextAction.PRIORITY);
 
         Ability ability = root.getAction();
@@ -133,7 +131,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     protected void calculateActions(Game game, NextAction action) {
         if (root == null) {
-            Game sim = createMCTSGame(game.getLastPriority());
+            Game sim = createMCTSGame(game.getLastDecisionPoint());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(action);//can remove this
             root = new MCTSNode(playerId, sim);
@@ -155,7 +153,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected void getNextAction(Game game, NextAction nextAction) {
         MCTSNode newRoot;
         if (root != null) {
-            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+            newRoot = root.getMatchingState(game.getLastDecisionPoint().getState().getValue(true, game.getLastDecisionPoint()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             if (newRoot != null) {
                 if(newRoot.size()>1000) {
                     logger.info("tree too large, starting fresh");
@@ -163,7 +161,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 } else {
                     newRoot.emancipate();
                     if(USE_STATELESS_NODES) { //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
-                        newRoot.rootGame = createMCTSGame(game.getLastPriority());
+                        newRoot.rootGame = createMCTSGame(game.getLastDecisionPoint());
                         newRoot.rootState = newRoot.rootGame.getState().copy();
                     }
                 }
@@ -321,7 +319,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
                 List<MCTSExecutor> tasks = new ArrayList<>();
                 for (int i = 0; i < poolSize; i++) {
-                    Game sim = createMCTSGame(game.getLastPriority());
+                    Game sim = createMCTSGame(game.getLastDecisionPoint());
                     MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
                     player.setNextAction(action);
                     MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);

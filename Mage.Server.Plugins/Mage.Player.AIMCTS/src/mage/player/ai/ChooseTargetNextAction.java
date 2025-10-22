@@ -1,9 +1,7 @@
 package mage.player.ai;
 
-import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.game.Game;
-import mage.target.Target;
 
 import java.util.*;
 
@@ -19,9 +17,9 @@ public class ChooseTargetNextAction implements MCTSNodeNextAction {
         for (Set<UUID> targets: player.chooseTargetOptions) {
             //create node to add option to
             //assert (game.getLastPriority().getLastPriority() == game.getLastPriority());
-            Game sim = game.getLastPriority().createSimulationForAI();
+            Game sim = game.getLastDecisionPoint().createSimulationForAI();
             MCTSPlayer simPlayer2 = (MCTSPlayer) sim.getPlayer(player.getId());
-            MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastPriorityPlayerId());
+            MCTSPlayer simPlayer1 = (MCTSPlayer) sim.getPlayer(game.getLastDecisionPlayerId());
             //simPlayer2.chooseTargetAction = new ArrayList<>(node.chooseTargetAction);//for stability
             //simPlayer2.chooseTargetAction.add(targets);
             simPlayer1.activateAbility((ActivatedAbility) node.getAction().copy(), sim);

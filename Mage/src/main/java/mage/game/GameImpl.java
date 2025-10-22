@@ -91,8 +91,8 @@ import java.util.stream.Collectors;
  */
 public abstract class GameImpl implements Game {
     //shallow game history for AI
-    private Game lastPriority = this;
-    private UUID lastPriorityPlayerId;
+    public Game lastDecisionPoint = this;
+    private UUID lastDecisionPlayerId;
     public Ability lastPriorityAction;
 
     public static boolean drawHand = true;
@@ -187,7 +187,7 @@ public abstract class GameImpl implements Game {
 
     protected GameImpl(final GameImpl game) {
         this.lastPriorityAction = game.lastPriorityAction;
-        this.lastPriorityPlayerId = game.lastPriorityPlayerId;
+        this.lastDecisionPlayerId = game.lastDecisionPlayerId;
         //this.customData = game.customData; // temporary data, no need on game copy
         //this.losingPlayer = game.losingPlayer; // temporary data, no need on game copy
         this.aiGame = game.aiGame;
@@ -272,16 +272,16 @@ public abstract class GameImpl implements Game {
      * @return the game object from right before the last priority
      */
     @Override
-    public Game getLastPriority() {
-        return lastPriority;
+    public Game getLastDecisionPoint() {
+        return lastDecisionPoint;
     }
 
     /**
      * @return the id of the player who last had priority
      */
     @Override
-    public UUID getLastPriorityPlayerId() {
-        return lastPriorityPlayerId;
+    public UUID getLastDecisionPlayerId() {
+        return lastDecisionPlayerId;
     }
 
     /**
@@ -295,12 +295,11 @@ public abstract class GameImpl implements Game {
      * @return the action made during the last priority
      */
     @Override
-    public void setLastPriority(UUID id) {
+    public void setLastDecisionPoint(UUID id) {
         clearHistory();
-        lastPriorityPlayerId  = id;
-        if(!isSimulation()) {
-            lastPriority = this.copy();
-        }
+        lastDecisionPlayerId = id;
+        lastDecisionPoint = this.copy();
+
     }
     @Override
     public boolean isSimulation() {
@@ -310,7 +309,7 @@ public abstract class GameImpl implements Game {
     @Override
     public Game createSimulationForAI() {
         Game res = this.copy();
-        ((GameImpl) res).lastPriority = lastPriority;
+        ((GameImpl) res).lastDecisionPoint = lastDecisionPoint;
         ((GameImpl) res).simulation = true;
         ((GameImpl) res).aiGame = true;
         return res;

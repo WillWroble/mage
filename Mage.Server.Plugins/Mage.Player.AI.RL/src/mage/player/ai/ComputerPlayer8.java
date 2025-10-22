@@ -3,17 +3,14 @@ package mage.player.ai;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.mana.ManaAbility;
-import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.GameImpl;
 import mage.game.events.GameEvent;
 import mage.players.Player;
 import mage.target.Target;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -52,7 +49,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
             pass(game);
             return false;
         }
-        game.setLastPriority(playerId);
+        game.setLastDecisionPoint(playerId);
 
         switch (game.getTurnStepType()) {
             case UPKEEP:
@@ -147,7 +144,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
                     MCTSNode root = mcts2.root;
-                    if(root != null) root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+                    if(root != null) root = root.getMatchingState(game.getLastDecisionPoint().getState().getValue(true, game.getLastDecisionPoint()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
                     if (root != null) {
                         log.info("found matching root with {} visits", root.visits);
                         root.emancipate();
