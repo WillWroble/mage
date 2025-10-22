@@ -6,6 +6,7 @@ import mage.abilities.costs.mana.GenericManaCost;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
@@ -222,6 +223,13 @@ public class MCTSPlayer extends ComputerPlayer {
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
         }
+        playables = getPlayableOptions(game);
+        if(ComputerPlayerMCTS.SKIP_TRANSITION_STATES && playables.size() == 1) {//skip transition states
+            pass(game);
+            return false;
+        }
+        game.setLastPriority(playerId);
+        //((GameImpl)game).clearHistory();
         decisionText = "priority";
         game.pause();
         lastToAct = true;
@@ -344,7 +352,7 @@ public class MCTSPlayer extends ComputerPlayer {
         if(chooseTargetOptions.isEmpty()) {
             return false; //fizzle
         }
-        decisionText = source.toString();
+        decisionText = source.getRule();
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;

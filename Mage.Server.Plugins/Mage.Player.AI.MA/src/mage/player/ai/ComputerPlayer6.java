@@ -971,6 +971,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
      * @param activePlayerId
      */
     private void declareAttackers(Game game, UUID activePlayerId) {
+
         attackersToCheck.clear();
         attackersList.clear();
         game.fireEvent(new GameEvent(GameEvent.EventType.DECLARE_ATTACKERS_STEP_PRE, null, null, activePlayerId));
@@ -1141,13 +1142,15 @@ public class ComputerPlayer6 extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         logger.debug("selectAttackers");
-        declareAttackers(game, playerId);
+        selectAttackersOneAtATime(game, attackingPlayerId);
+        //declareAttackers(game, playerId);
     }
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         logger.debug("selectBlockers");
-        declareBlockers(game, playerId);
+        selectBlockersOneAtATime(source, game, defendingPlayerId);
+        //declareBlockers(game, playerId);
     }
 
     /**

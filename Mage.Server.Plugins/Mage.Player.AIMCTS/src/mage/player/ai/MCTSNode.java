@@ -3,10 +3,12 @@ package mage.player.ai;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import mage.abilities.common.PassAbility;
 import mage.constants.Zone;
 import mage.abilities.Ability;
 import mage.cards.Card;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.GameState;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
@@ -49,6 +51,9 @@ public class MCTSNode {
     public String choiceAction;
     public Boolean useAction;
     public Combat combat;
+    //auto pass counters - represents how many auto passes must be executed by each player BEFORE the actual decision action was made at this node
+    public int autoPassesA = 0;
+    public int autoPassesB = 0;
 
     private String stateValue;
     private String fullStateValue;
@@ -116,8 +121,12 @@ public class MCTSNode {
         }
         this.terminal = game.checkIfGameIsOver();
         this.winner = isWinner(game, targetPlayer);
-        this.prefixScript = new PlayerScript(game.getPlayer(targetPlayer).getPlayerHistory());
-        this.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(targetPlayer).iterator().next()).getPlayerHistory());
+        MCTSPlayer playerA = (MCTSPlayer) game.getPlayer(targetPlayer);
+        MCTSPlayer playerB =  (MCTSPlayer) game.getPlayer(game.getOpponents(targetPlayer).iterator().next());
+        this.prefixScript = new PlayerScript(playerA.getPlayerHistory());
+        this.opponentPrefixScript = new PlayerScript(playerB.getPlayerHistory());
+        this.autoPassesA = playerA.autoPassed;
+        this.autoPassesB = playerB.autoPassed;
 
         if(this.terminal) return; //cant determine acting player after game has ended
 
@@ -125,6 +134,7 @@ public class MCTSNode {
         if(actingPlayer.scriptFailed) {//dont calc state value for failed scripts
             return;
         }
+
         if(actingPlayer.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {//priority point, use current state value
             this.stateValue = game.getState().getValue(game, targetPlayer);
             this.fullStateValue = game.getState().getValue(true, game);
@@ -179,7 +189,9 @@ public class MCTSNode {
             mp.actionScript.clear();
             mp.chooseTargetOptions.clear();
             mp.choiceOptions.clear();
+            mp.playables.clear();
             mp.decisionText = "";
+            mp.autoPassed=0;
         }
         return rootGame;
     }
@@ -225,8 +237,7 @@ public class MCTSNode {
     public List<MCTSNode> createChildren(MCTSPlayer.NextAction nextAction, MCTSPlayer player, Game game) {
         List<MCTSNode> children = new ArrayList<>();
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
-            List<Ability> playables = player.getPlayableOptions(game);
-            for(Ability playable : playables) {
+            for(Ability playable : player.playables) {
                 logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + playable.toString());
                 MCTSNode node = new MCTSNode(this, playable);
                 children.add(node);
@@ -774,7 +785,13 @@ public class MCTSNode {
         }
 
         GameState out = parent.getActionSequence(myScript, opponentScript);
-
+        //order actions are applied: prefix => auto passes => action
+        for(int i = 0; i < autoPassesA; i++) {
+            myScript.prioritySequence.add(new PassAbility());
+        }
+        for(int i = 0; i < autoPassesB; i++) {
+            opponentScript.prioritySequence.add(new PassAbility());
+        }
         if(chooseTargetAction != null && !chooseTargetAction.isEmpty()) {
             if(parent.playerId.equals(targetPlayer)) {
                 myScript.targetSequence.add(chooseTargetAction);

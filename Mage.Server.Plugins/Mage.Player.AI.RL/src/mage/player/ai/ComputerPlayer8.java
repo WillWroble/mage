@@ -2,15 +2,22 @@ package mage.player.ai;
 
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
+import mage.abilities.mana.ManaAbility;
+import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.events.GameEvent;
 import mage.players.Player;
 import mage.target.Target;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * minimax player that logs priority decisions (as one hot vectors) and state values (as minimax derived score of root normalized to -1,1)
@@ -39,11 +46,13 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     private boolean priorityPlay(Game game) {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
-        //process every priority
-        //encoder.processState(game);
-        //state learning testing
-        //encoder.processState(game);
-        //printBattlefieldScore(game, "PRIORITY====================");
+
+        List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
+        if(ComputerPlayerMCTS.SKIP_TRANSITION_STATES && playableAbilities.isEmpty()) {//just pass when only option
+            pass(game);
+            return false;
+        }
+        game.setLastPriority(playerId);
 
         switch (game.getTurnStepType()) {
             case UPKEEP:
@@ -138,29 +147,27 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
                     MCTSNode root = mcts2.root;
-                    root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+                    if(root != null) root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
                     if (root != null) {
                         log.info("found matching root with {} visits", root.visits);
                         root.emancipate();
                         int[] visits = mcts2.getActionVec(root, false);
                         visits[ActionEncoder.getActionIndex(ability, false)] += 100; //add 100 virtual visits of the actual action to the MCTS distribution
-                        //save blended action vector
-                        encoder.addAction(visits);
-                        //save state vector (from tree root)
-                        encoder.stateVectors.add(root.stateVector);
-                        //save (MCTS) score
-                        encoder.stateScores.add(root.score);
+                        encoder.addLabeledState(root.stateVector, visits, root.getScoreRatio(), MCTSPlayer.NextAction.PRIORITY, false);
+                        //update root for the mcts player too
+                        mcts2.root = root;
                     }
                 } else {
                     if (!getPlayable(game, true).isEmpty()) {//only log decision states
                         log.info("logged: {} for PlayerB", ability.toString());
                         //save action vector
-                        encoder.addAction(getActionVec(ability));
+                        int[] actionVec = getActionVec(ability);
                         //save state vector
-                        encoder.processMacroState(game, getId());
+                        Set<Integer> stateVector = encoder.processState(game, getId());
                         //add scores
                         double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
-                        encoder.stateScores.add(perspectiveFactor * Math.tanh(root.score * 1.0 / 20000));
+                        double score = perspectiveFactor * Math.tanh(root.score * 1.0 / 20000);
+                        encoder.addLabeledState(stateVector, actionVec, score, MCTSPlayer.NextAction.PRIORITY, false);
                     }
                 }
                 if (!ability.getTargets().isEmpty()) {

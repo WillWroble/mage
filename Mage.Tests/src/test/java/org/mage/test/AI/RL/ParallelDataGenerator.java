@@ -16,6 +16,7 @@ import mage.game.mulligan.MulliganType;
 import mage.game.permanent.token.Token;
 import mage.player.ai.*;
 import mage.util.RandomUtil;
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
@@ -29,13 +30,14 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.nio.file.StandardOpenOption.READ;
 
 
 /**
- * A dedicated, parallelized test class for generating training and testing data sets.
+ * A dedicated, parallelized test class for generating RL data sets.
  * This version is fully compatible with Java 1.8 and uses the correct, thread-safe
  * game execution logic as defined by the test framework.
  */
@@ -43,35 +45,36 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
-    public static int NUM_GAMES_TO_SIMULATE_TRAIN = 250;
-    public static int NUM_GAMES_TO_SIMULATE_TEST = 0;
-    private static final int MAX_GAME_TURNS = 50;
-    private static final int MAX_CONCURRENT_GAMES = 6;
+    protected static int NUM_GAMES_TO_SIMULATE = 100;
+    protected static int MAX_GAME_TURNS = 50;
+    protected static int MAX_CONCURRENT_GAMES = 6;
     // =============================== DECK AND AI SETTINGS ===============================
-    private static final String DECK_A = "MTGA_MonoU";
-    private static final String DECK_B= "MTGA_MonoR";
-    private static final boolean DONT_USE_NOISE = true;
-    private static final boolean DONT_USE_POLICY = true;
-    private static double DISCOUNT_FACTOR = 0.99;
+    protected static String DECK_A = "MTGA_MonoU";
+    protected static String DECK_B= "MTGA_MonoR";
+    protected static boolean DONT_USE_NOISE = true;
+    protected static boolean DONT_USE_POLICY = false;
+    protected static double DISCOUNT_FACTOR = 0.99;
+    protected static double VALUE_LAMBDA = 0.5;
     // ================================== FILE PATHS ==================================
-    private static final String DECK_A_PATH = "decks/" + DECK_A + ".dck";
-    private static final String DECK_B_PATH = "decks/" + DECK_B + ".dck";
-    private static final String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";//was 14
-    private static final String SEEN_FEATURES_PATH = "seenFeatures.roar";
-    public static String TRAIN_OUT_FILE = "training.bin";
-    public static String TEST_OUT_FILE = "testing.bin";
+    protected static String DECK_A_PATH = "decks/" + DECK_A + ".dck";
+    protected static String DECK_B_PATH = "decks/" + DECK_B + ".dck";
+    protected static String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";
+    protected static String SEEN_FEATURES_PATH = "seenFeatures.roar";
+    protected static String DATA_OUT_FILE = "training.hdf5";
     // ================================== GLOBAL FIELDS ==================================
-    //private Features finalFeatures;
     private RoaringBitmap seenFeatures = new RoaringBitmap();
     private int initialRawSize;
     private final AtomicInteger gameCount = new AtomicInteger(0);
     private final AtomicInteger winCount = new AtomicInteger(0);
-    //private NeuralNetEvaluator neuralNetEvaluator;
     private RemoteModelEvaluator remoteModelEvaluator;
-    //end
+    private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(32);
+    private final AtomicBoolean stop = new AtomicBoolean(false);
+
+
+
 
     /**
-     * A simple class to hold the results of a single game, compatible with Java 1.8.
+     * A simple class to hold the results of a single game
      */
     private static class GameResult {
         private final List<LabeledState> states;
@@ -215,32 +218,42 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
         initialRawSize = seenFeatures.getCardinality();
     }
-    @Override
-    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
-        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", DECK_A_PATH);
-        playerB = createPlayer(game, "PlayerB", DECK_B_PATH);
-        return game;
-    }
+    /**
+     * prints the sizes of the action spaces for these 2 decks
+     */
     @Test
-    public void train_4_250() {
-        NUM_GAMES_TO_SIMULATE_TRAIN=250;
-        NUM_GAMES_TO_SIMULATE_TEST=0;
-        for(int i = 0; i<4; i++) {
-            TRAIN_OUT_FILE = ("training"+i+".bin");
-            generateTrainingAndTestingData();
+    public void get_action_spaces() {
+        try {
+            createAllActionsFromDeckList(DECK_A_PATH, ActionEncoder.playerActionMap);
+            createAllActionsFromDeckList(DECK_B_PATH, ActionEncoder.opponentActionMap);
+            createAllTargetsFromDeckLists(DECK_A_PATH, DECK_B_PATH);
+        } catch (GameException e) {
+            logger.error("could not load Deck files!", e);
         }
+        logger.info("PlayerAPriority size: " + ActionEncoder.playerActionMap.size());
+        logger.info("PlayerBPriority size: " + ActionEncoder.opponentActionMap.size());
+        logger.info("Num Possible Targets for Both Players: " + ActionEncoder.targetMap.size());
+        logger.info("=========================================");
+        logger.info("            PRIORITY A ACTIONS:           ");
+        logger.info("==========================================");
+        printMapByValue(ActionEncoder.playerActionMap);
+        logger.info("=========================================");
+        logger.info("            PRIORITY B ACTIONS:           ");
+        logger.info("==========================================");
+        printMapByValue(ActionEncoder.opponentActionMap);
+        logger.info("=========================================");
+        logger.info("               TARGET ACTIONS:            ");
+        logger.info("==========================================");
+        printMapByValue(ActionEncoder.targetMap);
     }
     /**
-     * New test function to run a single game for debugging purposes without saving any data.
+     * test function to run a single game for debugging purposes without saving any data.
      */
     @Test
     public void test_single_game() {
         logger.info("\n=========================================");
         logger.info("       RUNNING SINGLE DEBUG GAME         ");
         logger.info("=========================================");
-        // --- Setup (required for the game to run) ---
-        //finalFeatures = new Features(); // Start with fresh features for this run
         loadAllFiles();
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
@@ -250,7 +263,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
         //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
         //Features.printOldFeatures = false;
-        // --- End Setup ---
         long seed = System.nanoTime();
         //seed = 751314143315900L; //opponent turn priority order bug
         //seed = -4411935635951101274L; //blocking bug
@@ -275,51 +287,80 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
         setStrictChooseMode(true);
         setStopAt(maxTurn, PhaseStep.END_TURN);
-        //GameImpl.drawHand = false;
-        //addCard(Zone.BATTLEFIELD, playerA, "Island", 2);
-        //addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
-        //addCard(Zone.HAND, playerA, "Combat Research", 7);
+        /* usage example for manual card insertion
+        GameImpl.drawHand = false;
+        addCard(Zone.BATTLEFIELD, playerA, "Island", 2);
+        addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
+        addCard(Zone.HAND, playerA, "Combat Research", 7);
+         */
         execute();
-        saveRoaring(threadEncoder.seenFeatures, SEEN_FEATURES_PATH);
+        //saveRoaring(threadEncoder.seenFeatures, SEEN_FEATURES_PATH);
 
-        logger.info("=========================================");
     }
-
     @Test
-    public void generateTrainingAndTestingData() {
+    public void generateData() {
 
-        //load original mapping as starting point
-        //finalFeatures = new Features();
+
         initialRawSize = 0;
         loadAllFiles();
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
-        //Features.printNewFeatures = false;
 
-        logger.info("\n=========================================");
-        logger.info("    STARTING TESTING DATA GENERATION     ");
+        LabeledStateWriter fw;
+        try {
+            fw = new LabeledStateWriter(DATA_OUT_FILE);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        Thread writer = getWriter(fw);
+
+
+        logger.info("=========================================");
+        logger.info("   STARTING DATA GENERATION     ");
         logger.info("=========================================");
 
-        List<LabeledState> testingStates = runSimulations(NUM_GAMES_TO_SIMULATE_TEST);
 
-        logger.info("=========================================");
-        logger.info("   STARTING TRAINING DATA GENERATION     ");
-        logger.info("=========================================");
+        runSimulations(NUM_GAMES_TO_SIMULATE);
 
+        //end writer thread
+        stop.set(true);
+        try {
+            writer.join();
+        } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
 
-        List<LabeledState> trainingStates = runSimulations(NUM_GAMES_TO_SIMULATE_TRAIN);
+        saveRoaring(seenFeatures, SEEN_FEATURES_PATH);
 
-        //save both data files at once
-        processAndSaveData(trainingStates, testingStates);
-
-        //logger.info("\nData generation complete.");
+        logger.info("Processing " + fw.batchStates + " states.");
+        logger.info("Initial feature count: " + initialRawSize);
+        logger.info("Final unique feature count from dataset: " + fw.batchFeatures.size());
+        logger.info("Global unique feature count: " + seenFeatures.getCardinality());
+        logger.info("Features added: " + (seenFeatures.getCardinality() - initialRawSize));
     }
 
-    private List<LabeledState> runSimulations(int numGames) {
+    @NotNull
+    private Thread getWriter(LabeledStateWriter fw) {
+        Thread writer = new Thread(() -> {
+            try {
+                while (!stop.get() || !LSQueue.isEmpty()) {
+                    List<LabeledState> batch = LSQueue.take();
+                    for (LabeledState s : batch) fw.writeRecord(s);
+                    fw.flush(); // flush per game to keep data durable
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                try { fw.close(); } catch (Exception ignore) {}
+            }
+        }, "lz-writer");
+        writer.start();
+        return writer;
+    }
+
+    private void runSimulations(int numGames) {
         int availableCores = Runtime.getRuntime().availableProcessors();
         int poolSize = MAX_CONCURRENT_GAMES;
-        System.out.printf("Simulating %d games. Using thread pool of size %d on %d available cores.\n", numGames, poolSize, availableCores);
+        logger.info(String.format("Simulating %d games. Using thread pool of size %d on %d available cores.", numGames, poolSize, availableCores));
 
         ExecutorService executor = Executors.newFixedThreadPool(poolSize);
         List<Callable<GameResult>> tasks = new ArrayList<>();
@@ -327,12 +368,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             tasks.add(new Callable<GameResult>() {
                 @Override
                 public GameResult call() throws Exception {
-                    return runSingleGame();
+                    GameResult out = runSingleGame();
+                    LSQueue.put(out.states);
+                    return out;
                 }
             });
         }
 
-        List<LabeledState> allLabeledStates = new ArrayList<>();
         int wins = 0;
         int successfulGames = 0;
         int failedGames = 0;
@@ -344,7 +386,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
                 try {
                     // future.get() will block until the task is complete.
                     GameResult result = future.get();
-                    allLabeledStates.addAll(result.getStates());
                     if (result.didPlayerAWin()) {
                         wins++;
                     }
@@ -352,41 +393,21 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
                 } catch (ExecutionException e) {
                     failedGames++;
-                    System.err.println("A game simulation failed and its result will be ignored. Cause: " + e.getCause());
+                    logger.error("A game simulation failed and its result will be ignored. Cause: " + e.getCause());
                     e.getCause().printStackTrace();
                 }
                 // The loop continues to the next future, ignoring the failed one.
             }
         } catch (InterruptedException e) {
-            System.err.println("Main simulation thread was interrupted. Shutting down.");
+            logger.error("Main simulation thread was interrupted. Shutting down.");
             e.printStackTrace();
             Thread.currentThread().interrupt();
         }
-        System.out.printf("\n--- Simulation Summary ---\n");
-        System.out.printf("Total requested: %d games\n", numGames);
-        System.out.printf("Successful: %d\n", successfulGames);
-        System.out.printf("Failed: %d\n", failedGames);
-        System.out.printf("Player A win rate: %.2f%% (%d/%d)\n", (100.0 * wins / numGames), wins, numGames);
-        return allLabeledStates;
-    }
-    private void processAndSaveData(List<LabeledState> trainingStates, List<LabeledState> testingStates) {
-        List<LabeledState> allStates = new ArrayList<>(trainingStates);
-        allStates.addAll(testingStates);
-        if (allStates.isEmpty()) {
-            logger.info("No states were generated, skipping file save for " + ParallelDataGenerator.TRAIN_OUT_FILE);
-            return;
-        }
-        //print_labeled_states(trainingStates);
-        logger.info("Processing " + allStates.size() + " states.");
-        logger.info("Initial feature count: " + initialRawSize);
-        logger.info("Final unique feature count from dataset: " + LabeledState.getUniqueFeaturesFromBatch(allStates));
-        logger.info("Global unique feature count: " + seenFeatures.getCardinality());
-        logger.info("Features added: " + (seenFeatures.getCardinality() - initialRawSize));
-        //logger.info("Final Compressed Feature Vector Size: " + (finalFeatures.localIndexCount.get() - finalFeatures.ignoreList.size()));
-        persistLabeledStates(trainingStates, ParallelDataGenerator.TRAIN_OUT_FILE);
-        persistLabeledStates(testingStates, ParallelDataGenerator.TEST_OUT_FILE);
-        persistData();
-        logger.info("Successfully saved data to " + ParallelDataGenerator.TRAIN_OUT_FILE + " and " + ParallelDataGenerator.TEST_OUT_FILE);
+        logger.info("--- Simulation Summary ---");
+        logger.info(String.format("Total requested: %d games", numGames));
+        logger.info(String.format("Successful: %d", successfulGames));
+        logger.info(String.format("Failed: %d", failedGames));
+        logger.info(String.format("Player A win rate: %.2f%% (%d/%d)", (100.0 * wins / numGames), wins, numGames));
     }
     private GameResult runSingleGame() throws ExecutionException {
         long seed = ThreadLocalRandom.current().nextLong();
@@ -443,7 +464,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             logger.info("Current WR: " + winCount.get()*1.0/gameCount.get());
             return new GameResult(generateLabeledStatesForGame(threadEncoder, playerAWon), playerAWon);
         } catch (Exception e) {
-            System.err.println("Caught an internal AI/Game exception in a worker thread. Ignoring this game. Cause: " + e.getMessage());
+            logger.error("Caught an internal AI/Game exception in a worker thread. Ignoring this game. Cause: " + e.getMessage());
             throw new ExecutionException("Worker thread failed - ignoring", e);
         }
     }
@@ -451,7 +472,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private void configurePlayer(TestPlayer player, StateEncoder encoder) {
         if (player.getComputerPlayer() instanceof ComputerPlayerMCTS2) {
             ((ComputerPlayerMCTS2) player.getComputerPlayer()).setEncoder(encoder);
-            //((ComputerPlayerMCTS2) player.getComputerPlayer()).initNN(MCTS_MODEL_PATH);
             ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluator;//shared reference
         } else if (player.getComputerPlayer() instanceof ComputerPlayer8) {
             ((ComputerPlayer8) player.getComputerPlayer()).setEncoder(encoder);
@@ -461,43 +481,17 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     }
 
     private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
-        List<LabeledState> results = new ArrayList<>();
-        int N = encoder.stateVectors.size();
-        double lambda = 0.5;
+        int N = encoder.labeledStates.size();
+        double lambda = VALUE_LAMBDA;
 
         for (int i = 0; i < N; i++) {
-            Set<Integer> state = encoder.stateVectors.get(i);
-            int[] action = encoder.actionVectors.get(i);
-            double normScore = encoder.stateScores.get(i);
-            double terminal = didPlayerAWin ? +1.0 : -1.0;
+            double normScore = encoder.labeledStates.get(i).stateScore;
+            double terminal = didPlayerAWin ? 1.0 : -1.0;
             double discount = Math.pow(DISCOUNT_FACTOR, (N - i - 1));
-            double blended = lambda * normScore + (1.0 - lambda) * terminal * discount;
-            results.add(new LabeledState(state, action, blended));
+            encoder.labeledStates.get(i).resultLabel = lambda * normScore + (1.0 - lambda) * terminal * discount;
         }
-        return results;
+        return encoder.labeledStates;
 
-    }
-    public void persistData() {
-        try {
-            saveRoaring(seenFeatures, SEEN_FEATURES_PATH);
-            logger.info("Persisted seen feature set to: "  + SEEN_FEATURES_PATH);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void persistLabeledStates(List<LabeledState> states, String filename) {
-        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(filename)))) {
-            out.writeInt(states.size());
-            out.writeInt(2000000);//out.writeInt(finalFeatures.localIndexCount.get());
-            out.writeInt(128); // Assuming policy vector size is constant
-
-            for (LabeledState ls : states) {
-                ls.persist(out);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
     void saveRoaring(RoaringBitmap rb, String filePath) {
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filePath))) {
@@ -506,12 +500,31 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             e.printStackTrace();
         }
     }
-    //endregion
+    public static void printMapByValue(Map<String, Integer> map) {
+        if (map == null || map.isEmpty()) {
+            System.out.println("(empty)");
+            return;
+        }
+
+        // find padding for nice alignment
+        int maxKeyLen = map.keySet().stream().mapToInt(String::length).max().orElse(0);
+
+        map.entrySet().stream()
+                .sorted(Comparator.<Map.Entry<String,Integer>>comparingInt(Map.Entry::getValue).reversed()
+                        .thenComparing(Map.Entry::getKey)) // tie-breaker: key asc
+                .forEach(e -> System.out.printf("%-" + maxKeyLen + "s  : %,d%n", e.getKey(), e.getValue()));
+    }
     @Override
     public List<String> getFullSimulatedPlayers() {
         return Arrays.asList("PlayerA", "PlayerB");
     }
-
+    @Override
+    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
+        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
+        playerA = createPlayer(game, "PlayerA", DECK_A_PATH);
+        playerB = createPlayer(game, "PlayerB", DECK_B_PATH);
+        return game;
+    }
     protected TestPlayer createLocalPlayer(Game game, String name, String deckName, Match match) throws GameException {
         TestPlayer player = createNewPlayer(name, game.getRangeOfInfluence());
         player.setTestMode(true);
@@ -537,11 +550,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
         return player;
     }
-
-    // This is the correct override to use for creating players within our self-contained games.
+    // This is the correct override to use for creating players within these self-contained games.
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
-        DISCOUNT_FACTOR = 0.95; //less states means higher discount
         if (name.equals("PlayerA")) {
             TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
             TestPlayer testPlayer = new TestPlayer(t8);
@@ -554,5 +565,4 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             return testPlayer;
         }
     }
-    //endregion
 }

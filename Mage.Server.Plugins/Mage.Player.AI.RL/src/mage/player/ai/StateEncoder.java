@@ -1,6 +1,5 @@
 package mage.player.ai;
 
-import com.j256.ormlite.stmt.query.In;
 import mage.MageObject;
 import mage.abilities.*;
 import mage.abilities.costs.Cost;
@@ -27,9 +26,6 @@ import mage.players.Player;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
-import java.io.*;
-
-import java.io.IOException;
 import java.util.*;
 
 /**
@@ -42,15 +38,12 @@ public class StateEncoder {
     public static volatile ImmutableRoaringBitmap globalIgnore;
     public volatile RoaringBitmap seenFeatures;
     public static boolean perfectInfo = true;
-    private Features features;
+    private final Features features;
     public Set<Integer> featureVector = new HashSet<>();
     private UUID opponentID;
     private UUID myPlayerID;
-    public List<Set<Integer>> stateVectors = new ArrayList<>();
-    public List<Set<Integer>> microStateVectors = new ArrayList<>();
 
-    public List<Double> stateScores = new ArrayList<>();
-    public List<int[]> actionVectors = new ArrayList<>();
+    public List<LabeledState>  labeledStates = new ArrayList<>();
 
     public Set<Integer> ignoreList;
 
@@ -67,10 +60,10 @@ public class StateEncoder {
     }
     public Features getFeatures() {return features;}
     public synchronized UUID getMyPlayerID() {return myPlayerID;}
-    public synchronized void addAction(int[] actionVec) { actionVectors.add(actionVec); }
+
 
     public void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
-        if(f == null) return;
+
         //f.addFeature(manaCost.getText());
         f.addNumericFeature("ManaValue", manaCost.manaValue(), callParent);
         for(ManaCost mc : manaCost) {
@@ -78,7 +71,7 @@ public class StateEncoder {
         }
     }
     public void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f, Boolean callParent) {
-        if(f == null) return;
+
         //if(c.c) f.addFeature("CanPay"); //use c.canPay()
         if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, callParent);
         if(costs == null || costs.isEmpty()) return;
@@ -87,7 +80,7 @@ public class StateEncoder {
         }
     }
     public void processAbility(Ability a, Game game, Features f) {
-        if(f == null) return;
+
         Costs<Cost> c = a.getCosts();
         //for now lets not worry about encoding costs per abilities
         ManaCosts<ManaCost> mcs = a.getManaCostsToPay();
@@ -102,13 +95,13 @@ public class StateEncoder {
         }
     }
     public void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
-        if(f == null) return;
+
         processAbility(aa, game, f);
 
         if(aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
     }
     public void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
-        if(f == null) return;
+
         processAbility(ta, game, f);
 
         if(!ta.checkTriggeredLimit(game)) f.addFeature("ReachedTriggerLimit"); //use ta.checkTriggeredLimit()
@@ -117,7 +110,7 @@ public class StateEncoder {
 
     }
     public void processCard(Card c, Game game, Features f) {
-        if(f == null) return;
+
         f.parent.addFeature("Card");//raw universal type of card added for counting purposes
 
         if(c.isPermanent()) f.addCategory("Permanent");
@@ -152,7 +145,7 @@ public class StateEncoder {
 
     }
     public void processPermBattlefield(Permanent p, Game game, Features f) {
-        if(f == null) return;
+
         processCard(p, game, f);
         //is tapped?
         if(p.isTapped()) f.addFeature("Tapped");
@@ -201,7 +194,7 @@ public class StateEncoder {
         }
     }
     public void processCardInZone(Card c, Zone z, Game game, Features f) {
-        if(f == null) return;
+
         //process as card
         processCard(c, game, f);
         //process abilities in gy
@@ -240,9 +233,9 @@ public class StateEncoder {
         }
     }
     public void processStackObject(StackObject so, int stackPosition, Game game, Features f) {
-        if(f == null) return;
+
         f.addNumericFeature("StackPosition", stackPosition, false);
-        if(so.getControllerId()==myPlayerID) f.addFeature("isController");
+        if(so.getControllerId().equals(myPlayerID)) f.addFeature("isController");
         Ability sa = so.getStackAbility();
         if(sa instanceof TriggeredAbility) {
             processTriggeredAbility((TriggeredAbility) sa, game, f);
@@ -282,7 +275,6 @@ public class StateEncoder {
         }
     }
     public void processManaPool(ManaPool mp, Game game,  Features f) {
-        if(f == null) return;
         f.addNumericFeature("GreenMana", mp.getGreen());
         f.addNumericFeature("RedMana", mp.getRed());
         f.addNumericFeature("BlueMana", mp.getBlue());
@@ -332,18 +324,20 @@ public class StateEncoder {
         myPlayerID = temp;
 
     }
-    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, String decisionsText) {
+    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, MCTSPlayer.NextAction decisionType, String decisionsText) {
         features.stateRefresh();
         featureVector.clear();
 
         Player myPlayer = game.getPlayer(myPlayerID);
+        //decision type
+        features.addFeature(decisionType.toString());
         //decision state
         features.addFeature(decisionsText);
 
         //game metadata
         features.addFeature(game.getTurnStepType().toString()); //phases
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
-        if(actingPlayerID==myPlayerID) features.addFeature("IsDecisionPlayer");
+        if(actingPlayerID.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
 
@@ -383,12 +377,13 @@ public class StateEncoder {
         return new HashSet<>(featureVector);
 
     }
-    public void processState(Game game, UUID actingPlayerID) {
-        processState(game, actingPlayerID, "priority");
+
+    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID) {
+        return processState(game, actingPlayerID, MCTSPlayer.NextAction.PRIORITY,"priority");
     }
 
-    public synchronized void processMacroState(Game game, UUID actingPlayerID) {
-        processState(game, actingPlayerID);
-        stateVectors.add(new HashSet<>(featureVector));
+    public void addLabeledState(Set<Integer> stateVector, int[] actionVector, double score, MCTSPlayer.NextAction actionType, boolean isPlayer) {
+        LabeledState newState = new LabeledState(stateVector, actionVector, score, actionType, isPlayer);
+        labeledStates.add(newState);
     }
 }

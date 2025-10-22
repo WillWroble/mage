@@ -295,8 +295,12 @@ public abstract class GameImpl implements Game {
      * @return the action made during the last priority
      */
     @Override
-    public void setLastPriority(Game game) {
-        lastPriority = game;
+    public void setLastPriority(UUID id) {
+        clearHistory();
+        lastPriorityPlayerId  = id;
+        if(!isSimulation()) {
+            lastPriority = this.copy();
+        }
     }
     @Override
     public boolean isSimulation() {
@@ -1733,7 +1737,7 @@ public abstract class GameImpl implements Game {
             player.getUserData().setUseFirstManaAbility(useFirstManaAbility);
         }
     }
-    private void clearHistory() {
+    public void clearHistory() {
         for(Player player : state.getPlayers().values()) {
             player.getPlayerHistory().clear();
         }
@@ -1778,11 +1782,11 @@ public abstract class GameImpl implements Game {
                                 if (isPaused() || checkIfGameIsOver()) {
                                     return;
                                 }
-                                if(!isSimulation()) {
-                                    lastPriorityPlayerId = player.getId();
-                                    lastPriority = this.copy();
-                                }
-                                clearHistory();
+//                                if(!isSimulation()) {
+//                                    lastPriorityPlayerId = player.getId();
+//                                    lastPriority = this.copy();
+//                                }
+                                //clearHistory();
                                 state.priorityCounter++;
                                 // resetPassed should be called if player performs any action
                                 if (player.priority(this)) {

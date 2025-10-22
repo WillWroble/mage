@@ -16,6 +16,7 @@ import mage.abilities.effects.RestrictionEffect;
 import mage.abilities.effects.RestrictionUntapNotMoreThanEffect;
 import mage.abilities.keyword.*;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
+import mage.abilities.mana.ManaAbility;
 import mage.abilities.mana.ManaOptions;
 import mage.cards.*;
 import mage.cards.decks.Deck;
@@ -84,6 +85,7 @@ public abstract class PlayerImpl implements Player, Serializable {
             put(PhaseStep.DECLARE_ATTACKERS, Step.StepPart.PRE).build();
 
     private Ability lastActivated;
+    public int autoPassed = 0;
     /**
      * Used to cancel waiting requests send to the player
      */
@@ -201,7 +203,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     // Used during available mana calculation to give back possible available net mana from triggered mana abilities (No need to copy)
     protected final List<List<Mana>> availableTriggeredManaList = new ArrayList<>();
 
-    private final PlayerScript playerHistory = new PlayerScript();
+    private PlayerScript playerHistory = new PlayerScript();
 
     protected PlayerImpl(String name, RangeOfInfluence range) {
         this(UUID.nameUUIDFromBytes(name.getBytes()));
@@ -224,6 +226,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     protected PlayerImpl(final PlayerImpl player) {
 
         this.lastActivated = player.lastActivated;
+        playerHistory = new PlayerScript(player.playerHistory);
 
         this.abort = player.abort;
         this.playerId = player.playerId;
@@ -328,6 +331,7 @@ public abstract class PlayerImpl implements Player, Serializable {
             throw new IllegalArgumentException("Wrong code usage: can't restore from player class " + player.getClass().getName());
         }
         this.lastActivated = player.getLastActivated();
+        this.playerHistory = new PlayerScript(player.getPlayerHistory());
         this.name = player.getName();
         this.human = player.isHuman();
         this.life = player.getLife();
@@ -401,6 +405,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         this.playersUnderYourControl.addAll(player.getPlayersUnderYourControl());
 
         this.reachedNextTurnAfterLeaving = player.hasReachedNextTurnAfterLeaving();
+
 
         this.clearCastSourceIdManaCosts();
         for (Entry<UUID, Set<MageIdentifier>> entry : player.getCastSourceIdWithAlternateMana().entrySet()) {
@@ -1628,7 +1633,7 @@ public abstract class PlayerImpl implements Player, Serializable {
             return true;
         }
         //needs to happen after pass since pass() logs ability separately
-        playerHistory.prioritySequence.add(ability.copy());
+        if(!(ability instanceof ManaAbility)) playerHistory.prioritySequence.add(ability.copy());
         Card card = game.getCard(ability.getSourceId());
         if (ability instanceof PlayLandAsCommanderAbility) {
 
@@ -2606,6 +2611,16 @@ public abstract class PlayerImpl implements Player, Serializable {
     public void pass(Game game) {
         getPlayerHistory().prioritySequence.add(new PassAbility());
         this.passed = true;
+        resetStoredBookmark(game);
+    }
+
+    /**
+     * doesn't update playerHistories (use when skipping forced passes)
+     * @param game
+     */
+    public void quietPass(Game game) {
+        this.passed = true;
+        this.autoPassed++;
         resetStoredBookmark(game);
     }
 

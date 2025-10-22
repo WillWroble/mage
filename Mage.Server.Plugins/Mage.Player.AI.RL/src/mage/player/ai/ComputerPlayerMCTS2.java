@@ -1,5 +1,9 @@
 package mage.player.ai;
 
+import mage.abilities.Ability;
+import mage.abilities.ActivatedAbility;
+import mage.abilities.common.PassAbility;
+import mage.abilities.mana.ManaAbility;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
@@ -23,7 +27,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final int BASE_THREAD_TIMEOUT = 4;//seconds
     private static final int MAX_TREE_VISITS = 300;//per thread
     private static final int MAX_TREE_NODES = 800;//per thread
-
+    public static final int[] PASS_ACTION = {100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     public static boolean SHOW_THREAD_INFO = false;
     public transient RemoteModelEvaluator nn;
 
@@ -58,7 +62,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     protected double evaluateState(MCTSNode node, Game game) {
         MCTSPlayer myPlayer = (MCTSPlayer)game.getPlayer(node.playerId);
 
-        Set<Integer> featureSet = encoder.processState(game, node.playerId, myPlayer.decisionText);
+        Set<Integer> featureSet = encoder.processState(game, node.playerId, myPlayer.getNextAction(), myPlayer.decisionText);
         node.stateVector = featureSet;
 
 
@@ -69,8 +73,24 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
 
         RemoteModelEvaluator.InferenceResult out = nn.infer(nnIndices);
+        switch (myPlayer.getNextAction()) {
+            case PRIORITY:
+                if(node.playerId.equals(playerId)) {
+                    node.policy = out.policy_player;
+                } else {
+                    node.policy = out.policy_opponent;
+                }
+                break;
+            case CHOOSE_TARGET:
+                node.policy = out.policy_target;
+                break;
+            case CHOOSE_USE:
+                node.policy = out.policy_binary;
+                break;
+            default:
+                node.policy = null;
 
-        node.policy = out.policy; //combat decisions don't get priors but get filtered out in expand()
+        }
         node.networkScore = out.value;
 
         return out.value;
@@ -105,9 +125,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if (game.getTurnStepType() == PhaseStep.END_TURN) {
             GameStateEvaluator2.printBattlefield(game, game.getActivePlayerId());
         }
-        boolean out = super.priority(game);
-        //ActionEncoder.addAction(root.getAction());
-        return out;
+        return super.priority(game);
     }
     /**
      * A single-threaded version of applyMCTS that preserves the custom logic for
@@ -189,6 +207,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         MCTSNode.logHitMiss();
     }
+
     int[] getActionVec(MCTSNode node) {
         return getActionVec(node, true);
     }
@@ -241,22 +260,17 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if (root != null) {
             MCTSNode best = root.bestChild(game);
             if(best == null) return;
-
+            int[] actionVec = null;
             if (action == NextAction.PRIORITY) {
-                encoder.stateVectors.add(root.stateVector);
-                encoder.addAction(getActionVec(root));
-                encoder.stateScores.add(root.getScoreRatio());
+                actionVec = getActionVec(root);
             }
             else if(action == NextAction.CHOOSE_TARGET) {
-                encoder.stateVectors.add(root.stateVector);
-                encoder.addAction(getTargetActionVec(root, game));
-                encoder.stateScores.add(root.getScoreRatio());
+                actionVec = getTargetActionVec(root, game);
             }
             else if(action == NextAction.CHOOSE_USE) {
-                encoder.stateVectors.add(root.stateVector);
-                encoder.addAction(getUseActionVec(root));
-                encoder.stateScores.add(root.getScoreRatio());
+                actionVec = getUseActionVec(root);
             }
+            encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, true);
             root = best;
             root.emancipate();
         } else {

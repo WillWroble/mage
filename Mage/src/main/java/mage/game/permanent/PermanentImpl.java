@@ -264,6 +264,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     public String getValue(GameState state) {
         StringBuilder sb = threadLocalBuilder.get();
         sb.append(controllerId).append(getName()).append(tapped).append(damage);
+        if(!this.isLand()) sb.append(getId());//TODO: temporary workaround for non deterministic auto-tapper. need to make auto tapper deterministic at some point
         sb.append(subtype).append(supertype).append(power.getValue()).append(toughness.getValue());
         sb.append(abilities.getValue());
         for(UUID att : attachments) {

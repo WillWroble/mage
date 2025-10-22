@@ -66,6 +66,8 @@ public class ComputerPlayer extends PlayerImpl {
     public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
     //for discrete choices
     public Set<String> choiceOptions = new HashSet<>();
+    //for priorities
+    public List<Ability> playables = new ArrayList<>();
 
     private static final Logger log = Logger.getLogger(ComputerPlayer.class);
     private long lastThinkTime = 0; // msecs for last AI actions calc
@@ -124,6 +126,7 @@ public class ComputerPlayer extends PlayerImpl {
         super(player);
         chooseTargetOptions = new HashSet<>(player.chooseTargetOptions);
         choiceOptions = new HashSet<>(player.choiceOptions);
+        playables = new  ArrayList<>(player.playables);
     }
 
     @Override
@@ -144,9 +147,15 @@ public class ComputerPlayer extends PlayerImpl {
     public boolean choose(Outcome outcome, Target target, Ability source, Game game) {
         return choose(outcome, target, source, game, null);
     }
-
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
+        boolean out = chooseHelper(outcome, target, source, game, options);
+        Set<UUID> targetOut =  new HashSet<>(target.getTargets());
+        getPlayerHistory().targetSequence.add(targetOut);
+        return out;
+    }
+
+    public boolean chooseHelper(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
         if(PRINT_DECISION_FALLBACKS && name.equals("PlayerA")) log.info("choose: ");
         if (log.isDebugEnabled()) {
             log.debug("choose: " + outcome.toString() + ':' + target.toString());
@@ -1925,7 +1934,9 @@ public class ComputerPlayer extends PlayerImpl {
         // Be proactive! Always use abilities, the evaluation function will decide if it's good or not
         // Otherwise some abilities won't be used by AI like LoseTargetEffect that has "bad" outcome
         // but still is good when targets opponent
-        return outcome != Outcome.AIDontUseIt; // Added for Desecration Demon sacrifice ability
+        boolean out =  outcome != Outcome.AIDontUseIt; // Added for Desecration Demon sacrifice ability
+        getPlayerHistory().useSequence.add(out);
+        return out;
     }
 
     @Override
@@ -2143,7 +2154,7 @@ public class ComputerPlayer extends PlayerImpl {
         List<Permanent> availableAttackers = getAvailableAttackers(game);
         availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
         for(Permanent attacker : availableAttackers) {
-            boolean willAttack = chooseUse(null, "attack with: " + attacker.getName() + "?", null, game);
+            boolean willAttack = chooseUse(Outcome.Neutral, "attack with: " + attacker.getName() + "?", null, game);
             if(willAttack) {
                 this.declareAttacker(attacker.getId(), opponentId, game, false);
             }
@@ -2177,7 +2188,7 @@ public class ComputerPlayer extends PlayerImpl {
         List<Permanent> blockers = getAvailableBlockers(game);
         blockers.sort(Comparator.comparing(Permanent::getId));
         for(Permanent blocker : blockers) {
-            boolean willBlock = chooseUse(null, "block with: " + blocker.getName() + "?", null, game);
+            boolean willBlock = chooseUse(Outcome.Neutral, "block with: " + blocker.getName() + "?", null, game);
             if(willBlock) {//now choose which creature to block
                 Target attackerTarget = new TargetAttackingCreature();
                 chooseTarget(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game);
@@ -3123,6 +3134,7 @@ public class ComputerPlayer extends PlayerImpl {
         ComputerPlayer cPlayer = (ComputerPlayer)player;
         chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
         choiceOptions = new HashSet<>(cPlayer.choiceOptions);
+        playables = new ArrayList<>(cPlayer.playables);
         this.human = false;
     }
 

@@ -55,7 +55,7 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     UUID getLastPriorityPlayerId();
     Ability getLastPriorityAction();
 
-    void setLastPriority(Game game);
+    void setLastPriority(UUID id);
 
     MatchType getGameType();
 

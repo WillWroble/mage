@@ -4,6 +4,7 @@ import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
+import mage.abilities.mana.ManaAbility;
 import mage.cards.Card;
 import mage.choices.Choice;
 import mage.constants.Outcome;
@@ -11,6 +12,7 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
@@ -45,6 +47,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
     //mcts tree doesn't save states if true; makes search slower but more memory efficient
     public static boolean USE_STATELESS_NODES =  false;
+    //tree search will now completely ignore states where passing is the only option. still logs the state in the base game for training
+    public static boolean SKIP_TRANSITION_STATES = true;
     //dirichlet noise is applied once to the priors of the root node; this represents how much of those priors should be noise
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     //how spiky the dirichlet noise will be
@@ -93,16 +97,22 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
+        //TODO: make more robust filtering
+        //(some mana abilities have other effects)
+        List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
+        if(SKIP_TRANSITION_STATES && playableAbilities.isEmpty()) {//just pass when only option
+            pass(game);
+            return false;
+        }
+        game.setLastPriority(playerId);
         getNextAction(game, NextAction.PRIORITY);
-
-        //chooseTargetAction.clear();
 
         Ability ability = root.getAction();
         if (ability == null)
             logger.fatal("null ability");
         activateAbility((ActivatedAbility) ability, game);
         if(getPlayerHistory().prioritySequence.isEmpty()) {
-            logger.error("huhssss");
+            logger.error("priority sequence update failure");
         }
         if (ability instanceof PassAbility)
             return false;
@@ -443,7 +453,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
         }
-        mcts.setLastPriority(null);//never use lastPriortiy in sim games
+        //mcts.setLastPriority(null);//never use lastPriortiy in sim games
         mcts.pause();
         return mcts;
     }

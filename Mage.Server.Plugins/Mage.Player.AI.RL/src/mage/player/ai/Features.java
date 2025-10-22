@@ -9,263 +9,186 @@ import org.apache.log4j.Logger;
 
 
 /**
- * Ephemeral, hashing-based Features tree (drop-in replacement).
- * Key properties:
- *  - Per-state, on-demand namespace nodes; GC after state.
- *  - Occurrence-aware subfeatures (getSubFeatures) AND terminal features (addFeature),
- *    each namespace tracks its own local counts.
- *  - Categories are real child namespaces (cached in categoriesForChildren),
- *    so occurrences within categories are tracked naturally.
- *  - pooling upward honors callParent (per call) and passToParent (persistent per node).
- *  - Numeric features are thermometer encoded (binary thresholds).
- *  - Indices computed by hashing; no global feature dictionary / merge.
+ * This hierarchical structure represents the mapping of every possible relevant feature encountered from a game state to
+ * an index on a 2000000 dimension binary vector. The reduced form of this vector (~5000) will be used as input for both a policy and
+ * value neural network. To see how game features are mapped look at StateEncoder.java this data structure only handles and stores the
+ * mappings.
  *
- * Optional:
- *  - If the encoder exposes a persistent "seen indices" set/bitmap, emitHere() will add to it.
- *  - If StateEncoder.globalIgnore (e.g., ImmutableRoaringBitmap) is present, you can use it for logging/filtering.
+ * @author willwroble
  */
 public class Features implements Serializable {
-    private static final long serialVersionUID = 4L;
-
-    // ---- Tuning knobs ----
-    private static final int  TABLE_SIZE        = 2_000_000;                // hash bins
-    private static final long GLOBAL_SEED       = 0x9E3779B185EBCA87L;      // fixed reproducible seed
-    private static final long OCC_CONST         = 0x165667B19E3779F9L;      // mix-in for occurrence separation
+    private static final long serialVersionUID = 2L; // Version updated for the structural change
     private static final Logger logger = Logger.getLogger(Features.class);
 
-    // Compatibility flags (kept; you can wire them to logs if desired)
+    private static final int  TABLE_SIZE        = 2_000_000;                // hash bins
+    private static final long GLOBAL_SEED       = 0x9E3779B185EBCA87L;      // fixed reproducible seed
+
+    private final Map<String, Features> subFeatures;
+    private final Map<String, Integer> occurrences;
+    private final Map<String, Features> categoriesForChildren; //isn't reset between states, represents all possible categories for children
+    private final Set<Features> categories; //resets every state represents temporary category features fall under
+    public boolean passToParent = true;
+
+    private transient StateEncoder encoder;
+
+    private String featureName;
+    private long seed; //namespace hash
+    public Features parent;
     public static boolean printOldFeatures = false;
-    public static boolean printNewFeatures = true;
+    public static boolean printNewFeatures = false;
 
-    // ---- Public fields preserved for compatibility ----
-    public boolean passToParent          = true;                 // persistent per-namespace guard for pooling
-    public Features parent;                                      // upward link
-    public String featureName = "root";                          // debug/compat
-
-    // ---- Internal per-node state ----
-    private transient StateEncoder encoder;                      // set once per state
-    private final long nsSeed;                                   // namespace seed for this node
-
-    // Occurrence counters:
-    private final Map<String,Integer> occSub   = new HashMap<>(); // for getSubFeatures(token)   → K
-    private final Map<String,Integer> occTerm  = new HashMap<>(); // for addFeature(name)        → K
-
-    // Category handling:
-    //  - categories active at THIS node (applies when emitting at this node).
-    //  - each category is a real Features node anchored to this node's parent.
-    private final Map<String, Features> categoriesForChildren = new HashMap<>();
-    private final List<Features> activeCategories;               // inherited list of active category nodes
-
-    // ---- Constructors ----
-
-    /** Root constructor (legacy-compatible) */
     public Features() {
-        this.featureName = "root";
-        this.parent = null;
-        this.encoder = null;
-        this.nsSeed = GLOBAL_SEED;
-        this.activeCategories = new ArrayList<>();
-    }
-    /** Legacy root/name/encoder/atomic ctor (compat) */
-    public Features(String name, StateEncoder e, AtomicInteger i) {
-        this.featureName = name;
-        this.parent = null;
-        this.encoder = e;
-        this.nsSeed = GLOBAL_SEED;
-        this.activeCategories = new ArrayList<>();
+        //constructor
+        subFeatures = new HashMap<>();
+        occurrences = new HashMap<>();
+        categoriesForChildren = new HashMap<>();
+        categories = new HashSet<>();
+        parent = null;
+        featureName = "root";
+        seed = GLOBAL_SEED;
     }
 
-    /** Internal child builder used by getSubFeatures(name, passToParent). */
-    private Features(Features parent, String childToken, boolean childPassToParent, boolean emitNamespaceBit) {
-        this.parent = parent;
-        this.encoder = parent.encoder;
-        this.featureName = childToken;
+    public Features(Features p, String name) {
+        this();
+        parent = p;
+        featureName = name;
+        encoder = p.encoder;
+        seed = hash64(name, p.seed);
+    }
 
-        int k = parent.bumpSubOccurrence(childToken);
-        if (emitNamespaceBit) {
-            parent.emitHereOcc(childToken); // "namespace is a feature" with terminal-occurrence semantics
+    public Features(String name, StateEncoder e, long s) {
+        this();
+        featureName = name;
+        encoder = e;
+        seed = s;
+    }
+
+    public void setEncoder(StateEncoder encoder) {
+        this.encoder = encoder;
+        for (String name : subFeatures.keySet()) {
+            subFeatures.get(name).setEncoder(encoder);
         }
-        this.nsSeed = deriveChildSeed(parent.nsSeed, childToken, k);
-        this.activeCategories = new ArrayList<>(parent.activeCategories); // inherit active categories
-        this.passToParent = childPassToParent;
-    }
-
-    /** Internal constructor to materialize a category node with an explicit seed (no subclass). */
-    private Features(Features anchorParent, String catName, long explicitSeed, boolean isCategory) {
-        this.parent = anchorParent;            // anchor at the parent of the scope that activated it
-        this.encoder = (anchorParent != null ? anchorParent.encoder : null);
-        this.featureName = (isCategory ? "CAT:" + catName : catName);
-        this.nsSeed = explicitSeed;
-        this.activeCategories = (anchorParent != null ? new ArrayList<>(anchorParent.activeCategories) : new ArrayList<>());
-    }
-
-    // ---- Public API (drop-in) ----
-
-    public void setEncoder(StateEncoder encoder) { this.encoder = encoder; }
-
-    /** Category accessor (compat). Usually you call addCategory(name) then emit under this scope/children. */
-    public Features getCategory(String name) {
-        if (name == null || name.isEmpty()) return null;
-        // Follow old semantics: category namespace anchored at THIS node's parent.
-        Features anchor = (this.parent != null ? this.parent : this);
-        Features cat = anchor.categoriesForChildren.get(name);
-        if (cat == null) {
-            long catSeed = mix64(anchor.nsSeed ^ hash64("CAT:" + name, anchor.nsSeed));
-            cat = new Features(anchor, name, catSeed, /*isCategory=*/true);
-            anchor.categoriesForChildren.put(name, cat);
+        for (String name : categoriesForChildren.keySet()) {
+            categoriesForChildren.get(name).setEncoder(encoder);
         }
-        return cat;
     }
-
-    /** Subfeature accessor (occurrence-aware); emits the subfeature token as a feature at the parent (old behavior). */
-    public Features getSubFeatures(String name) { return getSubFeatures(name, true); }
-
-    public Features getSubFeatures(String name, boolean passToParentForChild) {
-        if (name == null || name.isEmpty()) return null;
-        return new Features(this, name, passToParentForChild, /*emitNamespaceBit*/true);
-    }
-
-    /** Add a category: categories are features too, and activate pooling for this subtree. */
-    public void addCategory(String name) {
-        if (name == null || name.isEmpty()) return;
-        // Emit the category as a terminal feature here (with occurrence counting)
-        emitHereOcc(name);
-
-        // Activate or reuse the category node anchored at this node's parent
-        Features cat = getCategory(name);
-        // Add to THIS node's active list if not present
-        boolean present = false;
-        for (Features c : activeCategories) {
-            if (c == cat) { present = true; break; }
+    private Features getCategory(String name) {
+        if (categoriesForChildren.containsKey(name)) { //already contains category
+            return categoriesForChildren.get(name);
+        } else { //completely new
+            Features newCat = new Features(name + "_" + featureName, encoder, hash64(name, seed));
+            categoriesForChildren.put(name, newCat);
+            return newCat;
         }
-        if (!present) activeCategories.add(cat);
     }
-
-    public void addFeature(String name) { addFeature(name, true); }
 
     /**
-     * Binary feature; terminal occurrences are tracked per node:
-     *   1st/2nd/3rd call to the same 'name' under the same namespace produce distinct buckets.
-     * pools to ancestors if (callParent && passToParent at each ancestor).
+     * gets subfeatures at name or creates them if they dont exist
+     *
+     * @param name
+     * @return subfeature at name (never returns null)
      */
+    public Features getSubFeatures(String name) {
+        return getSubFeatures(name, true);
+    }
+
+    public Features getSubFeatures(String name, boolean passToParent) {
+        //added as normal binary feature
+        addFeature(name);
+
+        int n = occurrences.get(name);
+        String key = (name+"#"+n);
+        if (subFeatures.containsKey(key)) { //already contains feature
+            return subFeatures.get(key);
+        } else { //completely new
+            Features newSub = new Features(this, key);
+            subFeatures.put(key, newSub);
+            newSub.passToParent = passToParent;
+            return newSub;
+        }
+    }
+
+    /**
+     * similar to a subfeature a category will pool features within itself. however
+     * unlike subfeatures a feature can inherit multiple categories(ie card type and color).
+     * you can think of subfeatures as abstract classes and categories as interfaces
+     * this function creates/finds the category with the given name and adds it as a
+     * category for this feature to pass up to, similar to the parent
+     * Categories should always be added before features you want to pool into them
+     *
+     * can not add categories to root!!
+     *
+     * @param name
+     */
+    public void addCategory(String name) {
+        addFeature(name); //first add as feature since every category is also a feature
+        Features categoryFeature = parent.getCategory(name);
+        categories.add(categoryFeature);
+    }
+
+    public void addFeature(String name) {
+        addFeature(name, true);
+    }
+
     public void addFeature(String name, boolean callParent) {
-        if (name == null || name.isEmpty()) return;
-
-        emitHereOcc(name); // emit at THIS, with terminal-occurrence separation
-
-        if (callParent && this.passToParent) {
-            Features anc = this.parent;
-            while (anc != null) {
-                anc.emitHereOcc(name);          // ancestor tracks its own terminal occurrences
-                if (!anc.passToParent) break;   // stop pooling if ancestor blocks
-                anc = anc.parent;
+        //usually add feature to parent/categories
+        if (parent != null && callParent && passToParent) {
+            parent.addFeature(name);
+            for (Features c : categories) {
+                c.addFeature(name);
             }
         }
+        int n;
+        n = occurrences.getOrDefault(name, 0);
+        n++;
+        occurrences.put(name, n);
+        String key = (name+"#"+n);
+        long hash = hash64(key, seed);
+        addIndex(indexFor(hash), key);
     }
 
-    public void addNumericFeature(String name, int num) { addNumericFeature(name, num, true); }
+    public void addNumericFeature(String name, int num) {
+        addNumericFeature(name, num, true);
+    }
 
-    /** Numeric feature with per-threshold occurrence counting (thermometer).
-     *  Example: value=3 emits keys name:1, name:2, name:3
-     *  Each threshold key tracks its own terminal occurrence (so multiple entities
-     *  contributing to the same threshold produce distinct buckets).
+    /**
+     * thermometer encodes each less value, while also maintaining occurrence counts per value
+     * @param name
+     * @param num
+     * @param callParent
      */
-    public void addNumericFeature(String name, int k, boolean callParent) {
-        if (name == null || name.isEmpty()) return;
-        k = Math.max(0, k);
-        for (int i = 0; i <= k; i++) {
-            final String key = name + "<" + i + ">";
-
-            // emit here with per-threshold terminal occurrence separation
-            this.emitHereOcc(key);
-
-            // pool to ancestors if requested, honoring passToParent at each hop
-            if (callParent && this.passToParent) {
-                Features anc = this.parent;
-                while (anc != null) {
-                    anc.emitHereOcc(key);          // ancestor tracks occurrences for this threshold separately
-                    if (!anc.passToParent) break;
-                    anc = anc.parent;
-                }
-            }
+    public void addNumericFeature(String name, int num, boolean callParent) {
+        for(int n = 0; n < num; n++) {
+            String key = (name+"@"+n);
+            addFeature(key, callParent);
         }
     }
 
-    /** Clears per-state runtime data on this node (call on root at start of processState). */
     public void stateRefresh() {
-        this.occSub.clear();
-        this.occTerm.clear();
-        this.activeCategories.clear();
-        this.categoriesForChildren.clear();
-        // encoder/seed/passToParent unchanged; children from previous state are unreferenced and GC'd.
+        categories.clear();
+        occurrences.replaceAll((k, v) -> 0);
+        for (String n : subFeatures.keySet()) {
+            subFeatures.get(n).stateRefresh();
+        }
+        for (String n : categoriesForChildren.keySet()) {
+            categoriesForChildren.get(n).stateRefresh();
+        }
     }
-
-    // ---- Internals ----
-
-    /** Emit at THIS node, with terminal-occurrence separation and category mirroring. */
-    private void emitHereOcc(String key) {
-        if (encoder == null || encoder.featureVector == null) return;
-
-        // Terminal occurrence number under THIS namespace:
-        int k = bumpTermOccurrence(key);
-        long seed = (k == 1 ? nsSeed : mix64(nsSeed ^ (OCC_CONST * (long) k)));
-
-        // Emit main
-        int idx = indexFor(seed, key);
-        addIndex(idx, key, k);
-        // Mirror into active category nodes (each with its own terminal occurrence counters)
-        if (!activeCategories.isEmpty()) {
-            for (int i = 0; i < activeCategories.size(); i++) {
-                Features cat = activeCategories.get(i);
-                cat.emitHereOcc(key); // note: cat handles its own occurrence separation
+    private void addIndex(int idx, String key) {
+        encoder.featureVector.add(idx);
+        if (encoder.seenFeatures != null) {
+            if (!encoder.seenFeatures.contains(idx)) {
+                encoder.seenFeatures.add(idx);
+                if (Features.printNewFeatures) logger.info("new feature, " + key + " in " + featureName + ", at index: " + idx);
+            } else {
+                if (Features.printOldFeatures) logger.info("seen feature, " + key  + " in " + featureName + ", at index: " + idx);
             }
         }
     }
-
-    /** Bump occurrence for subfeature token used in getSubFeatures(token). */
-    private int bumpSubOccurrence(String token) {
-        Integer next = occSub.get(token);
-        int k = (next == null ? 1 : next + 1);
-        occSub.put(token, k);
-        return k;
-    }
-
-    /** Bump occurrence for terminal features emitted at THIS node. */
-    private int bumpTermOccurrence(String key) {
-        Integer next = occTerm.get(key);
-        int k = (next == null ? 1 : next + 1);
-        occTerm.put(key, k);
-        return k;
-    }
-
-    /** Append idx to encoder vector and update optional persistent seen sets/bitmaps. */
-        private void addIndex(int idx, String key, int k) {
-            encoder.featureVector.add(idx);
-
-            if (encoder.seenFeatures != null) {
-                if(!encoder.seenFeatures.contains(idx)) {
-                    encoder.seenFeatures.add(idx); // RoaringBitmap/IntSet-up to you
-                    if(Features.printNewFeatures) logger.info("new feature, " + key + "#" + k + " in " + featureName + ", at index: " + idx);
-                } else {
-                    if(Features.printOldFeatures) logger.info("seen feature, " + key + "#" + k + " in " + featureName + ", at index: " + idx);
-                }
-            }
-
-        }
-
-    private static int indexFor(long nsSeed, String key) {
-        long h = hash64(key, nsSeed);
+    private static int indexFor(long h) {
         if (h < 0) h = -h;
-        return (int)(h % TABLE_SIZE);
+        return (int) (h % TABLE_SIZE);
     }
-
-    private static long deriveChildSeed(long parentSeed, String token, int occurrenceK) {
-        long s = mix64(parentSeed ^ hash64(token, parentSeed));
-        s = mix64(s ^ (OCC_CONST * (long) occurrenceK)); // separate CARD#1 vs CARD#2
-        return s;
-    }
-
-    // Hashing utilities
     private static long hash64(String s, long seed) {
         byte[] data = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         long h = mix64(seed ^ (data.length * 0x9E3779B185EBCA87L));
@@ -286,7 +209,6 @@ public class Features implements Serializable {
         h ^= h >>> 33;
         return h;
     }
-
     private static long mix64(long z) {
         z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L;
         z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL;

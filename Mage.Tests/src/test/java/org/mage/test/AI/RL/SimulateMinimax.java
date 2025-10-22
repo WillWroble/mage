@@ -5,13 +5,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
-public class SimulateMCTS extends ParallelDataGenerator {
+public class SimulateMinimax extends ParallelDataGenerator {
+
     @Before
     public void setup() {
-        DISCOUNT_FACTOR = 0.95; //default for dense states
-        VALUE_LAMBDA = 0.5; //default for MCTS root scores
-        DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
+        DISCOUNT_FACTOR = 0.95; //less states means higher discount
+        VALUE_LAMBDA = 0.5; //consider lower lambda for heuristic minimax scores
     }
     @Test
     public void test_single_game() {
@@ -21,17 +20,16 @@ public class SimulateMCTS extends ParallelDataGenerator {
     public void generateData() {
         super.generateData();
     }
-
     @Test
     public void createTestDataSet() {
         DATA_OUT_FILE = "testing.hdf5";
-        NUM_GAMES_TO_SIMULATE = 50;
+        NUM_GAMES_TO_SIMULATE = 100;
         super.generateData();
     }
     @Test
     public void createTrainDataSet() {
         DATA_OUT_FILE = "training.hdf5";
-        NUM_GAMES_TO_SIMULATE = 250;
+        NUM_GAMES_TO_SIMULATE = 1000;
         super.generateData();
     }
     @Test
@@ -39,14 +37,12 @@ public class SimulateMCTS extends ParallelDataGenerator {
         createTestDataSet();
         createTrainDataSet();
     }
-
-    // This is the correct override to use for creating players within our self-contained games.
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
-        if(name.equals("PlayerA")) {
-            TestComputerPlayerMonteCarlo2 mcts2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(mcts2);
-            testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
+        if (name.equals("PlayerA")) {
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestPlayer testPlayer = new TestPlayer(t8);
+            testPlayer.setAIPlayer(true);
             return testPlayer;
         } else {
             TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
@@ -55,4 +51,5 @@ public class SimulateMCTS extends ParallelDataGenerator {
             return testPlayer;
         }
     }
+
 }
