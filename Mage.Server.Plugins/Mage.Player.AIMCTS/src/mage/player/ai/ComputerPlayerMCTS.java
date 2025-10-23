@@ -100,7 +100,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         //TODO: make more robust filtering
         //(some mana abilities have other effects)
         List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
-        if(SKIP_TRANSITION_STATES && playableAbilities.isEmpty()) {//just pass when only option
+        if(SKIP_TRANSITION_STATES && playableAbilities.isEmpty() &&
+                !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//just pass when only option
             pass(game);
             return false;
         }

@@ -1142,15 +1142,15 @@ public class ComputerPlayer6 extends ComputerPlayer {
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         logger.debug("selectAttackers");
-        selectAttackersOneAtATime(game, attackingPlayerId);
-        //declareAttackers(game, playerId);
+        //selectAttackersOneAtATime(game, attackingPlayerId);
+        declareAttackers(game, playerId);
     }
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         logger.debug("selectBlockers");
-        selectBlockersOneAtATime(source, game, defendingPlayerId);
-        //declareBlockers(game, playerId);
+        //selectBlockersOneAtATime(source, game, defendingPlayerId);
+        declareBlockers(game, playerId);
     }
 
     /**

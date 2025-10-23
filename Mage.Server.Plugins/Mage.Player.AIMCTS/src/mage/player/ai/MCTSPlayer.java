@@ -5,6 +5,7 @@ import mage.abilities.common.PassAbility;
 import mage.abilities.costs.mana.GenericManaCost;
 import mage.choices.Choice;
 import mage.constants.Outcome;
+import mage.constants.PhaseStep;
 import mage.game.Game;
 import mage.game.GameImpl;
 import mage.game.combat.Combat;
@@ -224,7 +225,8 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         playables = getPlayableOptions(game);
-        if(ComputerPlayerMCTS.SKIP_TRANSITION_STATES && playables.size() == 1) {//skip transition states
+        if(ComputerPlayerMCTS.SKIP_TRANSITION_STATES && playables.size() == 1 && //skip transition states
+                !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//forced checkpoint before combat
             pass(game);
             return false;
         }
