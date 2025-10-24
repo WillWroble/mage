@@ -11,11 +11,11 @@ public class SimulateMCTS extends ParallelDataGenerator {
         DISCOUNT_FACTOR = 0.95; //default for dense states
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
+        DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
     }
     @Test
     public void test_single_game() {
-        super.test_single_game();
+        super.test_single_game(-6072638497124130761L);
     }
     @Test
     public void generateData() {

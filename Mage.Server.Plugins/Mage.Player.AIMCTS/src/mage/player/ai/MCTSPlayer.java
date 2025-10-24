@@ -225,7 +225,7 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         playables = getPlayableOptions(game);
-        if(ComputerPlayerMCTS.SKIP_TRANSITION_STATES && playables.size() == 1 && //skip transition states
+        if(playables.size() == 1 && //skip transition states
                 !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//forced checkpoint before combat
             pass(game);
             return false;

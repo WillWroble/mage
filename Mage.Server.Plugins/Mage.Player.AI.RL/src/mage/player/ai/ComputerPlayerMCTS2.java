@@ -140,7 +140,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         double totalThinkTimeThisMove = 0;
 
         // Apply dirichlet noise once at the start of the search for this turn
-        root.dirichletSeed = RandomUtil.nextInt();
+        if(!NO_NOISE) root.dirichletSeed = RandomUtil.nextInt();
 
 
         long startTime = System.nanoTime();

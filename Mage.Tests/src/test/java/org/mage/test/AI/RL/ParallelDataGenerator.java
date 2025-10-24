@@ -47,13 +47,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // ============================ DATA GENERATION SETTINGS ============================
     protected static int NUM_GAMES_TO_SIMULATE = 100;
     protected static int MAX_GAME_TURNS = 50;
-    protected static int MAX_CONCURRENT_GAMES = 6;
+    protected static int MAX_CONCURRENT_GAMES = 8;
     // =============================== DECK AND AI SETTINGS ===============================
     protected static String DECK_A = "MTGA_MonoU";
     protected static String DECK_B= "MTGA_MonoR";
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
-    protected static double DISCOUNT_FACTOR = 0.99;
+    protected static double DISCOUNT_FACTOR = 0.95;
     protected static double VALUE_LAMBDA = 0.5;
     // ================================== FILE PATHS ==================================
     protected static String DECK_A_PATH = "decks/" + DECK_A + ".dck";
@@ -246,11 +246,14 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         logger.info("==========================================");
         printMapByValue(ActionEncoder.targetMap);
     }
+    @Test
+    public void test_single_game() {
+        test_single_game(System.nanoTime());
+    }
     /**
      * test function to run a single game for debugging purposes without saving any data.
      */
-    @Test
-    public void test_single_game() {
+    public void test_single_game(long seed) {
         logger.info("\n=========================================");
         logger.info("       RUNNING SINGLE DEBUG GAME         ");
         logger.info("=========================================");
@@ -263,12 +266,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
         //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
         //Features.printOldFeatures = false;
-        long seed = System.nanoTime();
+        //long seed = System.nanoTime();
         //seed = 751314143315900L; //opponent turn priority order bug
         //seed = -4411935635951101274L; //blocking bug
         //seed = 5401683921170803014L; //unable to find matching
         //seed = 1405302846091300L; //chooseTarget() and chooseUse() are used
         //seed = 1489032704055400L; //illegal block targets
+
 
 
         StateEncoder threadEncoder = new StateEncoder();

@@ -138,11 +138,11 @@ public class MCTSNode {
         if(actingPlayer.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {//priority point, use current state value
             this.stateValue = game.getState().getValue(game, targetPlayer);
             this.fullStateValue = game.getState().getValue(true, game);
-            if(!ComputerPlayerMCTS.USE_STATELESS_NODES) this.rootState = game.getState();
+            this.rootState = game.getState();
         } else {//micro point, use previous state value
             this.stateValue = parent.stateValue;
             this.fullStateValue = parent.fullStateValue;
-            if(!ComputerPlayerMCTS.USE_STATELESS_NODES) this.rootState = parent.rootState;
+            this.rootState = parent.rootState;
         }
 
     }
@@ -231,7 +231,9 @@ public class MCTSNode {
         }
 
         // best should never be null once visits>0 on the root
-        assert best != null;
+        if(best == null) {
+            logger.error("no best child. best val is: " + bestVal);
+        }
         return best;
     }
     public List<MCTSNode> createChildren(MCTSPlayer.NextAction nextAction, MCTSPlayer player, Game game) {
@@ -338,10 +340,8 @@ public class MCTSNode {
             double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
 
             //find max logit for numeric stability
-            double maxLogit = Double.NEGATIVE_INFINITY;
+            double maxLogit = Float.NEGATIVE_INFINITY;
             for (MCTSNode node : children) {
-                if (node.action == null)
-                    continue;
                 int idx = nodeToIdx(node, nextAction, game);
                 maxLogit = Math.max(maxLogit, policy[idx]);
             }
@@ -359,12 +359,14 @@ public class MCTSNode {
             for (MCTSNode node : children) {
                 node.prior /= sumExp;
             }
-            long seed = this.dirichletSeed;
 
+
+            long seed = this.dirichletSeed;
             if (seed != 0) {
+                logger.warn("using dirichlet seed: " + seed);
                 double alpha = 0.03;
                 double eps = ComputerPlayerMCTS.DIRICHLET_NOISE_EPS;
-                if(ComputerPlayerMCTS.NO_NOISE) eps = 0;
+                //if(ComputerPlayerMCTS.NO_NOISE) eps = 0;
                 int K = children.size();
                 double[] dir = new double[K];
                 double sum = 0;
@@ -785,13 +787,7 @@ public class MCTSNode {
         }
 
         GameState out = parent.getActionSequence(myScript, opponentScript);
-        //order actions are applied: prefix => auto passes => action
-        for(int i = 0; i < autoPassesA; i++) {
-            myScript.prioritySequence.add(new PassAbility());
-        }
-        for(int i = 0; i < autoPassesB; i++) {
-            opponentScript.prioritySequence.add(new PassAbility());
-        }
+
         if(chooseTargetAction != null && !chooseTargetAction.isEmpty()) {
             if(parent.playerId.equals(targetPlayer)) {
                 myScript.targetSequence.add(chooseTargetAction);

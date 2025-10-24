@@ -46,9 +46,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
     public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
     //mcts tree doesn't save states if true; makes search slower but more memory efficient
-    public static boolean USE_STATELESS_NODES =  false;
+    //public static boolean USE_STATELESS_NODES =  false;
     //tree search will now completely ignore states where passing is the only option. still logs the state in the base game for training
-    public static boolean SKIP_TRANSITION_STATES = true;
+    //public static boolean SKIP_TRANSITION_STATES = true;
     //dirichlet noise is applied once to the priors of the root node; this represents how much of those priors should be noise
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     //how spiky the dirichlet noise will be
@@ -100,8 +100,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         //TODO: make more robust filtering
         //(some mana abilities have other effects)
         List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
-        if(SKIP_TRANSITION_STATES && playableAbilities.isEmpty() &&
-                !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//just pass when only option
+        if(playableAbilities.isEmpty() &&
+                !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//declare attackers and blockers are always checkpoint for perf reasons
             pass(game);
             return false;
         }
@@ -158,15 +158,15 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (root != null) {
             newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             if (newRoot != null) {
-                if(newRoot.size()>1000) {
+                if(newRoot.size()>2500) {
                     logger.info("tree too large, starting fresh");
                     newRoot = null;
                 } else {
                     newRoot.emancipate();
-                    if(USE_STATELESS_NODES) { //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
-                        newRoot.rootGame = createMCTSGame(game.getLastPriority());
-                        newRoot.rootState = newRoot.rootGame.getState().copy();
-                    }
+                     //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
+                    newRoot.rootGame = createMCTSGame(game.getLastPriority());
+                    newRoot.rootState = newRoot.rootGame.getState().copy();
+
                 }
             } else {
                 logger.info("unable to find matching state");
