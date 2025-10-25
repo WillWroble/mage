@@ -96,7 +96,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
         } else {
             maxDepth = skill;
         }
-        maxThinkTimeSecs = skill * 3;
+        maxThinkTimeSecs = 1;
         maxNodes = MAX_SIMULATED_NODES_PER_CALC;
         this.actionCache = new HashSet<>();
     }
