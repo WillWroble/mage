@@ -37,9 +37,9 @@ import static java.nio.file.StandardOpenOption.READ;
 
 
 /**
- * A dedicated, parallelized test class for generating RL data sets.
- * This version is fully compatible with Java 1.8 and uses the correct, thread-safe
- * game execution logic as defined by the test framework.
+ * Base class for all RL data generators. see <a href="https://github.com/WillWroble/MageZero">MageZero repo</a>
+ * for how to use
+ *
  */
 public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
@@ -78,10 +78,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
 
 
-
-    /**
-     * A simple class to hold the results of a single game
-     */
     private static class GameResult {
         private final List<LabeledState> states;
         private final boolean didPlayerAWin;
@@ -100,11 +96,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
     }
 
-    /**
-     * note is only priority actions
-     * @param deckName
-     * @throws GameException
-     */
+
     public void createAllActionsFromDeckList(String deckName, Map<String, Integer> actionMap) throws GameException {
         logger.debug("Loading deck...");
         DeckCardLists list;
@@ -531,7 +523,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             return;
         }
 
-        // find padding for nice alignment
         int maxKeyLen = map.keySet().stream().mapToInt(String::length).max().orElse(0);
 
         map.entrySet().stream()
@@ -575,7 +566,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
         return player;
     }
-    // This is the correct override to use for creating players within these self-contained games.
+    // This is the correct override to use for choosing our AI types.
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (name.equals("PlayerA")) {
