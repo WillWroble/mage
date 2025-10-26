@@ -249,11 +249,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         Set<UUID> choice = root.chooseTargetAction;
         for(UUID targetId : choice) {
             Set<UUID> chosen = new HashSet<>();
-            if(target.canTarget(targetId, source, game)) {
-                target.addTarget(targetId, source, game);
-                chosen.add(targetId);
-                logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
-            }
+            target.addTarget(targetId, source, game);
+            chosen.add(targetId);
+            logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
+
             getPlayerHistory().targetSequence.add(chosen);
         }
         return target.isChosen(game);

@@ -71,13 +71,11 @@ public class MCTSPlayer extends ComputerPlayer {
                 out.add(aa);
             }
         }
-        //playables.add(new PassAbility());
         out.add(new PassAbility());
         return out;
     }
-
+    //TODO: make this better
     public List<Ability> getPlayableOptions(Game game) {
-        //if(true) return simulatePriority(game);
         List<Ability> all = new ArrayList<>();
         List<ActivatedAbility> playables = getPlayableAbilities(game);
         for (ActivatedAbility ability : playables) {
@@ -231,7 +229,6 @@ public class MCTSPlayer extends ComputerPlayer {
             return false;
         }
         game.setLastPriority(playerId);
-        //((GameImpl)game).clearHistory();
         decisionText = "priority";
         game.pause();
         lastToAct = true;
@@ -330,14 +327,14 @@ public class MCTSPlayer extends ComputerPlayer {
             StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
             Set<UUID> targets = actionScript.targetSequence.pollFirst();
             for (UUID id : targets) {
-                if (!target.canTarget(getId(), id, source, game)) {
-                    logger.error("target choice " + game.getEntity(id).toString() + " failed - skipping.");
-                    logger.error("possible targets: ");
+                /*if (!target.canTarget(getId(), id, source, game)) {TODO: research. doesnt seem to work with choosing sac target
+                    logger.warn("target choice " + game.getEntity(id).toString() + " failed - skipping.");
+                    logger.warn("possible targets: ");
                     for (UUID tid : target.possibleTargets(getId(), game)) {
-                        logger.error(game.getEntity(tid).toString());
+                        logger.warn(game.getEntity(tid).toString());
                     }
                     continue;
-                }
+                }*/
                 target.addTarget(id, source, game);
                 if (sb != null) {
                     sb.append(String.format("tried target: %s ", game.getEntity(id).toString()));
@@ -398,7 +395,7 @@ public class MCTSPlayer extends ComputerPlayer {
         nextAction = NextAction.MAKE_CHOICE;
         return super.choose(outcome, choice, game);
     }
-
+    //TODO: needs special care when handling alternate costs (eg. phyrexian). Sometimes getPlayble() only returns an ability that can be payed with one cost option.
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) {
