@@ -462,12 +462,12 @@ public abstract class GameImpl implements Game {
         return player;
     }
     @Override
-    public Object getEntity(UUID entityId) {
+    public String getEntity(UUID entityId) {
         MageObject obj = getObject(entityId);
         if(obj == null) {
-            return getPlayer(entityId);
+            return getPlayer(entityId).getName();
         }
-        return obj;
+        return obj.getName();
     }
 
     @Override
