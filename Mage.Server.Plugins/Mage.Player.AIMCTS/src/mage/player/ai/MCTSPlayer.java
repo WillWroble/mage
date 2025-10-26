@@ -214,7 +214,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
             boolean success = activateAbility(ability, game);
             if(!success) {
-                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString());
+                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
                 scriptFailed = true;
                 game.pause();
                 lastToAct = true;
@@ -354,7 +354,12 @@ public class MCTSPlayer extends ComputerPlayer {
         if(chooseTargetOptions.isEmpty()) {
             return false; //fizzle
         }
-        decisionText = source.getRule();
+        if(source == null) {
+            decisionText = "null";
+        } else {
+            logger.warn("choose target source is null");
+            decisionText = source.getRule();
+        }
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;
@@ -384,6 +389,7 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         choiceOptions = new HashSet<>(choice.getChoices());
         if(choiceOptions.isEmpty()) {
+            logger.warn("no choice options - fizzle");
             return false; //fizzle
         }
         decisionText = choice.toString();
@@ -405,10 +411,11 @@ public class MCTSPlayer extends ComputerPlayer {
             return chosen;
         }
         decisionText = message;
+        //logger.info("decisionText: " + decisionText);
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_USE;
-        return false;
+        return true; //defaults to use since this seems to avoid most mana cost handling issues
     }
 }
 

@@ -5,7 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
-public class SimulateMinimax extends ParallelDataGenerator {
+public class SimulateMinimaxvsMinimax extends ParallelDataGenerator {
 
     @Before
     public void setup() {

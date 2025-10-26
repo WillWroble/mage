@@ -391,12 +391,8 @@ public abstract class StackObjectImpl implements StackObject {
                         again = false;
                         tempTarget.clearChosen();
                         if (!tempTarget.chooseTarget(outcome, getControllerId(), ability, game)) {
-                            if (targetController.chooseUse(Outcome.Benefit, "No target object selected. Reset to original target?", ability, game)) {
-                                // use previous target no target was selected
-                                newTarget.addTarget(oldTargetId, target.getTargetAmount(oldTargetId), ability, game, true);
-                            } else {
-                                again = true;
-                            }
+                            // use previous target no target was selected
+                            newTarget.addTarget(oldTargetId, target.getTargetAmount(oldTargetId), ability, game, true);
                         } else {
                             // if possible add the alternate Target - it may not be included in the old definition nor in the already selected targets of the new definition
                             if (newTarget.getTargets().contains(tempTarget.getFirstTarget()) || target.getTargets().contains(tempTarget.getFirstTarget())) {

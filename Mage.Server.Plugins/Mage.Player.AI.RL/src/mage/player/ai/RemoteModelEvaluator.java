@@ -5,6 +5,7 @@ import org.msgpack.core.MessageBufferPacker;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -41,12 +42,12 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /** How many concurrent HTTP calls are allowed. Keep small when batching is enabled. */
-    public static int MAX_CONCURRENT_CALLS = 1;
+    public static int MAX_CONCURRENT_CALLS = 2;
 
     // ---------- batching controls ----------
     public static final boolean enableBatching = true;
-    public static final int batchInterval = 1000;//micro seconds
-    public static final int maxBatchSize = 128;
+    public static final int batchInterval = 2500;//micro seconds
+    public static final int maxBatchSize = 32;
 
     private final OkHttpClient http;
     private final HttpUrl evalUrl;
@@ -69,17 +70,29 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /** host:port like "http://127.0.0.1:50052" with explicit batching controls. */
-    public RemoteModelEvaluator(String baseUrl) {
+    public RemoteModelEvaluator(String baseUrl) throws IOException {
         this.permits = new Semaphore(Math.max(1, MAX_CONCURRENT_CALLS), true);
         this.http = new OkHttpClient.Builder()
                 .retryOnConnectionFailure(true)
                 .connectionPool(new ConnectionPool(8, 120, TimeUnit.SECONDS))
                 .build();
         this.evalUrl = HttpUrl.parse(baseUrl + "/evaluate");
+        if (this.evalUrl == null) {
+            throw new IllegalArgumentException("Invalid baseUrl: " + baseUrl);
+        }
         this.exec = Executors.newFixedThreadPool(
                 Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
 
-
+        //connection test
+        Request ping = new Request.Builder()
+                .url(baseUrl + "/health")
+                .get()
+                .build();
+        try (Response r = http.newCall(ping).execute()) {
+            if (!r.isSuccessful()) {
+                throw new IOException("Health check failed: HTTP " + r.code());
+            }
+        }
 
         if (enableBatching) {
             this.pending = new ConcurrentLinkedQueue<>();
@@ -97,7 +110,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /** Default to localhost; batching OFF by default. */
-    public RemoteModelEvaluator() { this("http://127.0.0.1:50052"); }
+    public RemoteModelEvaluator() throws IOException { this("http://127.0.0.1:50052"); }
 
     // ----------------- Public API -----------------
 

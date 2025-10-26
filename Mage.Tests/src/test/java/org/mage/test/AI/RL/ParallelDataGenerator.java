@@ -43,18 +43,23 @@ import static java.nio.file.StandardOpenOption.READ;
  */
 public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
-    //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
     protected static int NUM_GAMES_TO_SIMULATE = 100;
     protected static int MAX_GAME_TURNS = 50;
     protected static int MAX_CONCURRENT_GAMES = 8;
-    // =============================== DECK AND AI SETTINGS ===============================
-    protected static String DECK_A = "MTGA_MonoU";
-    protected static String DECK_B= "MTGA_MonoR";
+    // =============================== AI SETTINGS ===============================
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
     protected static double DISCOUNT_FACTOR = 0.95;
     protected static double VALUE_LAMBDA = 0.5;
+    /**MCTS settings in ComputerPlayerMCTS.java*/
+    // =============================== MATCH SETTINGS ===============================
+    protected static boolean ALWAYS_GO_FIRST = false;
+    protected static boolean ALLOW_MULLIGANS = false; //TODO: implement mulligans
+    protected static String DECK_A = "UWTempo";
+    protected static String DECK_B = "MTGA_MonoU";
+    protected static String MODEL_URL_A = "http://127.0.0.1:50052";
+    protected static String MODEL_URL_B = "http://127.0.0.1:50053";
     // ================================== FILE PATHS ==================================
     protected static String DECK_A_PATH = "decks/" + DECK_A + ".dck";
     protected static String DECK_B_PATH = "decks/" + DECK_B + ".dck";
@@ -66,7 +71,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private int initialRawSize;
     private final AtomicInteger gameCount = new AtomicInteger(0);
     private final AtomicInteger winCount = new AtomicInteger(0);
-    private RemoteModelEvaluator remoteModelEvaluator;
+    private RemoteModelEvaluator remoteModelEvaluatorA;
+    private RemoteModelEvaluator remoteModelEvaluatorB;
     private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(32);
     private final AtomicBoolean stop = new AtomicBoolean(false);
 
@@ -211,10 +217,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             logger.warn("external seen feature list not found");
         }
         try {
-            remoteModelEvaluator = new RemoteModelEvaluator();
+            remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
+            remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
         } catch (Exception e) {
-            logger.warn("Failed to establish connection to network model");
-            throw new RuntimeException(e);
+            logger.warn("Failed to establish connection to network model; falling back to offline mode");
+            ComputerPlayerMCTS2.OFFLINE_MODE = true;
+            VALUE_LAMBDA = 0.3;
         }
         initialRawSize = seenFeatures.getCardinality();
     }
@@ -430,14 +438,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
 
             // All game objects are local to this thread to prevent race conditions.
-            MatchOptions matchOptions = new MatchOptions("test match", "test game type", true, 4);
-            Match localMatch = new FreeForAllMatch(matchOptions);
+            MatchOptions matchOptions = new MatchOptions("test match", "test game type", false, 2);
+            Match localMatch = new TwoPlayerMatch(matchOptions);
             game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
             TestPlayer playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
             TestPlayer playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
 
-
-            //threadEncoder.loadMapping(finalFeatures);
             threadEncoder.seenFeatures = seenFeatures.clone();
 
 
@@ -456,8 +462,19 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
 
             // Start the game simulation. This is a blocking call that will run the game to completion.
-            game.start(playerA.getId());
-
+            if(ALWAYS_GO_FIRST) {
+                game.start(null);
+            } else {
+                int dieRoll = ThreadLocalRandom.current().nextInt()%2;
+                if(dieRoll==0) {
+                    logger.info("Player A won the die roll");
+                    game.setStartingPlayerId(playerA.getId());
+                } else {
+                    logger.info("Player B won the die roll");
+                    game.setStartingPlayerId(playerB.getId());
+                }
+                game.start(null);
+            }
             boolean playerAWon = playerA.hasWon();
             //merge to the final features
             synchronized (seenFeatures) {
@@ -476,7 +493,11 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private void configurePlayer(TestPlayer player, StateEncoder encoder) {
         if (player.getComputerPlayer() instanceof ComputerPlayerMCTS2) {
             ((ComputerPlayerMCTS2) player.getComputerPlayer()).setEncoder(encoder);
-            ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluator;//shared reference
+            if(player.getName().equals("PlayerA")) {
+                ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluatorA;
+            } else {
+                ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluatorB;
+            }
         } else if (player.getComputerPlayer() instanceof ComputerPlayer8) {
             ((ComputerPlayer8) player.getComputerPlayer()).setEncoder(encoder);
         } else  {

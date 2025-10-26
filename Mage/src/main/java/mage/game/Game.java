@@ -53,7 +53,6 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     void setLocalRandom(Random random);
     Game getLastPriority();
     UUID getLastPriorityPlayerId();
-    Ability getLastPriorityAction();
 
     void setLastPriority(UUID id);
 

@@ -32,7 +32,7 @@
 	  at mage.game.GameImpl.start(GameImpl.java:1096)
 	  at org.mage.test.AI.RL.ParallelDataGenerator.runSingleGame(ParallelDataGenerator.java:336)
 	  at org.mage.test.AI.RL.ParallelDataGenerator.test_single_game(ParallelDataGenerator.java:135)
-	  at org.mage.test.AI.RL.SimulateMCTS.test_single_game(SimulateMCTS.java:11)
+	  at org.mage.test.AI.RL.SimulateRLvsMinimax.test_single_game(SimulateMCTS.java:11)
 	  at java.lang.invoke.LambdaForm$DMH/0x00000238fb303c00.invokeVirtual(LambdaForm$DMH:-1)
 	  at java.lang.invoke.LambdaForm$MH/0x00000238fb304800.invoke(LambdaForm$MH:-1)
 	  at java.lang.invoke.Invokers$Holder.invokeExact_MT(Invokers$Holder:-1)

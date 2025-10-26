@@ -16,8 +16,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * ComputerPlayerMCTS2 extends ComputerPlayerMCTS and uses a value function at leaf nodes.
- * It replaces full rollout simulations with a call to evaluateState() on the leaf game state.
+ *
+ * AlphaZero style MCTS that uses a Neural Network with the PUCT formula. Supports almost all decision points for MTG (priority, choose_target, choose_use, make_choice)
+ * All decision types besides make_choice have their own learnable priors as heads of the neural network. priorityA and priorityB are deck dependent; choose_target and choose_use are matchup dependent.
+ * See StateEncoder.java for how MTG states are vectorized for the network.
+ *
+ *
+ * @author WillWroble
  */
 public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
@@ -25,10 +30,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
     private transient StateEncoder encoder = null;
     private static final int BASE_THREAD_TIMEOUT = 4;//seconds
-    private static final int MAX_TREE_VISITS = 300;//per thread
-    private static final int MAX_TREE_NODES = 800;//per thread
+    private static final int MAX_TREE_VISITS = 150;//per thread
     public static final int[] PASS_ACTION = {100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     public static boolean SHOW_THREAD_INFO = false;
+    /**if offline mode is on won't use a neural network and will instead use a heuristic value function and even priors.
+    is enabled by default if no network is found*/
+    public static boolean OFFLINE_MODE = false;
     public transient RemoteModelEvaluator nn;
 
 
@@ -65,6 +72,13 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Set<Integer> featureSet = encoder.processState(game, node.playerId, myPlayer.getNextAction(), myPlayer.decisionText);
         node.stateVector = featureSet;
 
+        if(OFFLINE_MODE) {
+            node.policy = null;
+            int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+            node.networkScore = Math.tanh(heuristicScore * 1.0 / 20000);
+            return node.networkScore;
+        }
+
 
         long[] nnIndices = new long[featureSet.size()];
         int k = 0;
@@ -93,7 +107,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
         node.networkScore = out.value;
 
-        return out.value;
+        return node.networkScore;
     }
 
     public void setEncoder(StateEncoder enc) {
@@ -262,7 +276,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if(best == null) return;
             int[] actionVec = null;
             if (action == NextAction.PRIORITY) {
-                actionVec = getActionVec(root);
+                actionVec = getActionVec(root, name.equals("PlayerA"));
             }
             else if(action == NextAction.CHOOSE_TARGET) {
                 actionVec = getTargetActionVec(root, game);
@@ -270,7 +284,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             else if(action == NextAction.CHOOSE_USE) {
                 actionVec = getUseActionVec(root);
             }
-            encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, true);
+            if(actionVec != null) encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, getName().equals("PlayerA"));
             root = best;
             root.emancipate();
         } else {

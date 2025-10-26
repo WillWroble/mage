@@ -5,7 +5,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
-public class SimulateMCTS extends ParallelDataGenerator {
+import java.util.ArrayList;
+import java.util.List;
+
+public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
     public void setup() {
         DISCOUNT_FACTOR = 0.95; //default for dense states
@@ -38,6 +41,16 @@ public class SimulateMCTS extends ParallelDataGenerator {
     public void createTrainingAndTestingDataSets() {
         createTestDataSet();
         createTrainDataSet();
+    }
+    @Test
+    public void roundRobin() {
+        NUM_GAMES_TO_SIMULATE = 200;
+        String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
+        for (String deckName :  deckPool) {
+            DATA_OUT_FILE = deckName+"_training.hdf5";
+            DECK_B = deckName;
+            super.generateData();
+        }
     }
 
     // This is the correct override to use for creating players within our self-contained games.

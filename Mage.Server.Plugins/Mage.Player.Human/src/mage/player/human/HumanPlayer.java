@@ -419,7 +419,6 @@ public class HumanPlayer extends PlayerImpl {
     public boolean chooseUse(Outcome outcome, String message, Ability source, Game game) {
         return this.chooseUse(outcome, message, null, "Yes", "No", source, game);
     }
-
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         if (game.inCheckPlayableState()) {

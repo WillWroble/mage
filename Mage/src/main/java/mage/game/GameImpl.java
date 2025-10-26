@@ -90,10 +90,9 @@ import java.util.stream.Collectors;
  * If it's a temporary/auto-generated data then mark that field as transient and comment in copy constructor.
  */
 public abstract class GameImpl implements Game {
-    //shallow game history for AI
+    //the state of the game at the last priority window where there was a decision. last priority + playerHistories should always equal the current game.
     private Game lastPriority = this;
     private UUID lastPriorityPlayerId;
-    public Ability lastPriorityAction;
 
     public static boolean drawHand = true;
 
@@ -186,7 +185,6 @@ public abstract class GameImpl implements Game {
     }
 
     protected GameImpl(final GameImpl game) {
-        this.lastPriorityAction = game.lastPriorityAction;
         this.lastPriorityPlayerId = game.lastPriorityPlayerId;
         //this.customData = game.customData; // temporary data, no need on game copy
         //this.losingPlayer = game.losingPlayer; // temporary data, no need on game copy
@@ -285,14 +283,7 @@ public abstract class GameImpl implements Game {
     }
 
     /**
-     * @return the action made during the last priority
-     */
-    @Override
-    public Ability getLastPriorityAction() {
-        return lastPriorityAction;
-    }
-    /**
-     * @return the action made during the last priority
+     *  sets the last priority to the current state and flushes history.
      */
     @Override
     public void setLastPriority(UUID id) {
@@ -318,7 +309,12 @@ public abstract class GameImpl implements Game {
 
     @Override
     public Game createSimulationForPlayableCalc() {
-        Game res = this.copy();
+        Game res;
+        if(false && simulation) {//TODO: figure out how to optimize this
+            res = this;
+        } else {
+            res = this.copy();
+        }
         ((GameImpl) res).simulation = true;
         ((GameImpl) res).checkPlayableState = true;
         return res;
