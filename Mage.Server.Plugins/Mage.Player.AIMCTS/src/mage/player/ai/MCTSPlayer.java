@@ -331,16 +331,16 @@ public class MCTSPlayer extends ComputerPlayer {
             Set<UUID> targets = actionScript.targetSequence.pollFirst();
             for (UUID id : targets) {
                 if (!target.canTarget(getId(), id, source, game)) {
-                    logger.error("target choice " + game.getObject(id).toString() + " failed - skipping.");
+                    logger.error("target choice " + game.getEntity(id).toString() + " failed - skipping.");
                     logger.error("possible targets: ");
                     for (UUID tid : target.possibleTargets(getId(), game)) {
-                        logger.error(game.getObject(tid).toString());
+                        logger.error(game.getEntity(tid).toString());
                     }
                     continue;
                 }
                 target.addTarget(id, source, game);
                 if (sb != null) {
-                    sb.append(String.format("tried target: %s ", game.getObject(id).toString()));
+                    sb.append(String.format("tried target: %s ", game.getEntity(id).toString()));
                 }
             }
             if (sb != null) {

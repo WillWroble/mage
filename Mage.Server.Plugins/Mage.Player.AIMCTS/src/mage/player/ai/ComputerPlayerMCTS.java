@@ -128,8 +128,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(root.getAction().getTargets().isEmpty()) {
             logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
         } else {
-            if(game.getObject(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getObject(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
+            if(game.getEntity(root.getAction().getTargets().getFirstTarget()) != null) {
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntity(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
             } else if (game.getPlayer(root.getAction().getTargets().getFirstTarget()) != null) {
                 logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
             } else {
@@ -252,7 +252,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             if(target.canTarget(targetId, source, game)) {
                 target.addTarget(targetId, source, game);
                 chosen.add(targetId);
-                logger.info(String.format("Targeting %s", game.getObject(targetId).toString()));
+                logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
             }
             getPlayerHistory().targetSequence.add(chosen);
         }

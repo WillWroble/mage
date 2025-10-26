@@ -241,7 +241,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int[] out = new int[128];
         Arrays.fill(out, 0);
         for (MCTSNode child : node.children) {
-            int idx = ActionEncoder.getTargetIndex(game.getObject(child.chooseTargetAction.iterator().next()).getName());
+            int idx = ActionEncoder.getTargetIndex(game.getEntity(child.chooseTargetAction.iterator().next()).toString());
             int v = child.visits;
             out[idx%128] += v;
         }

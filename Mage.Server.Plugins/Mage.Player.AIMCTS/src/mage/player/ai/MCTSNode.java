@@ -309,7 +309,7 @@ public class MCTSNode {
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
             idx = ActionEncoder.getActionIndex(node.getAction(), game.getPlayer(playerId).getName().equals("PlayerA"));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-            idx = ActionEncoder.getTargetIndex(game.getObject(node.chooseTargetAction.iterator().next()).getName());
+            idx = ActionEncoder.getTargetIndex(game.getEntity(node.chooseTargetAction.iterator().next()).toString());
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
             idx = node.useAction ? 1 : 0;
         } else {
@@ -412,8 +412,8 @@ public class MCTSNode {
         for (MCTSNode node: children) {
             if(node.action != null) {
                 if(node.chooseTargetAction != null && !node.chooseTargetAction.isEmpty()) {
-                    if(baseGame.getObject(node.chooseTargetAction.iterator().next()) != null) {
-                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getObject(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                    if(baseGame.getEntity(node.chooseTargetAction.iterator().next()) != null) {
+                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntity(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
                     } else if(baseGame.getPlayer(node.chooseTargetAction.iterator().next()) != null){
                         sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
                     } else {

@@ -461,6 +461,14 @@ public abstract class GameImpl implements Game {
         player = getPlayer(permanent.getControllerId());
         return player;
     }
+    @Override
+    public Object getEntity(UUID entityId) {
+        MageObject obj = getObject(entityId);
+        if(obj == null) {
+            return getPlayer(entityId);
+        }
+        return obj;
+    }
 
     @Override
     public MageObject getObject(UUID objectId) {

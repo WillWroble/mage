@@ -185,6 +185,11 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
      * run once
      */
     private void loadAllFiles() {
+        //update file paths
+        DECK_A_PATH = "decks/" + DECK_A + ".dck";
+        DECK_B_PATH = "decks/" + DECK_B + ".dck";
+        IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";
+
         //create the action map from the provided decklists
         try {
             createAllActionsFromDeckList(DECK_A_PATH, ActionEncoder.playerActionMap);
