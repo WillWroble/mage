@@ -8,8 +8,8 @@ import org.mage.test.player.*;
 public class SimulateRLvsRL extends ParallelDataGenerator {
     @Before
     public void setup() {
-        DISCOUNT_FACTOR = 0.95; //default for sparse states
-        VALUE_LAMBDA = 0.5; //default for MCTS root scores
+        DISCOUNT_FACTOR = 0.95; //0.95 default for sparse states
+        VALUE_LAMBDA = 0.5; //0.5 default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
         DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
         MODEL_URL_A = "http://127.0.0.1:50052";

@@ -185,6 +185,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
      * run once
      */
     private void loadAllFiles() {
+        //reset writer thread
+        stop.set(false);
+
         //update file paths
         DECK_A_PATH = "decks/" + DECK_A + ".dck";
         DECK_B_PATH = "decks/" + DECK_B + ".dck";

@@ -48,7 +48,8 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         game.firePriorityEvent(playerId);
 
         List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
-        if(playableAbilities.isEmpty()) {//just pass when only option
+        if(playableAbilities.isEmpty() &&
+        !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//just pass when only option
             pass(game);
             return false;
         }
