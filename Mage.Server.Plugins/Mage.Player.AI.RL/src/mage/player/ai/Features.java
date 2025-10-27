@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.log4j.Logger;
 
 
@@ -17,7 +17,6 @@ import org.apache.log4j.Logger;
  * @author willwroble
  */
 public class Features implements Serializable {
-    private static final long serialVersionUID = 2L; // Version updated for the structural change
     private static final Logger logger = Logger.getLogger(Features.class);
 
     private static final int  TABLE_SIZE        = 2_000_000;                // hash bins
@@ -25,8 +24,8 @@ public class Features implements Serializable {
 
     private final Map<String, Features> subFeatures;
     private final Map<String, Integer> occurrences;
-    private final Map<String, Features> categoriesForChildren; //isn't reset between states, represents all possible categories for children
-    private final Set<Features> categories; //resets every state represents temporary category features fall under
+    private final Map<String, Features> categoryMap; //isn't reset between states, anchored at parent
+    private final Set<Features> activeCategories; //resets every state represents temporary category features fall under
     public boolean passToParent = true;
 
     private transient StateEncoder encoder;
@@ -36,18 +35,17 @@ public class Features implements Serializable {
     public Features parent;
     public static boolean printOldFeatures = false;
     public static boolean printNewFeatures = false;
-
+    //root constructor
     public Features() {
-        //constructor
         subFeatures = new HashMap<>();
         occurrences = new HashMap<>();
-        categoriesForChildren = new HashMap<>();
-        categories = new HashSet<>();
+        categoryMap = new HashMap<>();
+        activeCategories = new HashSet<>();
         parent = null;
         featureName = "root";
         seed = GLOBAL_SEED;
     }
-
+    //sub feature constructor
     public Features(Features p, String name) {
         this();
         parent = p;
@@ -55,7 +53,7 @@ public class Features implements Serializable {
         encoder = p.encoder;
         seed = hash64(name, p.seed);
     }
-
+    //category constructor
     public Features(String name, StateEncoder e, long s) {
         this();
         featureName = name;
@@ -68,16 +66,16 @@ public class Features implements Serializable {
         for (String name : subFeatures.keySet()) {
             subFeatures.get(name).setEncoder(encoder);
         }
-        for (String name : categoriesForChildren.keySet()) {
-            categoriesForChildren.get(name).setEncoder(encoder);
+        for (String name : categoryMap.keySet()) {
+            categoryMap.get(name).setEncoder(encoder);
         }
     }
     private Features getCategory(String name) {
-        if (categoriesForChildren.containsKey(name)) { //already contains category
-            return categoriesForChildren.get(name);
+        if (categoryMap.containsKey(name)) { //already contains category
+            return categoryMap.get(name);
         } else { //completely new
             Features newCat = new Features(name + "_" + featureName, encoder, hash64(name, seed));
-            categoriesForChildren.put(name, newCat);
+            categoryMap.put(name, newCat);
             return newCat;
         }
     }
@@ -123,7 +121,7 @@ public class Features implements Serializable {
     public void addCategory(String name) {
         addFeature(name); //first add as feature since every category is also a feature
         Features categoryFeature = parent.getCategory(name);
-        categories.add(categoryFeature);
+        activeCategories.add(categoryFeature);
     }
 
     public void addFeature(String name) {
@@ -134,7 +132,7 @@ public class Features implements Serializable {
         //usually add feature to parent/categories
         if (parent != null && callParent && passToParent) {
             parent.addFeature(name);
-            for (Features c : categories) {
+            for (Features c : activeCategories) {
                 c.addFeature(name);
             }
         }
@@ -165,13 +163,13 @@ public class Features implements Serializable {
     }
 
     public void stateRefresh() {
-        categories.clear();
+        activeCategories.clear();
         occurrences.replaceAll((k, v) -> 0);
         for (String n : subFeatures.keySet()) {
             subFeatures.get(n).stateRefresh();
         }
-        for (String n : categoriesForChildren.keySet()) {
-            categoriesForChildren.get(n).stateRefresh();
+        for (String n : categoryMap.keySet()) {
+            categoryMap.get(n).stateRefresh();
         }
     }
     private void addIndex(int idx, String key) {

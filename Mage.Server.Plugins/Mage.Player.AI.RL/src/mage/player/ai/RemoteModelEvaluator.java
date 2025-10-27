@@ -85,7 +85,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
 
         //connection test
         Request ping = new Request.Builder()
-                .url(baseUrl + "/health")
+                .url(baseUrl + "/healthz")
                 .get()
                 .build();
         try (Response r = http.newCall(ping).execute()) {

@@ -8,13 +8,13 @@ import org.mage.test.player.*;
 public class SimulateRLvsRL extends ParallelDataGenerator {
     @Before
     public void setup() {
-        DISCOUNT_FACTOR = 0.95; //0.95 default for sparse states
+        DISCOUNT_FACTOR = 0.98; //tad higher because both players are logging micro decisions
         VALUE_LAMBDA = 0.5; //0.5 default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
         DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
         MODEL_URL_A = "http://127.0.0.1:50052";
         MODEL_URL_B = "http://127.0.0.1:50053";
-        ALWAYS_GO_FIRST = false;
+        ALWAYS_GO_FIRST = false; //consider turning on if your agent is really struggling to win (<20% WR)
     }
     @Test
     public void test_single_game() {

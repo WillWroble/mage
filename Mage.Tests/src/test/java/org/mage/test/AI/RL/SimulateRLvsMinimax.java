@@ -11,7 +11,7 @@ import java.util.List;
 public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
     public void setup() {
-        DISCOUNT_FACTOR = 0.95; //default for sparse states; might be worth adjusting for particularly fast decks
+        DISCOUNT_FACTOR = 0.97; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
         DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
@@ -47,7 +47,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         NUM_GAMES_TO_SIMULATE = 200;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
-            DATA_OUT_FILE = "training/"+deckName+"_training.hdf5";
+            DATA_OUT_FILE = "training/"+deckName+"_training3.hdf5";
             DECK_B = deckName;
             super.generateData();
         }

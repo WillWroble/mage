@@ -218,8 +218,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
         try {
             remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
-            remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
+            //if(this instanceof SimulateRLvsRL) remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
         } catch (Exception e) {
+            e.printStackTrace();
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
             ComputerPlayerMCTS2.OFFLINE_MODE = true;
             VALUE_LAMBDA = 0.3;
