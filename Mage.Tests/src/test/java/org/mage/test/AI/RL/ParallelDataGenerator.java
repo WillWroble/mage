@@ -27,7 +27,11 @@ import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import java.io.*;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,8 +73,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // ================================== GLOBAL FIELDS ==================================
     private RoaringBitmap seenFeatures = new RoaringBitmap();
     private int initialRawSize;
-    private final AtomicInteger gameCount = new AtomicInteger(0);
-    private final AtomicInteger winCount = new AtomicInteger(0);
+    public final AtomicInteger gameCount = new AtomicInteger(0);
+    public final AtomicInteger winCount = new AtomicInteger(0);
     private RemoteModelEvaluator remoteModelEvaluatorA;
     private RemoteModelEvaluator remoteModelEvaluatorB;
     private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(32);
@@ -187,6 +191,10 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private void loadAllFiles() {
         //reset writer thread
         stop.set(false);
+
+        //reset counts
+        winCount.set(0);
+        gameCount.set(0);
 
         //update file paths
         DECK_A_PATH = "decks/" + DECK_A + ".dck";
@@ -574,6 +582,20 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         match.addPlayer(player, deck); // fake match
 
         return player;
+    }
+    public void writeResults(String filePath, String results) {
+
+        try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(
+                Paths.get(filePath),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,   // create if it doesn't exist
+                StandardOpenOption.APPEND))) // append if it does
+        {
+            out.println(results);
+
+        } catch (IOException ex) {
+            logger.error("Error while writing results: " + ex.getMessage(), ex);
+        }
     }
     // This is the correct override to use for choosing our AI types.
     @Override

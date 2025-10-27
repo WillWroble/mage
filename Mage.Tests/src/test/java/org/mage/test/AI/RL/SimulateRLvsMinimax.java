@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,12 +31,16 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         DATA_OUT_FILE = "testing.hdf5";
         NUM_GAMES_TO_SIMULATE = 50;
         super.generateData();
+        writeResults("test_results.txt", "WR with " + DECK_A + " vs " +
+                DECK_B + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
     }
     @Test
     public void createTrainDataSet() {
         DATA_OUT_FILE = "training.hdf5";
         NUM_GAMES_TO_SIMULATE = 250;
         super.generateData();
+        writeResults("train_results.txt", "WR with " + DECK_A + " vs " +
+                DECK_B + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
     }
     @Test
     public void createTrainingAndTestingDataSets() {
@@ -50,6 +55,8 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
             DATA_OUT_FILE = "training/"+deckName+"_training3.hdf5";
             DECK_B = deckName;
             super.generateData();
+            writeResults("round_robin_train_results.txt", "WR with " + DECK_A + " vs " +
+                    deckName + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
         }
     }
     @Test
@@ -57,9 +64,11 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
-            DATA_OUT_FILE = "testing/"+deckName+"_testing.hdf5";
+            DATA_OUT_FILE = "testing/"+deckName+"_testing3.hdf5";
             DECK_B = deckName;
             super.generateData();
+            writeResults("round_robin_test_results.txt", "WR with " + DECK_A + " vs " +
+                    deckName + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
         }
     }
 
