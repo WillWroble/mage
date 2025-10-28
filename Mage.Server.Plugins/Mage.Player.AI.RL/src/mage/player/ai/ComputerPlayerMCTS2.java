@@ -92,11 +92,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 if(node.playerId.equals(playerId)) {
                     node.policy = out.policy_player;
                 } else {
-                    node.policy = out.policy_opponent;
+                    if(!ROUND_ROBIN_MODE) {
+                        node.policy = out.policy_opponent;
+                    }
                 }
                 break;
             case CHOOSE_TARGET:
-                node.policy = out.policy_target;
+                if(!ROUND_ROBIN_MODE ||
+                    myPlayer.chooseTargetOptions.stream().anyMatch(s -> s.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId)))) {
+                    node.policy = out.policy_target;
+                }
                 break;
             case CHOOSE_USE:
                 node.policy = out.policy_binary;

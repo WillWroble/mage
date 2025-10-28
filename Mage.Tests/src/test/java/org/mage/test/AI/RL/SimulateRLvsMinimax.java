@@ -1,6 +1,7 @@
 package org.mage.test.AI.RL;
 
 import mage.constants.RangeOfInfluence;
+import mage.player.ai.ComputerPlayerMCTS;
 import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
@@ -49,6 +50,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobin() {
+        ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 200;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
@@ -61,6 +63,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobinTest() {
+        ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {

@@ -57,6 +57,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     //how spiky the dirichlet noise will be
     public static double POLICY_PRIOR_TEMP = 1.5;
+    public static boolean ROUND_ROBIN_MODE = false;
     //adjust based on available RAM and threads running
     public static int MAX_TREE_NODES = 800;
 
