@@ -513,7 +513,9 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             logger.warn("unexpected player type" + player.getComputerPlayer().getClass().getName());
         }
     }
-
+    public void thankYouLinus() {
+        logger.info("Thank You Linus");
+    }
     private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
         int N = encoder.labeledStates.size();
         double lambda = VALUE_LAMBDA;

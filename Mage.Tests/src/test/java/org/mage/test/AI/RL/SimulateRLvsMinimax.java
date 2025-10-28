@@ -6,16 +6,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
 public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
     public void setup() {
         //this is a test for Will
 
-        
+
         DISCOUNT_FACTOR = 0.97; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
@@ -65,7 +61,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         }
     }
     @Test
-    public void roundRobinTest() {
+    public void ttttttt() {
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
