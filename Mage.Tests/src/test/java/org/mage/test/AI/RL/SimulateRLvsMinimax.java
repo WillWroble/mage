@@ -6,6 +6,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
     public void setup() {
@@ -61,7 +65,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         }
     }
     @Test
-    public void ttttttt() {
+    public void roundRobinTest() {
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
