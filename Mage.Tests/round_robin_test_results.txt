@@ -1,0 +1,10 @@
+WR with UWTempo vs MTGA_MonoB: 0.4 in 5 games
+WR with UWTempo vs MTGA_MonoG: 0.0 in 5 games
+WR with UWTempo vs MTGA_MonoR: 0.4 in 5 games
+WR with UWTempo vs MTGA_MonoU: 0.4 in 5 games
+WR with UWTempo vs MTGA_MonoW: 0.4 in 5 games
+WR with UWTempo vs MTGA_MonoB: 0.5 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.475 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.4 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.25 in 40 games
+WR with UWTempo vs MTGA_MonoW: 0.3 in 40 games

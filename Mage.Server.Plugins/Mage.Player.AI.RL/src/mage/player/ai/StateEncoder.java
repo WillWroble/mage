@@ -146,7 +146,7 @@ public class StateEncoder {
     }
     public void processPermBattlefield(Permanent p, Game game, Features f) {
 
-        processCard(p, game, f);
+        processCardInZone(p, Zone.BATTLEFIELD, game, f);
         //is tapped?
         if(p.isTapped()) f.addFeature("Tapped");
 
@@ -155,27 +155,9 @@ public class StateEncoder {
             Permanent attachment = game.getPermanent(id);
             if(attachment == null) continue;
             //modify name to not count auras/equipment twice
-            f.passToParent = false; //don't pass pooled attachment features up, or they will be counted twice
-            Features attachmentFeatures = f.getSubFeatures(attachment.getName());
+            //don't pass pooled attachment features up, or they will be counted twice
+            Features attachmentFeatures = f.getSubFeatures(attachment.getName(), false);
             processPermBattlefield(attachment, game, attachmentFeatures);
-            f.passToParent = true;
-        }
-
-
-        //process abilities on battlefield
-        //static abilities
-        for (StaticAbility sa : p.getAbilities(game).getStaticAbilities(Zone.BATTLEFIELD)) {
-            f.addFeature(sa.getRule());
-        }
-        //activated abilities
-        for(ActivatedAbility aa : p.getAbilities(game).getActivatedAbilities(Zone.BATTLEFIELD)) {
-            Features aaFeatures = f.getSubFeatures(aa.getRule());
-            processActivatedAbility(aa, game, aaFeatures);
-        }
-        //triggered abilities
-        for(TriggeredAbility ta : p.getAbilities(game).getTriggeredAbilities(Zone.BATTLEFIELD)) {
-            Features taFeatures = f.getSubFeatures(ta.getRule());
-            processTriggeredAbility(ta, game, taFeatures);
 
         }
         if(p.isCreature(game)) {
@@ -308,7 +290,7 @@ public class StateEncoder {
         processGraveyard(gy, game, gyFeatures);
 
         //now do hand (cards are face down so only keep count of number of cards
-        // TODO: keep track of face up cards and exile
+        //TODO: special handling of revealed cards
         if(myPlayerID==activePlayerID || perfectInfo) { //invert perspective
             Cards hand = myPlayer.getHand();
             Features handFeatures = features.getSubFeatures("OpponentHand");
@@ -324,6 +306,16 @@ public class StateEncoder {
         myPlayerID = temp;
 
     }
+
+    /**
+     * vectorizes (hashes) the entire game state in a neural network-learnable way. These vectors are massive and sparse -
+     * they are designed to have redundant features masked before training and used with a massive embedding bag in pytorch
+     * @param game S
+     * @param actingPlayerID the player who is making the decision at this state
+     * @param decisionType type of decision being made at this state (choose_target, choose_use, choose etc.)
+     * @param decisionsText informative context about the micro decision being made to be hashed as its own feature for the network
+     * @return set of active indices in the sparse binary vector
+     */
     public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, MCTSPlayer.NextAction decisionType, String decisionsText) {
         features.stateRefresh();
         featureVector.clear();
@@ -339,14 +331,14 @@ public class StateEncoder {
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
         if(actingPlayerID.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
-        if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
+        if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand");
 
         //stack
-        Features stackFeatures = features.getSubFeatures("Stack");
+        Features stackFeatures = features.getSubFeatures("Stack", false);
         processStack(game.getStack(), game, stackFeatures);
 
         //mana pool
-        Features mpFeatures = features.getSubFeatures("ManaPool");
+        Features mpFeatures = features.getSubFeatures("ManaPool", false);
         processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
         //start with battlefield

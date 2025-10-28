@@ -1922,6 +1922,7 @@ public class ComputerPlayer extends PlayerImpl {
     public void skip() {
     }
 
+
     @Override
     public boolean chooseUse(Outcome outcome, String message, Ability source, Game game) {
         return this.chooseUse(outcome, message, null, null, null, source, game);

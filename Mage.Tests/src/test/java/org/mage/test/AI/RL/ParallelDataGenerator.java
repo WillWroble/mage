@@ -27,7 +27,11 @@ import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import java.io.*;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,24 +41,29 @@ import static java.nio.file.StandardOpenOption.READ;
 
 
 /**
- * A dedicated, parallelized test class for generating RL data sets.
- * This version is fully compatible with Java 1.8 and uses the correct, thread-safe
- * game execution logic as defined by the test framework.
+ * Base class for all RL data generators. see <a href="https://github.com/WillWroble/MageZero">MageZero repo</a>
+ * for how to use
+ *
  */
 public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
-    //region Configuration
     // ============================ DATA GENERATION SETTINGS ============================
     protected static int NUM_GAMES_TO_SIMULATE = 100;
     protected static int MAX_GAME_TURNS = 50;
     protected static int MAX_CONCURRENT_GAMES = 8;
-    // =============================== DECK AND AI SETTINGS ===============================
-    protected static String DECK_A = "MTGA_MonoU";
-    protected static String DECK_B= "MTGA_MonoR";
+    // =============================== AI SETTINGS ===============================
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
     protected static double DISCOUNT_FACTOR = 0.95;
     protected static double VALUE_LAMBDA = 0.5;
+    /**MCTS settings in ComputerPlayerMCTS.java*/
+    // =============================== MATCH SETTINGS ===============================
+    protected static boolean ALWAYS_GO_FIRST = false;
+    protected static boolean ALLOW_MULLIGANS = false; //TODO: implement mulligans
+    protected static String DECK_A = "UWTempo";
+    protected static String DECK_B = "MTGA_MonoU";
+    protected static String MODEL_URL_A = "http://127.0.0.1:50052";
+    protected static String MODEL_URL_B = "http://127.0.0.1:50053";
     // ================================== FILE PATHS ==================================
     protected static String DECK_A_PATH = "decks/" + DECK_A + ".dck";
     protected static String DECK_B_PATH = "decks/" + DECK_B + ".dck";
@@ -64,18 +73,15 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // ================================== GLOBAL FIELDS ==================================
     private RoaringBitmap seenFeatures = new RoaringBitmap();
     private int initialRawSize;
-    private final AtomicInteger gameCount = new AtomicInteger(0);
-    private final AtomicInteger winCount = new AtomicInteger(0);
-    private RemoteModelEvaluator remoteModelEvaluator;
+    public final AtomicInteger gameCount = new AtomicInteger(0);
+    public final AtomicInteger winCount = new AtomicInteger(0);
+    private RemoteModelEvaluator remoteModelEvaluatorA;
+    private RemoteModelEvaluator remoteModelEvaluatorB;
     private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(32);
     private final AtomicBoolean stop = new AtomicBoolean(false);
 
 
 
-
-    /**
-     * A simple class to hold the results of a single game
-     */
     private static class GameResult {
         private final List<LabeledState> states;
         private final boolean didPlayerAWin;
@@ -94,11 +100,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
     }
 
-    /**
-     * note is only priority actions
-     * @param deckName
-     * @throws GameException
-     */
+
     public void createAllActionsFromDeckList(String deckName, Map<String, Integer> actionMap) throws GameException {
         logger.debug("Loading deck...");
         DeckCardLists list;
@@ -187,6 +189,18 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
      * run once
      */
     private void loadAllFiles() {
+        //reset writer thread
+        stop.set(false);
+
+        //reset counts
+        winCount.set(0);
+        gameCount.set(0);
+
+        //update file paths
+        DECK_A_PATH = "decks/" + DECK_A + ".dck";
+        DECK_B_PATH = "decks/" + DECK_B + ".dck";
+        IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";
+
         //create the action map from the provided decklists
         try {
             createAllActionsFromDeckList(DECK_A_PATH, ActionEncoder.playerActionMap);
@@ -211,10 +225,13 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             logger.warn("external seen feature list not found");
         }
         try {
-            remoteModelEvaluator = new RemoteModelEvaluator();
+            remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
+            //if(this instanceof SimulateRLvsRL) remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
         } catch (Exception e) {
-            logger.warn("Failed to establish connection to network model");
-            throw new RuntimeException(e);
+            e.printStackTrace();
+            logger.warn("Failed to establish connection to network model; falling back to offline mode");
+            ComputerPlayerMCTS2.OFFLINE_MODE = true;
+            VALUE_LAMBDA = 0.3;
         }
         initialRawSize = seenFeatures.getCardinality();
     }
@@ -430,14 +447,12 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
 
             // All game objects are local to this thread to prevent race conditions.
-            MatchOptions matchOptions = new MatchOptions("test match", "test game type", true, 4);
-            Match localMatch = new FreeForAllMatch(matchOptions);
+            MatchOptions matchOptions = new MatchOptions("test match", "test game type", false, 2);
+            Match localMatch = new TwoPlayerMatch(matchOptions);
             game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
             TestPlayer playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
             TestPlayer playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
 
-
-            //threadEncoder.loadMapping(finalFeatures);
             threadEncoder.seenFeatures = seenFeatures.clone();
 
 
@@ -456,8 +471,19 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
 
             // Start the game simulation. This is a blocking call that will run the game to completion.
-            game.start(playerA.getId());
-
+            if(ALWAYS_GO_FIRST) {
+                game.start(null);
+            } else {
+                int dieRoll = ThreadLocalRandom.current().nextInt()%2;
+                if(dieRoll==0) {
+                    logger.info("Player A won the die roll");
+                    game.setStartingPlayerId(playerA.getId());
+                } else {
+                    logger.info("Player B won the die roll");
+                    game.setStartingPlayerId(playerB.getId());
+                }
+                game.start(null);
+            }
             boolean playerAWon = playerA.hasWon();
             //merge to the final features
             synchronized (seenFeatures) {
@@ -476,7 +502,11 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private void configurePlayer(TestPlayer player, StateEncoder encoder) {
         if (player.getComputerPlayer() instanceof ComputerPlayerMCTS2) {
             ((ComputerPlayerMCTS2) player.getComputerPlayer()).setEncoder(encoder);
-            ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluator;//shared reference
+            if(player.getName().equals("PlayerA")) {
+                ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluatorA;
+            } else {
+                ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluatorB;
+            }
         } else if (player.getComputerPlayer() instanceof ComputerPlayer8) {
             ((ComputerPlayer8) player.getComputerPlayer()).setEncoder(encoder);
         } else  {
@@ -510,7 +540,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             return;
         }
 
-        // find padding for nice alignment
         int maxKeyLen = map.keySet().stream().mapToInt(String::length).max().orElse(0);
 
         map.entrySet().stream()
@@ -554,7 +583,21 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
         return player;
     }
-    // This is the correct override to use for creating players within these self-contained games.
+    public void writeResults(String filePath, String results) {
+
+        try (PrintWriter out = new PrintWriter(Files.newBufferedWriter(
+                Paths.get(filePath),
+                StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE,   // create if it doesn't exist
+                StandardOpenOption.APPEND))) // append if it does
+        {
+            out.println(results);
+
+        } catch (IOException ex) {
+            logger.error("Error while writing results: " + ex.getMessage(), ex);
+        }
+    }
+    // This is the correct override to use for choosing our AI types.
     @Override
     protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (name.equals("PlayerA")) {

@@ -30,7 +30,11 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 /**
+ * traditional MCTS (Monte Carlo Tree Search), expanded to incorporate micro decisions
+ *
  * @author BetaSteward_at_googlemail.com
+ * @author WillWroble
+ *
  */
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
@@ -53,6 +57,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     //how spiky the dirichlet noise will be
     public static double POLICY_PRIOR_TEMP = 1.5;
+    public static boolean ROUND_ROBIN_MODE = false;
+    //adjust based on available RAM and threads running
+    public static int MAX_TREE_NODES = 800;
 
     public transient MCTSNode root;
     protected int maxThinkTime;
@@ -122,8 +129,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(root.getAction().getTargets().isEmpty()) {
             logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
         } else {
-            if(game.getObject(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getObject(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
+            if(game.getEntity(root.getAction().getTargets().getFirstTarget()) != null) {
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntity(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
             } else if (game.getPlayer(root.getAction().getTargets().getFirstTarget()) != null) {
                 logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
             } else {
@@ -158,16 +165,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (root != null) {
             newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             if (newRoot != null) {
-                if(newRoot.size()>2500) {
-                    logger.info("tree too large, starting fresh");
-                    newRoot = null;
-                } else {
-                    newRoot.emancipate();
-                     //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
-                    newRoot.rootGame = createMCTSGame(game.getLastPriority());
-                    newRoot.rootState = newRoot.rootGame.getState().copy();
-
-                }
+                newRoot.emancipate();
+                 //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
+                newRoot.rootGame = createMCTSGame(game.getLastPriority());
+                newRoot.rootState = newRoot.rootGame.getState().copy();
             } else {
                 logger.info("unable to find matching state");
             }
@@ -249,11 +250,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         Set<UUID> choice = root.chooseTargetAction;
         for(UUID targetId : choice) {
             Set<UUID> chosen = new HashSet<>();
-            if(target.canTarget(targetId, source, game)) {
-                target.addTarget(targetId, source, game);
-                chosen.add(targetId);
-                logger.info(String.format("Targeting %s", game.getObject(targetId).toString()));
-            }
+            target.addTarget(targetId, source, game);
+            chosen.add(targetId);
+            logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
+
             getPlayerHistory().targetSequence.add(chosen);
         }
         return target.isChosen(game);

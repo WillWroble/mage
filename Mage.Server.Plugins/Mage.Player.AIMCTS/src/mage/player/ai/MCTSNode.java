@@ -27,7 +27,7 @@ import static java.lang.Math.*;
  * @author BetaSteward_at_googlemail.com
  * @author willwroble@gmail.com
  *
- * this refactored MCTS is effectively stateless by using action replay scripts to derive states on demand from the root.
+ * this refactored MCTS uses replay scripts to simulate micro decisions (CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE).
  *
  */
 public class MCTSNode {
@@ -50,10 +50,8 @@ public class MCTSNode {
     public Set<UUID>chooseTargetAction;
     public String choiceAction;
     public Boolean useAction;
-    public Combat combat;
-    //auto pass counters - represents how many auto passes must be executed by each player BEFORE the actual decision action was made at this node
-    public int autoPassesA = 0;
-    public int autoPassesB = 0;
+    public Combat combat; //TODO:remove
+
 
     private String stateValue;
     private String fullStateValue;
@@ -68,7 +66,7 @@ public class MCTSNode {
 
     //the single dynamic game that is reused for all simulation logic
     public Game rootGame;
-    //the fixed saved state of the root so it can be reset after use.
+    //the fixed saved state of this node so it can be reset after use.
     public GameState rootState;
     //prefix scripts represent the sequence of actions that need to be taken since the last priority to represent this microstate
     public PlayerScript prefixScript = new PlayerScript();
@@ -125,8 +123,6 @@ public class MCTSNode {
         MCTSPlayer playerB =  (MCTSPlayer) game.getPlayer(game.getOpponents(targetPlayer).iterator().next());
         this.prefixScript = new PlayerScript(playerA.getPlayerHistory());
         this.opponentPrefixScript = new PlayerScript(playerB.getPlayerHistory());
-        this.autoPassesA = playerA.autoPassed;
-        this.autoPassesB = playerB.autoPassed;
 
         if(this.terminal) return; //cant determine acting player after game has ended
 
@@ -244,7 +240,7 @@ public class MCTSNode {
                 MCTSNode node = new MCTSNode(this, playable);
                 children.add(node);
             }
-        } else if(nextAction == MCTSPlayer.NextAction.SELECT_ATTACKERS) { //choose each attacker as its own seperate decsi
+        } else if(nextAction == MCTSPlayer.NextAction.SELECT_ATTACKERS) { //TODO: remove attacking now uses micro decisions
             List<List<UUID>> attacks = player.getAttacks(game);
             UUID defenderId = game.getOpponents(player.getId()).iterator().next();
             for (List<UUID> attack: attacks) {
@@ -256,7 +252,7 @@ public class MCTSNode {
                 MCTSNode node = new MCTSNode(this, newCombat);
                 children.add(node);
             }
-        } else if(nextAction == MCTSPlayer.NextAction.SELECT_BLOCKERS) {
+        } else if(nextAction == MCTSPlayer.NextAction.SELECT_BLOCKERS) { //TODO: remove blocking now uses micro decisions
             List<List<List<UUID>>> blocks = player.getBlocks(game);
             for (List<List<UUID>> block : blocks) {
                 Combat newCombat = game.getCombat().copy();
@@ -311,9 +307,9 @@ public class MCTSNode {
     private int nodeToIdx(MCTSNode node, MCTSPlayer.NextAction nextAction, Game game) {
         int idx;
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
-            idx = ActionEncoder.getActionIndex(node.getAction(), playerId.equals(targetPlayer));
+            idx = ActionEncoder.getActionIndex(node.getAction(), game.getPlayer(playerId).getName().equals("PlayerA"));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-            idx = ActionEncoder.getTargetIndex(game.getObject(node.chooseTargetAction.iterator().next()).getName());
+            idx = ActionEncoder.getTargetIndex(game.getEntity(node.chooseTargetAction.iterator().next()).toString());
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
             idx = node.useAction ? 1 : 0;
         } else {
@@ -366,7 +362,6 @@ public class MCTSNode {
                 logger.warn("using dirichlet seed: " + seed);
                 double alpha = 0.03;
                 double eps = ComputerPlayerMCTS.DIRICHLET_NOISE_EPS;
-                //if(ComputerPlayerMCTS.NO_NOISE) eps = 0;
                 int K = children.size();
                 double[] dir = new double[K];
                 double sum = 0;
@@ -417,8 +412,8 @@ public class MCTSNode {
         for (MCTSNode node: children) {
             if(node.action != null) {
                 if(node.chooseTargetAction != null && !node.chooseTargetAction.isEmpty()) {
-                    if(baseGame.getObject(node.chooseTargetAction.iterator().next()) != null) {
-                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getObject(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                    if(baseGame.getEntity(node.chooseTargetAction.iterator().next()) != null) {
+                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntity(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
                     } else if(baseGame.getPlayer(node.chooseTargetAction.iterator().next()) != null){
                         sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
                     } else {
