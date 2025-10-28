@@ -54,7 +54,7 @@ class LethalSchemeEffect extends OneShotEffect {
 
     LethalSchemeEffect() {
         super(Outcome.Benefit);
-        this.staticText = "Each creature that convoked {this} connives.";
+        this.staticText = "Each creature that convoked this spell connives.";
     }
 
     private LethalSchemeEffect(final LethalSchemeEffect effect) {
@@ -69,7 +69,7 @@ class LethalSchemeEffect extends OneShotEffect {
     @Override
     public boolean apply(Game game, Ability source) {
         HashSet<MageObjectReference> convokingCreatures = CardUtil.getSourceCostsTag(game, source,
-                ConvokeAbility.convokingCreaturesKey, new HashSet<>(0));
+                ConvokeAbility.convokingCreaturesKey, new HashSet<>());
         Set<AbstractMap.SimpleEntry<UUID, Permanent>> playerPermanentsPairs =
                 convokingCreatures
                         .stream()

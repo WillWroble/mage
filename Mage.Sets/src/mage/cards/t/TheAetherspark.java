@@ -8,7 +8,6 @@ import mage.abilities.condition.Condition;
 import mage.abilities.condition.common.AttachedToMatchesFilterCondition;
 import mage.abilities.condition.common.MyTurnCondition;
 import mage.abilities.decorator.ConditionalContinuousEffect;
-import mage.abilities.decorator.ConditionalTriggeredAbility;
 import mage.abilities.dynamicvalue.common.SavedDamageValue;
 import mage.abilities.effects.RestrictionEffect;
 import mage.abilities.effects.common.AttachEffect;
@@ -35,7 +34,6 @@ import java.util.UUID;
 public final class TheAetherspark extends CardImpl {
 
     private static final Condition condition = new AttachedToMatchesFilterCondition(StaticFilters.FILTER_PERMANENT_CREATURE);
-    private static final String rule = "Whenever equipped creature deals combat damage during your turn, put that many loyalty counters on {this}.";
 
     public TheAetherspark(UUID ownerId, CardSetInfo setInfo) {
         super(ownerId, setInfo, new CardType[]{CardType.ARTIFACT, CardType.PLANESWALKER}, "{4}");
@@ -47,12 +45,10 @@ public final class TheAetherspark extends CardImpl {
         // As long as The Aetherspark is attached to a creature, The Aetherspark can't be attacked and has "Whenever equipped creature deals combat damage during your turn, put that many loyalty counters on The Aetherspark."
         Ability ability = new SimpleStaticAbility(new TheAethersparkEffect());
         ability.addEffect(new ConditionalContinuousEffect(new GainAbilitySourceEffect(
-                new ConditionalTriggeredAbility(
-                        new DealsCombatDamageEquippedTriggeredAbility(new AddCountersSourceEffect(
-                                CounterType.LOYALTY.createInstance(0), SavedDamageValue.MANY
-                        )), MyTurnCondition.instance, rule
-                )
-        ), condition, "and has \"" + rule + "\""));
+                new DealsCombatDamageEquippedTriggeredAbility(new AddCountersSourceEffect(
+                        CounterType.LOYALTY.createInstance(0), SavedDamageValue.MANY
+                )).withTriggerCondition(MyTurnCondition.instance)
+        ), condition, "and has \"Whenever equipped creature deals combat damage during your turn, put that many loyalty counters on {this}.\""));
         this.addAbility(ability);
 
         // +1: Attach The Aetherspark to up to one target creature you control. Put a +1/+1 counter on that creature.
@@ -61,14 +57,14 @@ public final class TheAetherspark extends CardImpl {
         ), 1);
         ability.addEffect(new AddCountersTargetEffect(CounterType.P1P1.createInstance())
                 .setText("put a +1/+1 counter on that creature"));
-        ability.addTarget(new TargetControlledCreaturePermanent());
+        ability.addTarget(new TargetControlledCreaturePermanent(0, 1));
         this.addAbility(ability);
 
         // -5: Draw two cards.
         this.addAbility(new LoyaltyAbility(new DrawCardSourceControllerEffect(2), -5));
 
         // -10: Add ten mana of any one color.
-        this.addAbility(new LoyaltyAbility(new AddManaOfAnyColorEffect(3), -10));
+        this.addAbility(new LoyaltyAbility(new AddManaOfAnyColorEffect(10), -10));
     }
 
     private TheAetherspark(final TheAetherspark card) {
@@ -100,7 +96,7 @@ class TheAethersparkEffect extends RestrictionEffect {
     @Override
     public boolean applies(Permanent permanent, Ability source, Game game) {
         return Optional
-                .ofNullable(source.getControllerId())
+                .ofNullable(source.getSourceId())
                 .map(game::getPermanent)
                 .map(Permanent::getAttachedTo)
                 .map(game::getPermanent)

@@ -23,6 +23,7 @@ import mage.game.stack.StackAbility;
 import mage.game.stack.StackObject;
 import mage.player.ai.ma.optimizers.TreeOptimizer;
 import mage.player.ai.ma.optimizers.impl.*;
+import mage.player.ai.score.GameStateEvaluator2;
 import mage.player.ai.util.CombatInfo;
 import mage.player.ai.util.CombatUtil;
 import mage.players.Player;
@@ -112,6 +113,13 @@ public class ComputerPlayer6 extends ComputerPlayer {
         this.targets.addAll(player.targets);
         this.choices.addAll(player.choices);
         this.actionCache = player.actionCache;
+    }
+
+    /**
+     * Change simulation timeout - used for AI stability tests only
+     */
+    public void setMaxThinkTimeSecs(int maxThinkTimeSecs) {
+        this.maxThinkTimeSecs = maxThinkTimeSecs;
     }
 
     @Override
@@ -206,14 +214,13 @@ public class ComputerPlayer6 extends ComputerPlayer {
             logger.trace("Add Action [" + depth + "] " + node.getAbilities().toString() + "  a: " + alpha + " b: " + beta);
         }
         Game game = node.getGame();
-        if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS
-                && Thread.interrupted()) {
-            Thread.currentThread().interrupt();
-            logger.debug("interrupted");
+        if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS && Thread.currentThread().isInterrupted()) {
+            logger.debug("AI game sim interrupted by timeout");
             return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
         }
         // Condition to stop deeper simulation
         if (SimulationNode2.nodeCount > MAX_SIMULATED_NODES_PER_ERROR) {
+            // how-to fix: make sure you are disabled debug mode by COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS = false
             throw new IllegalStateException("AI ERROR: too much nodes (possible actions)");
         }
         if (depth <= 0
@@ -393,20 +400,23 @@ public class ComputerPlayer6 extends ComputerPlayer {
     }
 
     protected void resolve(SimulationNode2 node, int depth, Game game) {
-        StackObject stackObject = game.getStack().getFirst();
+        StackObject stackObject = game.getStack().getFirstOrNull();
+        if (stackObject == null) {
+            throw new IllegalStateException("Catch empty stack on resolve (something wrong with sim code)");
+        }
         if (stackObject instanceof StackAbility) {
             // AI hint for search effects (calc all possible cards for best score)
             SearchEffect effect = getSearchEffect((StackAbility) stackObject);
             if (effect != null
                     && stackObject.getControllerId().equals(playerId)) {
                 Target target = effect.getTarget();
-                if (!target.doneChoosing(game)) {
+                if (!target.isChoiceCompleted(getId(), (StackAbility) stackObject, game, null)) {
                     for (UUID targetId : target.possibleTargets(stackObject.getControllerId(), stackObject.getStackAbility(), game)) {
                         Game sim = game.createSimulationForAI();
                         StackAbility newAbility = (StackAbility) stackObject.copy();
                         SearchEffect newEffect = getSearchEffect(newAbility);
                         newEffect.getTarget().addTarget(targetId, newAbility, sim);
-                        sim.getStack().push(newAbility);
+                        sim.getStack().push(sim, newAbility);
                         SimulationNode2 newNode = new SimulationNode2(node, sim, depth, stackObject.getControllerId());
                         node.children.add(newNode);
                         newNode.getTargets().add(targetId);
@@ -431,6 +441,8 @@ public class ComputerPlayer6 extends ComputerPlayer {
      * @return
      */
     protected Integer addActionsTimed() {
+        // TODO: all actions added and calculated one by one,
+        //  multithreading do not supported here
         // run new game simulation in parallel thread
         //assert (threadPoolSimulations != null);
         FutureTask<Integer> task = new FutureTask<>(() -> addActions(root, maxDepth, Integer.MIN_VALUE, Integer.MAX_VALUE));
@@ -447,15 +459,23 @@ public class ComputerPlayer6 extends ComputerPlayer {
             }
         } catch (TimeoutException | InterruptedException e) {
             // AI thinks too long
-            logger.info("ai simulating - timed out");
+            // how-to fix: look at stack info - it can contain bad ability with infinite choose dialog
+            logger.warn("");
+            logger.warn("AI player thinks too long (report it to github):");
+            logger.warn(" - player: " + getName());
+            logger.warn(" - battlefield size: " + root.game.getBattlefield().getAllPermanents().size());
+            logger.warn(" - stack: " + root.game.getStack());
+            logger.warn(" - game: " + root.game);
+            printFreezeNode(root);
+            logger.warn("");
             task.cancel(true);
         } catch (ExecutionException e) {
             // game error
-            logger.error("AI simulation catch game error: " + e, e);
+            logger.error("AI player catch game error in simulation - " + getName() + " - " + root.game + ": " + e, e);
             task.cancel(true);
             // real games: must catch and log
             // unit tests: must raise again for fast fail
-            if (this.isTestsMode()) {
+            if (this.isTestMode() && this.isFastFailInTestMode()) {
                 throw new IllegalStateException("One of the simulated games raise the error: " + e, e);
             }
         } catch (Throwable e) {
@@ -467,11 +487,33 @@ public class ComputerPlayer6 extends ComputerPlayer {
         return 0;
     }
 
+    private void printFreezeNode(SimulationNode2 root) {
+        // print simple tree - there are possible multiple child nodes, but ignore it - same for abilities
+        List<String> chain = new ArrayList<>();
+        SimulationNode2 node = root;
+        while (node != null) {
+            if (node.abilities != null && !node.abilities.isEmpty()) {
+                Ability ability = node.abilities.get(0);
+                String sourceInfo = CardUtil.getSourceIdName(node.game, ability);
+                chain.add(String.format("%s: %s",
+                        (sourceInfo.isEmpty() ? "unknown" : sourceInfo),
+                        ability
+                ));
+            }
+            node = node.children == null || node.children.isEmpty() ? null : node.children.get(0);
+        }
+        logger.warn("Possible freeze chain:");
+        if (root != null && chain.isEmpty()) {
+            logger.warn(" - unknown use case (too many possible targets?)"); // maybe can't finish any calc, maybe related to target options
+        }
+        chain.forEach(s -> {
+            logger.warn(" - " + s);
+        });
+    }
+
     protected int simulatePriority(SimulationNode2 node, Game game, int depth, int alpha, int beta) {
-        if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS
-                && Thread.interrupted()) {
-            Thread.currentThread().interrupt();
-            logger.debug("interrupted");
+        if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS && Thread.currentThread().isInterrupted()) {
+            logger.debug("AI game sim interrupted by timeout");
             return GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
         }
         node.setGameValue(game.getState().getValue(true).hashCode());
@@ -499,10 +541,8 @@ public class ComputerPlayer6 extends ComputerPlayer {
         int bestValSubNodes = Integer.MIN_VALUE;
         for (Ability action : allActions) {
             actionNumber++;
-            if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS
-                    && Thread.interrupted()) {
-                Thread.currentThread().interrupt();
-                logger.debug("Sim Prio [" + depth + "] -- interrupted");
+            if (!COMPUTER_DISABLE_TIMEOUT_IN_GAME_SIMULATIONS && Thread.currentThread().isInterrupted()) {
+                logger.info("Sim Prio [" + depth + "] -- interrupted");
                 break;
             }
             Game sim = game.createSimulationForAI();
@@ -605,7 +645,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
                                         return "unknown";
                                     })
                                     .collect(Collectors.joining(", "));
-                            logger.debug(String.format("Sim Prio [%d] -> with choices (TODO): [%d]<diff %s> (%s)",
+                            logger.info(String.format("Sim Prio [%d] -> with possible choices: [%d]<diff %s> (%s)",
                                     depth,
                                     currentNode.getDepth(),
                                     printDiffScore(currentScore - prevScore),
@@ -614,14 +654,18 @@ public class ComputerPlayer6 extends ComputerPlayer {
                         } else if (!currentNode.getChoices().isEmpty()) {
                             // ON CHOICES
                             String choicesInfo = String.join(", ", currentNode.getChoices());
-                            logger.debug(String.format("Sim Prio [%d] -> with choices (TODO): [%d]<diff %s> (%s)",
+                            logger.info(String.format("Sim Prio [%d] -> with possible choices (must not see that code): [%d]<diff %s> (%s)",
                                     depth,
                                     currentNode.getDepth(),
                                     printDiffScore(currentScore - prevScore),
                                     choicesInfo)
                             );
                         } else {
-                            throw new IllegalStateException("AI CALC ERROR: unknown calculation result (no abilities, no targets, no choices)");
+                            logger.info(String.format("Sim Prio [%d] -> with do nothing: [%d]<diff %s>",
+                                    depth,
+                                    currentNode.getDepth(),
+                                    printDiffScore(currentScore - prevScore))
+                            );
                         }
                     }
                 }
@@ -850,10 +894,12 @@ public class ComputerPlayer6 extends ComputerPlayer {
         if (targets.isEmpty()) {
             return super.chooseTarget(outcome, cards, target, source, game);
         }
-        if (!target.doneChoosing(game)) {
+
+        UUID abilityControllerId = target.getAffectedAbilityControllerId(getId());
+        if (!target.isChoiceCompleted(abilityControllerId, source, game, cards)) {
             for (UUID targetId : targets) {
                 target.addTarget(targetId, source, game);
-                if (target.doneChoosing(game)) {
+                if (target.isChoiceCompleted(abilityControllerId, source, game, cards)) {
                     targets.clear();
                     return true;
                 }
@@ -868,10 +914,12 @@ public class ComputerPlayer6 extends ComputerPlayer {
         if (targets.isEmpty()) {
             return super.choose(outcome, cards, target, source, game);
         }
-        if (!target.doneChoosing(game)) {
+
+        UUID abilityControllerId = target.getAffectedAbilityControllerId(getId());
+        if (!target.isChoiceCompleted(abilityControllerId, source, game, cards)) {
             for (UUID targetId : targets) {
                 target.add(targetId, game);
-                if (target.doneChoosing(game)) {
+                if (target.isChoiceCompleted(abilityControllerId, source, game, cards)) {
                     targets.clear();
                     return true;
                 }
@@ -979,7 +1027,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
             Player attackingPlayer = game.getPlayer(activePlayerId);
 
             // check alpha strike first (all in attack to kill a player)
-            for (UUID defenderId : game.getOpponents(playerId)) {
+            for (UUID defenderId : game.getOpponents(playerId, true)) {
                 Player defender = game.getPlayer(defenderId);
                 if (!defender.isInGame()) {
                     continue;
@@ -1002,7 +1050,7 @@ public class ComputerPlayer6 extends ComputerPlayer {
             // TODO: add game simulations here to find best attackers/blockers combination
 
             // find safe attackers (can't be killed by blockers)
-            for (UUID defenderId : game.getOpponents(playerId)) {
+            for (UUID defenderId : game.getOpponents(playerId, true)) {
                 Player defender = game.getPlayer(defenderId);
                 if (!defender.isInGame()) {
                     continue;

@@ -10,7 +10,6 @@ import mage.constants.ColoredManaSymbol;
 import mage.constants.ManaType;
 import mage.constants.Outcome;
 import mage.filter.Filter;
-import mage.filter.FilterMana;
 import mage.game.Game;
 import mage.players.ManaPool;
 import mage.players.Player;
@@ -43,7 +42,7 @@ public class ManaCostsImpl<T extends ManaCost> extends ArrayList<T> implements M
         load(mana);
     }
 
-    private ManaCostsImpl(final ManaCostsImpl<T> costs) {
+    protected ManaCostsImpl(final ManaCostsImpl<T> costs) {
         this.id = costs.id;
         this.text = costs.text;
         this.ensureCapacity(costs.size());
@@ -439,7 +438,7 @@ public class ManaCostsImpl<T extends ManaCost> extends ArrayList<T> implements M
                     this.add(new ColoredManaCost(ColoredManaSymbol.lookup(symbol.charAt(0))));
                 } else // check X wasn't added before
                     if (modifierForX == 0) {
-                        // count X occurence
+                        // count X occurrence
                         for (String s : symbols) {
                             if (s.equals("X")) {
                                 modifierForX++;

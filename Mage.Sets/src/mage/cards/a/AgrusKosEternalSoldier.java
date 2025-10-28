@@ -23,7 +23,6 @@ import mage.game.stack.Spell;
 import mage.game.stack.StackObject;
 import mage.players.Player;
 import mage.target.Target;
-import mage.util.CardUtil;
 
 import java.util.Collection;
 import java.util.List;
@@ -90,11 +89,8 @@ class AgrusKosEternalSoldierTriggeredAbility extends TriggeredAbilityImpl {
         if (!event.getTargetId().equals(getSourceId())) {
             return false;
         }
-        StackObject targetingObject = CardUtil.getTargetingStackObject(event, game);
+        StackObject targetingObject = game.findTargetingStackObject(this.getId().toString(), event);
         if (targetingObject == null || targetingObject instanceof Spell) {
-            return false;
-        }
-        if (CardUtil.checkTargetedEventAlreadyUsed(this.getId().toString(), targetingObject, event, game)) {
             return false;
         }
         Set<UUID> targets = targetingObject

@@ -29,6 +29,8 @@ Anthologies|ATH|
 Antiquities|ATQ|
 Assassin's Creed|ACR|
 Avacyn Restored|AVR|
+Avatar: The Last Airbender|TLA|
+Avatar: The Last Airbender Eternal|TLE|
 Battle for Zendikar|BFZ|
 Battlebond|BBD|
 Born of the Gods|BNG|
@@ -100,6 +102,8 @@ Darksteel|DST|
 Dragons of Tarkir|DTK|
 Archenemy: Nicol Bolas|E01|
 Explorers of Ixalan|E02|
+Edge of Eternities|EOE|
+Edge of Eternities Commander|EOC|
 Eternal Masters|EMA|
 Eldritch Moon|EMN|
 European Land Program|EURO|
@@ -111,6 +115,8 @@ Exodus|EXO|
 Zendikar Expeditions|EXP|
 Fallout|PIP|
 Fallen Empires|FEM|
+Final Fantasy|FIN|
+Final Fantasy Commander|FIC|
 Friday Night Magic|FNMP|
 Fate Reforged|FRF|
 Foundations|FDN|
@@ -133,6 +139,7 @@ Iconic Masters|IMA|
 Ikoria: Lair of Behemoths|IKO|
 Invasion|INV|
 Innistrad|ISD|
+Lorwyn Eclipsed|ECL|
 The Lost Caverns of Ixalan|LCI|
 The Lost Caverns of Ixalan Commander|LCC|
 Innistrad: Midnight Hunt|MID|
@@ -171,6 +178,8 @@ Masters 25|A25|
 Magic: The Gathering-Commander|CMD|
 Magic: The Gathering-Conspiracy|CNS|
 Media Inserts|MBP|
+Marvel's Spider-Man|SPM|
+Marvel's Spider-Man Eternal|SPE|
 March of the Machine|MOM|
 March of the Machine Commander|MOC|
 March of the Machine: The Aftermath|MAT|
@@ -246,6 +255,10 @@ New Capenna Commander|NCC|
 Stronghold|STH|
 Special Guests|SPG|
 Super Series|SUS|
+Tarkir: Dragonstorm|TDM|
+Tarkir: Dragonstorm Commander|TDC|
+Teenage Mutant Ninja Turtles|TMT|
+Teenage Mutant Ninja Turtles Eternal|TMC|
 Theros|THS|
 Theros Beyond Death|THB|
 The Brothers' War|BRO|

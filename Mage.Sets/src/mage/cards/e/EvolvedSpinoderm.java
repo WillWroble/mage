@@ -2,7 +2,6 @@ package mage.cards.e;
 
 import mage.MageInt;
 import mage.abilities.Ability;
-import mage.abilities.triggers.BeginningOfUpkeepTriggeredAbility;
 import mage.abilities.common.EntersBattlefieldAbility;
 import mage.abilities.common.SimpleStaticAbility;
 import mage.abilities.condition.Condition;
@@ -15,9 +14,11 @@ import mage.abilities.effects.common.counter.AddCountersSourceEffect;
 import mage.abilities.effects.common.counter.RemoveCounterSourceEffect;
 import mage.abilities.keyword.HexproofAbility;
 import mage.abilities.keyword.TrampleAbility;
+import mage.abilities.triggers.BeginningOfUpkeepTriggeredAbility;
 import mage.cards.CardImpl;
 import mage.cards.CardSetInfo;
 import mage.constants.CardType;
+import mage.constants.ComparisonType;
 import mage.constants.SubType;
 import mage.counters.CounterType;
 
@@ -28,8 +29,8 @@ import java.util.UUID;
  */
 public final class EvolvedSpinoderm extends CardImpl {
 
-    private static final Condition condition1 = new SourceHasCounterCondition(CounterType.OIL, 3);
-    private static final Condition condition2 = new SourceHasCounterCondition(CounterType.OIL, 0, 0);
+    private static final Condition condition1 = new SourceHasCounterCondition(CounterType.OIL, ComparisonType.OR_LESS, 2);
+    private static final Condition condition2 = new SourceHasCounterCondition(CounterType.OIL, ComparisonType.EQUAL_TO, 0);
 
     public EvolvedSpinoderm(UUID ownerId, CardSetInfo setInfo) {
         super(ownerId, setInfo, new CardType[]{CardType.CREATURE}, "{2}{G}{G}");
@@ -47,8 +48,8 @@ public final class EvolvedSpinoderm extends CardImpl {
 
         // Evolved Spinoderm has trample as long as it was two or fewer oil counters on it, Otherwise, it has hexproof.
         this.addAbility(new SimpleStaticAbility(new ConditionalContinuousEffect(
-                new GainAbilitySourceEffect(HexproofAbility.getInstance()),
                 new GainAbilitySourceEffect(TrampleAbility.getInstance()),
+                new GainAbilitySourceEffect(HexproofAbility.getInstance()),
                 condition1, "{this} has trample as long as it has two " +
                 "or fewer oil counters on it. Otherwise, it has hexproof"
         )));

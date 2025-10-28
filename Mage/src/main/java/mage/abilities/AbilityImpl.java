@@ -34,6 +34,7 @@ import mage.game.events.BatchEvent;
 import mage.game.events.GameEvent;
 import mage.game.events.ZoneChangeEvent;
 import mage.game.permanent.Permanent;
+import mage.game.permanent.PermanentToken;
 import mage.game.stack.Spell;
 import mage.game.stack.StackAbility;
 import mage.players.Player;
@@ -84,6 +85,7 @@ public abstract class AbilityImpl implements Ability {
     private List<Watcher> watchers = new ArrayList<>(); // access to it by GetWatchers only (it can be overridden by some abilities)
     private List<Ability> subAbilities = null;
     private boolean canFizzle = true; // for Gilded Drake
+    private boolean canBeCopied = true;
     private TargetAdjuster targetAdjuster = null;
     private CostAdjuster costAdjuster = null;
     private List<Hint> hints = new ArrayList<>();
@@ -130,6 +132,7 @@ public abstract class AbilityImpl implements Ability {
         this.flavorWord = ability.flavorWord;
         this.sourceObjectZoneChangeCounter = ability.sourceObjectZoneChangeCounter;
         this.canFizzle = ability.canFizzle;
+        this.canBeCopied = ability.canBeCopied;
         this.targetAdjuster = ability.targetAdjuster;
         this.costAdjuster = ability.costAdjuster;
         this.hints = CardUtil.deepCopyObject(ability.hints);
@@ -282,9 +285,7 @@ public abstract class AbilityImpl implements Ability {
         game.applyEffects();
 
         MageObject sourceObject = getSourceObject(game);
-        if (getSourceObjectZoneChangeCounter() == 0) {
-            setSourceObjectZoneChangeCounter(game.getState().getZoneChangeCounter(getSourceId()));
-        }
+        initSourceObjectZoneChangeCounter(game, false);
         setSourcePermanentTransformCount(game);
 
         // if ability can be cast for no mana, clear the mana costs now, because additional mana costs must be paid.
@@ -303,6 +304,8 @@ public abstract class AbilityImpl implements Ability {
 
         // fused or spliced spells contain multiple abilities (e.g. fused, left, right)
         // optional costs and cost modification must be applied only to the first/main ability
+        // TODO: need tests with X announced costs, cost modification effects, CostAdjuster, early cost target, etc
+        //  can be bugged due multiple calls (not all code parts below use isMainPartAbility)
         boolean isMainPartAbility = !CardUtil.isFusedPartAbility(this, game);
 
         /* 20220908 - 601.2b
@@ -336,6 +339,16 @@ public abstract class AbilityImpl implements Ability {
         //}
         if (getAbilityType() == AbilityType.SPELL && (getManaCostsToPay().isEmpty() && getCosts().isEmpty()) && !noMana) {
             return false;
+        }
+
+        // 20241022 - 601.2b
+        // Choose targets for costs that have to be chosen early
+        // Not yet included in 601.2b but this is where it will be
+        handleChooseCostTargets(game, controller);
+
+        // prepare dynamic costs (must be called before any x announce)
+        if (isMainPartAbility) {
+            adjustX(game);
         }
 
         // 20121001 - 601.2b
@@ -376,8 +389,8 @@ public abstract class AbilityImpl implements Ability {
 
         // unit tests only: it allows to add targets/choices by two ways:
         // 1. From cast/activate command params (process it here)
-        // 2. From single addTarget/setChoice, it's a preffered method for tests (process it in normal choose dialogs like human player)
-        if (controller.isTestsMode()) {
+        // 2. From single addTarget/setChoice, it's a preferred method for tests (process it in normal choose dialogs like human player)
+        if (controller.isTestMode()) {
             if (!controller.addTargets(this, game)) {
                 return false;
             }
@@ -414,7 +427,7 @@ public abstract class AbilityImpl implements Ability {
                 // Note: ActivatedAbility does include SpellAbility & PlayLandAbility, but those should be able to be canceled too.
                 boolean canCancel = this instanceof ActivatedAbility && controller.isHuman();
                 if (!getTargets().chooseTargets(outcome, this.controllerId, this, noMana, game, canCancel)) {
-                    // was canceled during targer selection
+                    // was canceled during target selection
                     return false;
                 }
             }
@@ -440,7 +453,7 @@ public abstract class AbilityImpl implements Ability {
 
         //20101001 - 601.2e
         if (isMainPartAbility) {
-            adjustCosts(game); // still needed for CostAdjuster objects (to handle some types of dynamic costs)
+            // adjustX already called before any announces
             game.getContinuousEffects().costModification(this, game);
         }
 
@@ -495,6 +508,7 @@ public abstract class AbilityImpl implements Ability {
             // A player can't apply two alternative methods of casting or two alternative costs to a single spell.
             switch (((SpellAbility) this).getSpellAbilityCastMode()) {
                 case FLASHBACK:
+                case HARMONIZE:
                 case MADNESS:
                 case TRANSFORMED:
                 case DISTURB:
@@ -738,6 +752,11 @@ public abstract class AbilityImpl implements Ability {
                 ((EarlyTargetCost) cost).chooseTarget(game, this, controller);
             }
         }
+        for (ManaCost cost : getManaCostsToPay()) {
+            if (cost instanceof EarlyTargetCost && cost.getTargets().isEmpty()) {
+                ((EarlyTargetCost) cost).chooseTarget(game, this, controller);
+            }
+        }
     }
 
     /**
@@ -776,8 +795,15 @@ public abstract class AbilityImpl implements Ability {
             if (!variableManaCost.isPaid()) { // should only happen for human players
                 int xValue;
                 if (!noMana || variableManaCost.getCostType().canUseAnnounceOnFreeCast()) {
-                    xValue = controller.announceXMana(variableManaCost.getMinX(), variableManaCost.getMaxX(),
-                            "Announce the value for " + variableManaCost.getText(), game, this);
+                    if (variableManaCost.wasAnnounced()) {
+                        // announce by rules
+                        xValue = variableManaCost.getAmount();
+                    } else {
+                        // announce by player
+                        xValue = controller.announceX(variableManaCost.getMinX(), variableManaCost.getMaxX(),
+                                "Announce the value for " + variableManaCost.getText(), game, this, true);
+                    }
+
                     int amountMana = xValue * variableManaCost.getXInstancesCount();
                     StringBuilder manaString = threadLocalBuilder.get();
                     if (variableManaCost.getFilter() == null || variableManaCost.getFilter().isGeneric()) {
@@ -1003,38 +1029,28 @@ public abstract class AbilityImpl implements Ability {
 
         String ruleStart = sbRule.toString();
         String text = getModes().getText();
-        String rule;
+        StringBuilder rule = new StringBuilder();
         if (!text.isEmpty()) {
             if (ruleStart.length() > 1) {
                 String end = ruleStart.substring(ruleStart.length() - 2).trim();
                 if (end.isEmpty() || end.equals(":") || end.equals(".")) {
-                    rule = ruleStart + CardUtil.getTextWithFirstCharUpperCase(text);
+                    rule.append(ruleStart + CardUtil.getTextWithFirstCharUpperCase(text));
                 } else {
-                    rule = ruleStart + text;
+                    rule.append(ruleStart + text);
                 }
             } else {
-                rule = ruleStart + text;
+                rule.append(ruleStart + text);
             }
         } else {
-            rule = ruleStart;
-        }
-        String prefix;
-        if (this instanceof TriggeredAbility || this instanceof EntersBattlefieldAbility) {
-            prefix = null;
-        } else if (abilityWord != null) {
-            prefix = abilityWord.formatWord();
-        } else if (flavorWord != null) {
-            prefix = CardUtil.italicizeWithEmDash(flavorWord);
-        } else {
-            prefix = null;
-        }
-        if (prefix != null) {
-            rule = prefix + CardUtil.getTextWithFirstCharUpperCase(rule);
+            rule.append(ruleStart);
         }
         if (appendToRule != null) {
-            rule = rule.concat(appendToRule);
+            rule.append(appendToRule);
         }
-        return rule;
+        if (this instanceof TriggeredAbility || this instanceof EntersBattlefieldAbility) {
+            return rule.toString();
+        }
+        return addRulePrefix(rule.toString());
     }
 
     @Override
@@ -1081,6 +1097,60 @@ public abstract class AbilityImpl implements Ability {
             manaCostsToPay.addAll((ManaCosts) manaCost);
         } else {
             manaCostsToPay.add(manaCost);
+        }
+    }
+
+    @Override
+    public void setVariableCostsMinMax(int min, int max) {
+        // modify all values (mtg rules allow only one type of X, so min/max must be shared between all X instances)
+
+        // base cost
+        for (ManaCost cost : getManaCosts()) {
+            if (cost instanceof MinMaxVariableCost) {
+                MinMaxVariableCost minMaxCost = (MinMaxVariableCost) cost;
+                minMaxCost.setMinX(min);
+                minMaxCost.setMaxX(max);
+            }
+        }
+
+        // prepared cost
+        for (ManaCost cost : getManaCostsToPay()) {
+            if (cost instanceof MinMaxVariableCost) {
+                MinMaxVariableCost minMaxCost = (MinMaxVariableCost) cost;
+                minMaxCost.setMinX(min);
+                minMaxCost.setMaxX(max);
+            }
+        }
+    }
+
+    @Override
+    public void setVariableCostsValue(int xValue) {
+        // only mana cost supported
+
+        // base cost
+        boolean foundBaseCost = false;
+        for (ManaCost cost : getManaCosts()) {
+            if (cost instanceof VariableManaCost) {
+                foundBaseCost = true;
+                ((VariableManaCost) cost).setMinX(xValue);
+                ((VariableManaCost) cost).setMaxX(xValue);
+                ((VariableManaCost) cost).setAmount(xValue, xValue, false);
+            }
+        }
+
+        // prepared cost
+        boolean foundPreparedCost = false;
+        for (ManaCost cost : getManaCostsToPay()) {
+            if (cost instanceof VariableManaCost) {
+                foundPreparedCost = true;
+                ((VariableManaCost) cost).setMinX(xValue);
+                ((VariableManaCost) cost).setMaxX(xValue);
+                ((VariableManaCost) cost).setAmount(xValue, xValue, false);
+            }
+        }
+
+        if (!foundPreparedCost || !foundBaseCost) {
+            throw new IllegalArgumentException("Wrong code usage: auto-announced X values allowed in mana costs only");
         }
     }
 
@@ -1169,11 +1239,8 @@ public abstract class AbilityImpl implements Ability {
         for (Mode mode : modes.values()) {
             boolean validTargets = true;
             for (Target target : mode.getTargets()) {
-                UUID abilityControllerId = controllerId;
-                if (target.getTargetController() != null) {
-                    abilityControllerId = target.getTargetController();
-                }
-                if (!target.canChoose(abilityControllerId, ability, game)) {
+                UUID abilityControllerId = target.getAffectedAbilityControllerId(controllerId);
+                if (!target.canChooseOrAlreadyChosen(abilityControllerId, ability, game)) {
                     validTargets = false;
                     break;
                 }
@@ -1411,6 +1478,17 @@ public abstract class AbilityImpl implements Ability {
     }
 
     @Override
+    public String addRulePrefix(String rule) {
+        if (abilityWord != null) {
+            return abilityWord.formatWord() + CardUtil.getTextWithFirstCharUpperCase(rule);
+        } else if (flavorWord != null) {
+            return CardUtil.italicizeWithEmDash(flavorWord) + CardUtil.getTextWithFirstCharUpperCase(rule);
+        } else {
+            return rule;
+        }
+    }
+
+    @Override
     public Ability withFirstModeFlavorWord(String flavorWord) {
         this.modes.getMode().withFlavorWord(flavorWord);
         return this;
@@ -1593,8 +1671,8 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public MageObject getSourceObjectIfItStillExists(Game game) {
-        if (getSourceObjectZoneChangeCounter() == 0
-                || getSourceObjectZoneChangeCounter() == game.getState().getZoneChangeCounter(getSourceId())) {
+        if (getStackMomentSourceZCC() == 0
+                || getStackMomentSourceZCC() == getCurrentSourceObjectZoneChangeCounter(game)) {
             // exists or lki from battlefield
             return game.getObject(getSourceId());
         }
@@ -1623,7 +1701,7 @@ public abstract class AbilityImpl implements Ability {
     public Permanent getSourcePermanentOrLKI(Game game) {
         Permanent permanent = getSourcePermanentIfItStillExists(game);
         if (permanent == null) {
-            permanent = (Permanent) game.getLastKnownInformation(getSourceId(), Zone.BATTLEFIELD, getSourceObjectZoneChangeCounter());
+            permanent = (Permanent) game.getLastKnownInformation(getSourceId(), Zone.BATTLEFIELD, getStackMomentSourceZCC());
         }
         return permanent;
     }
@@ -1634,7 +1712,30 @@ public abstract class AbilityImpl implements Ability {
     }
 
     @Override
-    public int getSourceObjectZoneChangeCounter() {
+    public void initSourceObjectZoneChangeCounter(Game game, boolean force) {
+        if (!(this instanceof MageSingleton) && (force || sourceObjectZoneChangeCounter == 0 )) {
+            setSourceObjectZoneChangeCounter(getCurrentSourceObjectZoneChangeCounter(game));
+        }
+    }
+
+    private int getCurrentSourceObjectZoneChangeCounter(Game game){
+        int zcc = game.getState().getZoneChangeCounter(getSourceId());
+        Permanent p = game.getPermanentEntering(getSourceId());
+        if (p != null && !(p instanceof PermanentToken)){
+            // If the triggered ability triggered while the permanent is entering the battlefield
+            // then add 1 zcc so that it triggers as if the permanent was already on the battlefield
+            // So "Enters with counters" causes "Whenever counters are placed" to trigger with battlefield zcc
+            // Particularly relevant for Sagas, which always involve both
+            // Note that this does NOT apply to "As ~ ETB" effects, those still use the stack zcc
+            // TODO: JayDi doesn't like this solution, consider finding another one.
+            zcc += 1;
+            // However, tokens don't change their zcc upon entering the battlefield, so don't add for them
+        }
+        return zcc;
+    }
+
+    @Override
+    public int getStackMomentSourceZCC() {
         return sourceObjectZoneChangeCounter;
     }
 
@@ -1667,7 +1768,22 @@ public abstract class AbilityImpl implements Ability {
     }
 
     @Override
+    public boolean canBeCopied() {
+        return canBeCopied;
+    }
+
+    @Override
+    public Ability withCanBeCopied(boolean canBeCopied) {
+        this.canBeCopied = canBeCopied;
+        return this;
+    }
+
+    @Override
     public AbilityImpl setTargetAdjuster(TargetAdjuster targetAdjuster) {
+        if (targetAdjuster == null) {
+            this.targetAdjuster = null;
+            return this;
+        }
         if (targetAdjuster instanceof GenericTargetAdjuster && this.getTargets().isEmpty()) {
             throw new IllegalStateException("Target adjuster being added but no targets are set!");
         }
@@ -1688,17 +1804,6 @@ public abstract class AbilityImpl implements Ability {
         }
     }
 
-    /**
-     * Dynamic cost modification for ability.<br>
-     * Example: if it need stack related info (like real targets) then must
-     * check two states (game.inCheckPlayableState): <br>
-     * 1. In playable state it must check all possible use cases (e.g. allow to
-     * reduce on any available target and modes) <br>
-     * 2. In real cast state it must check current use case (e.g. real selected
-     * targets and modes)
-     *
-     * @param costAdjuster
-     */
     @Override
     public AbilityImpl setCostAdjuster(CostAdjuster costAdjuster) {
         this.costAdjuster = costAdjuster;
@@ -1711,9 +1816,23 @@ public abstract class AbilityImpl implements Ability {
     }
 
     @Override
-    public void adjustCosts(Game game) {
+    public void adjustX(Game game) {
         if (costAdjuster != null) {
-            costAdjuster.adjustCosts(this, game);
+            costAdjuster.prepareX(this, game);
+        }
+    }
+
+    @Override
+    public void adjustCostsPrepare(Game game) {
+        if (costAdjuster != null) {
+            costAdjuster.prepareCost(this, game);
+        }
+    }
+
+    @Override
+    public void adjustCostsModify(Game game, CostModificationType costModificationType) {
+        if (costAdjuster != null) {
+            costAdjuster.modifyCost(this, game, costModificationType);
         }
     }
 

@@ -10,10 +10,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
-import java.net.URL;
+import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -93,7 +90,9 @@ public class XmageURLConnection {
         initDefaultProxy();
 
         try {
-            URL url = new URL(this.url);
+            // convert utf8 url to ascii format (e.g. url encode)
+            URI uri = new URI(this.url);
+            URL url = new URL(uri.toASCIIString());
 
             // proxy settings
             if (this.proxy != null) {
@@ -107,7 +106,7 @@ public class XmageURLConnection {
             this.connection.setReadTimeout(CONNECTION_READING_TIMEOUT_MS);
 
             initDefaultHeaders();
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException e) {
             this.connection = null;
         }
     }
@@ -129,6 +128,10 @@ public class XmageURLConnection {
         }
 
         this.proxy = Proxy.NO_PROXY;
+        if (!PreferencesDialog.NETWORK_ENABLE_PROXY_SUPPORT) {
+            return;
+        }
+
         if (type != Proxy.Type.DIRECT) {
             try {
                 String address = PreferencesDialog.getCachedValue(PreferencesDialog.KEY_PROXY_ADDRESS, "");
@@ -287,16 +290,25 @@ public class XmageURLConnection {
         }
     }
 
+    public static String downloadText(String resourceUrl) {
+        return downloadText(resourceUrl, null);
+    }
+
     /**
      * Fast download of text data
      *
+     * @param additionalHeaders set extra headers like application/json
+     *
      * @return downloaded text on OK 200 response or empty on any other errors
      */
-    public static String downloadText(String resourceUrl) {
+    public static String downloadText(String resourceUrl, Map<String, String> additionalHeaders) {
         XmageURLConnection con = new XmageURLConnection(resourceUrl);
         con.startConnection();
         if (con.isConnected()) {
             try {
+                if (additionalHeaders != null) {
+                    con.setRequestHeaders(additionalHeaders);
+                }
                 con.connect();
                 if (con.getResponseCode() == 200) {
                     return con.getGoodResponseAsString();

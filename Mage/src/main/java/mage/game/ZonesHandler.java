@@ -16,6 +16,7 @@ import mage.game.permanent.PermanentToken;
 import mage.game.stack.Spell;
 import mage.players.Player;
 import mage.target.TargetCard;
+import mage.util.FuzzyTestsUtil;
 
 import java.util.*;
 
@@ -190,6 +191,28 @@ public final class ZonesHandler {
                         cardsToUpdate.get(toZone).add(mdfCard.getRightHalfCard());
                         break;
                 }
+            } else if (targetCard instanceof RoomCard || targetCard instanceof RoomCardHalf) {
+                // Room cards must be moved as single object
+                RoomCard roomCard = (RoomCard) targetCard.getMainCard();
+                cardsToMove = new CardsImpl(roomCard);
+                cardsToUpdate.get(toZone).add(roomCard);
+                switch (toZone) {
+                    case STACK:
+                    case BATTLEFIELD:
+                        // We don't want room halves to ever be on the battlefield
+                        cardsToUpdate.get(Zone.OUTSIDE).add(roomCard.getLeftHalfCard());
+                        cardsToUpdate.get(Zone.OUTSIDE).add(roomCard.getRightHalfCard());
+                        break;
+                    default:
+                        // move all parts
+                        cardsToUpdate.get(toZone).add(roomCard.getLeftHalfCard());
+                        cardsToUpdate.get(toZone).add(roomCard.getRightHalfCard());
+                        // If we aren't casting onto the stack or etb'ing, we need to clear this state
+                        // (countered, memory lapsed etc)
+                        // This prevents the state persisting for a put into play effect later
+                        roomCard.setLastCastHalf(null);
+                        break;
+                }
             } else {
                 cardsToMove = new CardsImpl(targetCard);
                 cardsToUpdate.get(toZone).addAll(cardsToMove);
@@ -252,9 +275,9 @@ public final class ZonesHandler {
                             spell = new Spell(card, card.getSpellAbility().copy(), card.getOwnerId(), event.getFromZone(), game);
                         }
                         spell.syncZoneChangeCounterOnStack(card, game);
-                        game.getStack().push(spell);
                         game.getState().setZone(spell.getId(), Zone.STACK);
                         game.getState().setZone(card.getId(), Zone.STACK);
+                        game.getStack().push(game, spell);
                     }
                     break;
                 case BATTLEFIELD:
@@ -268,8 +291,12 @@ public final class ZonesHandler {
         }
 
         // update zone in main
-        game.setZone(event.getTargetId(), event.getToZone());
-
+        if (targetCard instanceof RoomCardHalf && (toZone == Zone.BATTLEFIELD)) {
+            game.setZone(event.getTargetId(), Zone.OUTSIDE);
+        } else {
+            game.setZone(event.getTargetId(), event.getToZone());
+        }
+        
         // update zone in other parts (meld cards, mdf half cards)
         cardsToUpdate.entrySet().forEach(entry -> {
             for (Card card : entry.getValue().getCards(game)) {
@@ -377,7 +404,11 @@ public final class ZonesHandler {
                 Permanent permanent;
                 if (card instanceof MeldCard) {
                     permanent = new PermanentMeld(card, event.getPlayerId(), game);
-                } else if (card instanceof ModalDoubleFacedCard) {
+                } else if (card instanceof RoomCardHalf) {
+                    // Only the main room card can etb
+                    permanent = new PermanentCard(card.getMainCard(), event.getPlayerId(), game);
+                }
+                else if (card instanceof ModalDoubleFacedCard) {
                     // main mdf card must be processed before that call (e.g. only halves can be moved to battlefield)
                     throw new IllegalStateException("Unexpected trying of move mdf card to battlefield instead half");
                 } else if (card instanceof Permanent) {
@@ -416,6 +447,9 @@ public final class ZonesHandler {
                             && card.removeFromZone(game, fromZone, source)) {
                         success = true;
                         event.setTarget(permanent);
+
+                        // tests only: inject fuzzy data with random phased out permanents
+                        FuzzyTestsUtil.addRandomPhasedOutPermanent(permanent, source, game);
                     } else {
                         // revert controller to owner if permanent does not enter
                         game.getContinuousEffects().setController(permanent.getId(), permanent.getOwnerId());
@@ -458,10 +492,14 @@ public final class ZonesHandler {
         target.setRequired(true);
         while (player.canRespond() && cards.size() > 1) {
             player.choose(Outcome.Neutral, cards, target, source, game);
-            UUID targetObjectId = target.getFirstTarget();
-            order.add(cards.get(targetObjectId, game));
-            cards.remove(targetObjectId);
-            target.clearChosen();
+            Card card = cards.get(target.getFirstTarget(), game);
+            if (card != null) {
+                order.add(card);
+                cards.remove(target.getFirstTarget());
+                target.clearChosen();
+            } else {
+                break;
+            }
         }
         order.addAll(cards.getCards(game));
         return order;

@@ -17,9 +17,12 @@ import mage.cards.CardImpl;
 import mage.cards.CardSetInfo;
 import mage.constants.*;
 import mage.filter.StaticFilters;
+import mage.target.TargetPermanent;
 import mage.target.common.TargetCreaturePermanent;
 
 import java.util.UUID;
+
+import static mage.filter.StaticFilters.FILTER_ANOTHER_TARGET_CREATURE;
 
 /**
  * @author Cguy7777
@@ -36,7 +39,7 @@ public final class DugganPrivateDetective extends CardImpl {
         this.toughness = new MageInt(0);
 
         // Duggan's power and toughness are each equal to the number of cards in your hand.
-        this.addAbility(new SimpleStaticAbility(Zone.ALL, new SetBasePowerToughnessSourceEffect(CardsInControllerHandCount.instance)));
+        this.addAbility(new SimpleStaticAbility(Zone.ALL, new SetBasePowerToughnessSourceEffect(CardsInControllerHandCount.ANY)));
 
         // Whenever Duggan enters the battlefield or attacks, investigate.
         this.addAbility(new EntersBattlefieldOrAttacksSourceTriggeredAbility(new InvestigateEffect().setText("investigate")));
@@ -49,7 +52,7 @@ public final class DugganPrivateDetective extends CardImpl {
                 new ManaCostsImpl<>("{1}{G}"),
                 TimingRule.INSTANT);
         ability.addCost(new TapSourceCost());
-        ability.addTarget(new TargetCreaturePermanent(StaticFilters.FILTER_ANOTHER_TARGET_CREATURE));
+        ability.addTarget(new TargetPermanent(FILTER_ANOTHER_TARGET_CREATURE));
         ability.withFlavorWord("The Most Important Punch in History");
         this.addAbility(ability);
     }

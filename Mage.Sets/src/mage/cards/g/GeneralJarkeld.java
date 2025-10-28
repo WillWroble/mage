@@ -1,35 +1,32 @@
-
 package mage.cards.g;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 import mage.MageInt;
 import mage.abilities.Ability;
+import mage.abilities.common.ActivateIfConditionActivatedAbility;
+import mage.abilities.condition.Condition;
 import mage.abilities.condition.common.IsStepCondition;
 import mage.abilities.costs.common.TapSourceCost;
-import mage.abilities.decorator.ConditionalActivatedAbility;
 import mage.abilities.effects.OneShotEffect;
 import mage.cards.CardImpl;
 import mage.cards.CardSetInfo;
-import mage.constants.CardType;
-import mage.constants.SubType;
-import mage.constants.Outcome;
-import mage.constants.SuperType;
-import mage.constants.PhaseStep;
-import mage.constants.Zone;
+import mage.constants.*;
 import mage.game.Game;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
 import mage.players.Player;
 import mage.target.common.TargetAttackingCreature;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
 /**
- *
  * @author L_J
  */
 public final class GeneralJarkeld extends CardImpl {
+
+    private static final Condition condition = new IsStepCondition(PhaseStep.DECLARE_BLOCKERS, false);
 
     public GeneralJarkeld(UUID ownerId, CardSetInfo setInfo) {
         super(ownerId, setInfo, new CardType[]{CardType.CREATURE}, "{3}{W}");
@@ -40,7 +37,9 @@ public final class GeneralJarkeld extends CardImpl {
         this.toughness = new MageInt(2);
 
         // {T}: Switch the blocking creatures of two target attacking creatures. Activate this ability only during the declare blockers step.
-        Ability ability = new ConditionalActivatedAbility(Zone.BATTLEFIELD, new GeneralJarkeldSwitchBlockersEffect(), new TapSourceCost(), new IsStepCondition(PhaseStep.DECLARE_BLOCKERS, false));
+        Ability ability = new ActivateIfConditionActivatedAbility(
+                new GeneralJarkeldSwitchBlockersEffect(), new TapSourceCost(), condition
+        );
         ability.addTarget(new TargetAttackingCreature(2));
         this.addAbility(ability);
     }
@@ -60,7 +59,9 @@ class GeneralJarkeldSwitchBlockersEffect extends OneShotEffect {
 
     GeneralJarkeldSwitchBlockersEffect() {
         super(Outcome.Benefit);
-        this.staticText = "Switch the blocking creatures of two target attacking creatures";
+        this.staticText = "choose two target blocked attacking creatures. If each of those creatures could be " +
+                "blocked by all creatures that the other is blocked by, each creature that's blocking exactly one " +
+                "of those attacking creatures stops blocking it and is blocking the other attacking creature";
     }
 
     private GeneralJarkeldSwitchBlockersEffect(final GeneralJarkeldSwitchBlockersEffect effect) {
@@ -86,14 +87,14 @@ class GeneralJarkeldSwitchBlockersEffect extends OneShotEffect {
                     Set<Permanent> blockers1 = new HashSet<>();
                     Set<Permanent> blockers2 = new HashSet<>();
                     Set<Permanent> multiBlockers = new HashSet<>();
-                    
+
                     blockerSearch1:
                     for (UUID blockerId : chosenGroup1.getBlockers()) {
                         Permanent blocker = game.getPermanent(blockerId);
                         if (blocker != null) {
                             if (game.getCombat().blockingGroupsContains(blocker.getId())) { // if (blocker.getBlocking() > 1) {
                                 for (CombatGroup group : game.getCombat().getBlockingGroups()) {
-                                    if (group.getBlockers().contains(blocker.getId())) { 
+                                    if (group.getBlockers().contains(blocker.getId())) {
                                         int attackerCount = group.getAttackers().size();
                                         if (attackerCount > 1) {
                                             multiBlockers.add(blocker);
@@ -108,7 +109,7 @@ class GeneralJarkeldSwitchBlockersEffect extends OneShotEffect {
                             }
                         }
                     }
-                    
+
                     blockerSearch2:
                     for (UUID blockerId : chosenGroup2.getBlockers()) {
                         Permanent blocker = game.getPermanent(blockerId);
@@ -130,19 +131,17 @@ class GeneralJarkeldSwitchBlockersEffect extends OneShotEffect {
                             }
                         }
                     }
-                    
+
                     handleSingleBlockers(blockers1, chosenGroup1, chosenGroup2, controller, game);
                     handleSingleBlockers(blockers2, chosenGroup2, chosenGroup1, controller, game);
                     handleMultiBlockers(multiBlockers, chosenGroup1, chosenGroup2, controller, game);
-                    
+
                     // the ability doesn't unblock a group that loses all blockers, however it will newly block a previously unblocked group if it gains a blocker this way
                     if (!(chosenGroup1.getBlockers().isEmpty())) {
                         chosenGroup1.setBlocked(true, game);
-                        chosenGroup1.pickBlockerOrder(attacker1.getControllerId(), game);
                     }
                     if (!(chosenGroup2.getBlockers().isEmpty())) {
                         chosenGroup2.setBlocked(true, game);
-                        chosenGroup2.pickBlockerOrder(attacker2.getControllerId(), game);
                     }
                     return true;
                 }
@@ -185,7 +184,7 @@ class GeneralJarkeldSwitchBlockersEffect extends OneShotEffect {
                         }
                     }
                 }
-                
+
                 if (sameBlocked && chosenGroup != null) { // if none (should not happen) or all the blockers correspond to Jarkeld's targets, the blockers remain the same
                     CombatGroup otherGroup = (chosenGroup.equals(chosenGroup1) ? chosenGroup2 : chosenGroup1);
                     chosenGroup.remove(blocker.getId());
@@ -197,7 +196,6 @@ class GeneralJarkeldSwitchBlockersEffect extends OneShotEffect {
                         // 10/4/2004 	The new blocker does not trigger any abilities which trigger on creatures becoming blockers, because the creatures were already blockers and the simple change of who is blocking does not trigger such abilities.
                         game.getCombat().addBlockingGroup(blocker.getId(), attacker, controller.getId(), game);
                     }
-                    blockGroup.pickAttackerOrder(blocker.getControllerId(), game);
                 }
             }
         }

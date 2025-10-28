@@ -60,7 +60,7 @@ enum CobraTrapCondition implements Condition {
 
     @Override
     public String toString() {
-        return "If a noncreature permanent under your control was destroyed this turn by a spell or ability an opponent controlled";
+        return "a noncreature permanent under your control was destroyed this turn by a spell or ability an opponent controlled";
     }
 
 }
@@ -78,11 +78,9 @@ class CobraTrapWatcher extends Watcher {
         if (event.getType() == GameEvent.EventType.DESTROYED_PERMANENT) {
             Permanent perm = game.getPermanentOrLKIBattlefield(event.getTargetId()); // can regenerate or be indestructible
             if (perm != null && !perm.isCreature(game)) {
-                if (!game.getStack().isEmpty()) {
-                    StackObject spell = game.getStack().getStackObject(event.getSourceId());
-                    if (spell != null && game.getOpponents(perm.getControllerId()).contains(spell.getControllerId())) {
-                        players.add(perm.getControllerId());
-                    }
+                StackObject spell = game.getStack().getStackObject(event.getSourceId());
+                if (spell != null && game.getOpponents(perm.getControllerId()).contains(spell.getControllerId())) {
+                    players.add(perm.getControllerId());
                 }
             }
         }

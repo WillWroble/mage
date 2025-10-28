@@ -3,8 +3,7 @@ package mage.cards.c;
 import mage.MageInt;
 import mage.abilities.Ability;
 import mage.abilities.common.EntersBattlefieldAbility;
-import mage.abilities.dynamicvalue.DynamicValue;
-import mage.abilities.effects.Effect;
+import mage.abilities.dynamicvalue.common.CreaturesYouControlDiedCount;
 import mage.abilities.effects.OneShotEffect;
 import mage.abilities.effects.common.DamageWithPowerFromOneToAnotherTargetEffect;
 import mage.abilities.effects.common.counter.AddCountersSourceEffect;
@@ -17,11 +16,11 @@ import mage.constants.Outcome;
 import mage.constants.SubType;
 import mage.counters.CounterType;
 import mage.filter.common.FilterAnyTarget;
+import mage.filter.common.FilterPermanentOrPlayer;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
-import mage.target.common.TargetAnyTarget;
 import mage.target.common.TargetControlledCreaturePermanent;
-import mage.watchers.common.CreaturesDiedWatcher;
+import mage.target.common.TargetPermanentOrPlayer;
 
 import java.util.UUID;
 
@@ -30,10 +29,10 @@ import java.util.UUID;
  */
 public final class CallousSellSword extends AdventureCard {
 
-    private static final FilterAnyTarget filterSecondTarget = new FilterAnyTarget("any other target");
+    private static final FilterPermanentOrPlayer filterSecondTarget = new FilterAnyTarget("any other target");
 
     private static final Hint hint = new ValueHint(
-            "Creatures that died under your control this turn", CallousSellSwordValue.instance
+            "Creatures that died under your control this turn", CreaturesYouControlDiedCount.instance
     );
 
     public CallousSellSword(UUID ownerId, CardSetInfo setInfo) {
@@ -48,7 +47,7 @@ public final class CallousSellSword extends AdventureCard {
         this.addAbility(new EntersBattlefieldAbility(
                 new AddCountersSourceEffect(
                         CounterType.P1P1.createInstance(0),
-                        CallousSellSwordValue.instance, true
+                        CreaturesYouControlDiedCount.instance, true
                 ).setText("with a +1/+1 counter on it for each creature that died under your control this turn.")
         ).addHint(hint));
 
@@ -56,7 +55,7 @@ public final class CallousSellSword extends AdventureCard {
         // Target creature you control deals damage equal to its power to any other target. Then sacrifice it.
         this.getSpellCard().getSpellAbility().addEffect(new DamageWithPowerFromOneToAnotherTargetEffect());
         this.getSpellCard().getSpellAbility().addTarget(new TargetControlledCreaturePermanent().setTargetTag(1));
-        this.getSpellCard().getSpellAbility().addTarget(new TargetAnyTarget(1, 1, filterSecondTarget).setTargetTag(2));
+        this.getSpellCard().getSpellAbility().addTarget(new TargetPermanentOrPlayer(filterSecondTarget).setTargetTag(2));
         this.getSpellCard().getSpellAbility().addEffect(new CallousSellSwordSacrificeFirstTargetEffect().concatBy("Then"));
 
         this.finalizeAdventure();
@@ -69,32 +68,6 @@ public final class CallousSellSword extends AdventureCard {
     @Override
     public CallousSellSword copy() {
         return new CallousSellSword(this);
-    }
-}
-
-enum CallousSellSwordValue implements DynamicValue {
-    instance;
-
-    @Override
-    public int calculate(Game game, Ability sourceAbility, Effect effect) {
-        return game.getState()
-                .getWatcher(CreaturesDiedWatcher.class)
-                .getAmountOfCreaturesDiedThisTurnByController(sourceAbility.getControllerId());
-    }
-
-    @Override
-    public CallousSellSwordValue copy() {
-        return this;
-    }
-
-    @Override
-    public String getMessage() {
-        return "creature that died under your control this turn";
-    }
-
-    @Override
-    public String toString() {
-        return "1";
     }
 }
 

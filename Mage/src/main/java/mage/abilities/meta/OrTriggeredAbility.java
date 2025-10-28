@@ -42,7 +42,7 @@ public class OrTriggeredAbility extends TriggeredAbilityImpl {
             //Remove useless data
             ability.getEffects().clear();
 
-            for(Watcher watcher : ability.getWatchers()) {
+            for (Watcher watcher : ability.getWatchers()) {
                 super.addWatcher(watcher);
             }
 
@@ -51,6 +51,21 @@ public class OrTriggeredAbility extends TriggeredAbilityImpl {
             }
         }
         setTriggerPhrase(generateTriggerPhrase());
+
+        // runtime check: enters and sacrifice must use Zone.ALL, see https://github.com/magefree/mage/issues/12826
+        boolean haveEnters = false;
+        boolean haveSacrifice = false;
+        for (Ability ability : abilities) {
+            if (ability.getRule().toLowerCase(Locale.ENGLISH).contains("enters")) {
+                haveEnters = true;
+            }
+            if (ability.getRule().toLowerCase(Locale.ENGLISH).contains("sacrifice")) {
+                haveSacrifice = true;
+            }
+        }
+        if (zone != Zone.ALL && haveEnters && haveSacrifice) {
+            throw new IllegalArgumentException("Wrong code usage: on enters and sacrifice OrTriggeredAbility must use Zone.ALL");
+        }
     }
 
     public OrTriggeredAbility(OrTriggeredAbility ability) {
@@ -75,12 +90,14 @@ public class OrTriggeredAbility extends TriggeredAbilityImpl {
     public boolean checkTrigger(GameEvent event, Game game) {
         boolean toRet = false;
         for (TriggeredAbility ability : triggeredAbilities) {
-            for (Effect e : getEffects()) { //Add effects to the sub-abilities so that they can set target pointers
+            for (Effect e : getEffects()) { // Add effects to the sub-abilities so that they can set target pointers
                 ability.addEffect(e);
             }
-            if (ability.checkEventType(event, game) && ability.checkTrigger(event, game)) {
+            ability.getTargets().addAll(this.getTargets()); // AtStepTriggeredAbility automatically sets target pointer if it can't find any targets
+            if (ability.checkEventType(event, game) && ability.checkTrigger(event, game) && ability.checkTriggerCondition(game)) {
                 toRet = true;
             }
+            ability.getTargets().clear();
             ability.getEffects().clear(); //Remove afterwards, ensures that they remain synced even with copying
         }
         return toRet;

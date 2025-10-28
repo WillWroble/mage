@@ -31,6 +31,7 @@ public enum AbilityWord {
     FATEFUL_HOUR("Fateful hour"),
     FATHOMLESS_DESCENT("Fathomless descent"),
     FEROCIOUS("Ferocious"),
+    FLURRY("Flurry"),
     FORMIDABLE("Formidable"),
     GRANDEUR("Grandeur"),
     HATE("Hate"),
@@ -51,6 +52,7 @@ public enum AbilityWord {
     RADIANCE("Radiance"),
     RAID("Raid"),
     RALLY("Rally"),
+    RENEW("Renew"),
     REVOLT("Revolt"),
     SECRET_COUNCIL("Secret council"),
     SPELL_MASTERY("Spell mastery"),
@@ -61,6 +63,7 @@ public enum AbilityWord {
     THRESHOLD("Threshold"),
     UNDERGROWTH("Undergrowth"),
     VALIANT("Valiant"),
+    VOID("Void"),
     WILL_OF_THE_COUNCIL("Will of the council"),
     WILL_OF_THE_PLANESWALKERS("Will of the planeswalkers");
 

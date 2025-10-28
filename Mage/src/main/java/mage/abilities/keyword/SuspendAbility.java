@@ -1,24 +1,27 @@
 package mage.abilities.keyword;
 
-import mage.ApprovingObject;
 import mage.MageIdentifier;
+import mage.MageObjectReference;
 import mage.abilities.Ability;
 import mage.abilities.SpecialAction;
 import mage.abilities.TriggeredAbilityImpl;
-import mage.abilities.triggers.BeginningOfUpkeepTriggeredAbility;
 import mage.abilities.condition.common.SuspendedCondition;
 import mage.abilities.costs.VariableCostType;
 import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.costs.mana.ManaCostsImpl;
 import mage.abilities.costs.mana.VariableManaCost;
-import mage.abilities.decorator.ConditionalInterveningIfTriggeredAbility;
 import mage.abilities.effects.ContinuousEffect;
 import mage.abilities.effects.ContinuousEffectImpl;
 import mage.abilities.effects.OneShotEffect;
+import mage.abilities.effects.common.continuous.GainSuspendEffect;
 import mage.abilities.effects.common.counter.RemoveCounterSourceEffect;
+import mage.abilities.triggers.BeginningOfUpkeepTriggeredAbility;
 import mage.cards.Card;
+import mage.cards.CardsImpl;
+import mage.cards.ModalDoubleFacedCard;
 import mage.constants.*;
 import mage.counters.CounterType;
+import mage.filter.StaticFilters;
 import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.game.permanent.Permanent;
@@ -26,8 +29,6 @@ import mage.players.Player;
 import mage.target.targetpointer.FixedTarget;
 import mage.util.CardUtil;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -112,7 +113,6 @@ import java.util.UUID;
 public class SuspendAbility extends SpecialAction {
 
     private final String ruleText;
-    private boolean gainedTemporary;
 
     /**
      * Gives the card the SuspendAbility
@@ -132,6 +132,8 @@ public class SuspendAbility extends SpecialAction {
         this.addEffect(new SuspendExileEffect(suspend));
         this.usesStack = false;
         if (suspend == Integer.MAX_VALUE) {
+            // example: Suspend X-{X}{W}{W}. X can't be 0.
+            // TODO: replace by costAdjuster for shared logic
             VariableManaCost xCosts = new VariableManaCost(VariableCostType.ALTERNATIVE);
             xCosts.setMinX(1);
             this.addCost(xCosts);
@@ -144,7 +146,7 @@ public class SuspendAbility extends SpecialAction {
             if (card.getManaCost().isEmpty()) {
                 setRuleAtTheTop(true);
             }
-            addSubAbility(new SuspendBeginningOfUpkeepInterveningIfTriggeredAbility());
+            addSubAbility(new SuspendUpkeepAbility());
             addSubAbility(new SuspendPlayCardAbility());
         } else {
             ruleText = "Suspend";
@@ -175,13 +177,17 @@ public class SuspendAbility extends SpecialAction {
      * or added by Jhoira of the Ghitu
      */
     public static void addSuspendTemporaryToCard(Card card, Ability source, Game game) {
+        if (card instanceof ModalDoubleFacedCard) {
+            // Need to ensure the suspend ability gets put on the left side card
+            // since counters get added to this card.
+            card = ((ModalDoubleFacedCard) card).getLeftHalfCard();
+        }
         SuspendAbility ability = new SuspendAbility(0, null, card, false);
         ability.setSourceId(card.getId());
         ability.setControllerId(card.getOwnerId());
         game.getState().addOtherAbility(card, ability);
 
-        SuspendBeginningOfUpkeepInterveningIfTriggeredAbility ability1
-                = new SuspendBeginningOfUpkeepInterveningIfTriggeredAbility();
+        SuspendUpkeepAbility ability1 = new SuspendUpkeepAbility();
         ability1.setSourceId(card.getId());
         ability1.setControllerId(card.getOwnerId());
         game.getState().addOtherAbility(card, ability1);
@@ -204,7 +210,6 @@ public class SuspendAbility extends SpecialAction {
     private SuspendAbility(final SuspendAbility ability) {
         super(ability);
         this.ruleText = ability.ruleText;
-        this.gainedTemporary = ability.gainedTemporary;
     }
 
     @Override
@@ -225,13 +230,37 @@ public class SuspendAbility extends SpecialAction {
         return super.canActivate(playerId, game);
     }
 
+    public static boolean addTimeCountersAndSuspend(Card card, int amount, Ability source, Game game) {
+        if (card == null || card.isCopy()) {
+            return false;
+        }
+        if (!Zone.EXILED.match(game.getState().getZone(card.getId()))) {
+            return false;
+        }
+        Player owner = game.getPlayer(card.getOwnerId());
+        if (owner == null) {
+            return false;
+        }
+        game.getExile().moveToAnotherZone(
+                card.getMainCard(), game,
+                game.getExile().createZone(
+                        SuspendAbility.getSuspendExileId(owner.getId(), game),
+                        "Suspended cards of " + owner.getName()
+                )
+        );
+        if (amount > 0) {
+            card.addCounters(CounterType.TIME.createInstance(amount), owner.getId(), source, game);
+        }
+        if (!card.getAbilities(game).containsClass(SuspendAbility.class)) {
+            game.addEffect(new GainSuspendEffect(new MageObjectReference(card, game)), source);
+        }
+        game.informPlayers(owner.getLogName() + " suspends " + amount + " - " + card.getName());
+        return true;
+    }
+
     @Override
     public String getRule() {
         return ruleText;
-    }
-
-    public boolean isGainedTemporary() {
-        return gainedTemporary;
     }
 
     @Override
@@ -343,40 +372,16 @@ class SuspendPlayCardEffect extends OneShotEffect {
         if (player == null || card == null) {
             return false;
         }
-        if (!player.chooseUse(Outcome.Benefit, "Play " + card.getLogName() + " without paying its mana cost?", source, game)) {
+        // ensure we're getting the main card when passing to CardUtil to check all parts of card
+        // MDFC points to left half card
+        card = card.getMainCard();
+        // cast/play the card for free
+        if (!CardUtil.castSpellWithAttributesForFree(player, source, game, new CardsImpl(card),
+                StaticFilters.FILTER_CARD, null, true)) {
             return true;
         }
-        // remove temporary suspend ability (used e.g. for Epochrasite)
-        // TODO: isGainedTemporary is not set or use in other places, so it can be deleted?!
-        List<Ability> abilitiesToRemove = new ArrayList<>();
-        for (Ability ability : card.getAbilities(game)) {
-            if (ability instanceof SuspendAbility && (((SuspendAbility) ability).isGainedTemporary())) {
-                abilitiesToRemove.add(ability);
-            }
-        }
-        if (!abilitiesToRemove.isEmpty()) {
-            for (Ability ability : card.getAbilities(game)) {
-                if (ability instanceof SuspendBeginningOfUpkeepInterveningIfTriggeredAbility
-                        || ability instanceof SuspendPlayCardAbility) {
-                    abilitiesToRemove.add(ability);
-                }
-            }
-            // remove the abilities from the card
-            // TODO: will not work with Adventure Cards and another auto-generated abilities list
-            // TODO: is it work after blink or return to hand?
-            /*
-             bug example:
-             Epochrasite bug: It comes out of suspend, is cast and enters the battlefield. THEN if it's returned to
-             its owner's hand from battlefield, the bounced Epochrasite can't be cast for the rest of the game.
-             */
-            card.getAbilities().removeAll(abilitiesToRemove);
-        }
-        // cast the card for free
-        game.getState().setValue("PlayFromNotOwnHandZone" + card.getId(), Boolean.TRUE);
-        boolean cardWasCast = player.cast(player.chooseAbilityForCast(card, game, true),
-                game, true, new ApprovingObject(source, game));
-        game.getState().setValue("PlayFromNotOwnHandZone" + card.getId(), null);
-        if (cardWasCast && (card.isCreature(game))) {
+        // creatures cast from suspend gain haste
+        if ((card.isCreature(game))) {
             ContinuousEffect effect = new GainHasteEffect();
             effect.setTargetPointer(new FixedTarget(card.getId(), card.getZoneChangeCounter(game) + 1));
             game.addEffect(effect, source);
@@ -427,23 +432,20 @@ class GainHasteEffect extends ContinuousEffectImpl {
 
 }
 
-class SuspendBeginningOfUpkeepInterveningIfTriggeredAbility extends ConditionalInterveningIfTriggeredAbility {
+class SuspendUpkeepAbility extends BeginningOfUpkeepTriggeredAbility {
 
-    SuspendBeginningOfUpkeepInterveningIfTriggeredAbility() {
-        super(new BeginningOfUpkeepTriggeredAbility(Zone.EXILED, TargetController.YOU, new RemoveCounterSourceEffect(CounterType.TIME.createInstance()),
-                        false),
-                SuspendedCondition.instance,
-                "At the beginning of your upkeep, if {this} is suspended, remove a time counter from it.");
+    SuspendUpkeepAbility() {
+        super(Zone.EXILED, TargetController.YOU, new RemoveCounterSourceEffect(CounterType.TIME.createInstance()).setText("remove a time counter from it"), false);
+        this.withInterveningIf(SuspendedCondition.instance);
         this.setRuleVisible(false);
-
     }
 
-    private SuspendBeginningOfUpkeepInterveningIfTriggeredAbility(final SuspendBeginningOfUpkeepInterveningIfTriggeredAbility effect) {
+    private SuspendUpkeepAbility(final SuspendUpkeepAbility effect) {
         super(effect);
     }
 
     @Override
-    public SuspendBeginningOfUpkeepInterveningIfTriggeredAbility copy() {
-        return new SuspendBeginningOfUpkeepInterveningIfTriggeredAbility(this);
+    public SuspendUpkeepAbility copy() {
+        return new SuspendUpkeepAbility(this);
     }
 }

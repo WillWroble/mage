@@ -10,7 +10,6 @@ import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.game.stack.StackObject;
 import mage.target.targetpointer.FixedTarget;
-import mage.util.CardUtil;
 
 /**
  * @author North
@@ -57,11 +56,8 @@ public class BecomesTargetSourceTriggeredAbility extends TriggeredAbilityImpl {
         if (!event.getTargetId().equals(getSourceId())) {
             return false;
         }
-        StackObject targetingObject = CardUtil.getTargetingStackObject(event, game);
+        StackObject targetingObject = game.findTargetingStackObject(this.getId().toString(), event);
         if (targetingObject == null || !filter.match(targetingObject, getControllerId(), this, game)) {
-            return false;
-        }
-        if (CardUtil.checkTargetedEventAlreadyUsed(this.getId().toString(), targetingObject, event, game)) {
             return false;
         }
         switch (setTargetPointer) {

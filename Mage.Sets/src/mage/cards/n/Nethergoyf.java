@@ -6,7 +6,6 @@ import mage.abilities.common.SimpleStaticAbility;
 import mage.abilities.costs.Cost;
 import mage.abilities.costs.CostsImpl;
 import mage.abilities.costs.common.ExileFromGraveCost;
-import mage.abilities.dynamicvalue.DynamicValue;
 import mage.abilities.dynamicvalue.common.CardTypesInGraveyardCount;
 import mage.abilities.effects.common.continuous.SetBasePowerToughnessPlusOneSourceEffect;
 import mage.abilities.hint.HintUtils;
@@ -23,18 +22,13 @@ import mage.target.common.TargetCardInYourGraveyard;
 import mage.util.CardUtil;
 
 import java.awt.*;
-import java.util.Collection;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
  * @author Susucr
  */
 public final class Nethergoyf extends CardImpl {
-
-    private static final DynamicValue powerValue = CardTypesInGraveyardCount.YOU;
 
     public Nethergoyf(UUID ownerId, CardSetInfo setInfo) {
         super(ownerId, setInfo, new CardType[]{CardType.CREATURE}, "{B}");
@@ -44,7 +38,9 @@ public final class Nethergoyf extends CardImpl {
         this.toughness = new MageInt(1);
 
         // Nethergoyf's power is equal to the number of card types among cards in your graveyard and its toughness is equal to that number plus 1.
-        this.addAbility(new SimpleStaticAbility(Zone.ALL, new SetBasePowerToughnessPlusOneSourceEffect(powerValue)));
+        this.addAbility(new SimpleStaticAbility(Zone.ALL,
+                new SetBasePowerToughnessPlusOneSourceEffect(CardTypesInGraveyardCount.YOU)
+        ).addHint(CardTypesInGraveyardCount.YOU.getHint()));
 
         // Escape--{2}{B}, Exile any number of other cards from your graveyard with four or more card types among them.
         CostsImpl<Cost> additionalCost = new CostsImpl();
@@ -100,7 +96,11 @@ class NethergoyfTarget extends TargetCardInYourGraveyard {
                 types.size() + " of 4",
                 types.size() >= 4 ? Color.GREEN : Color.RED
         );
-        text += " [" + types.stream().map(CardType::toString).collect(Collectors.joining(", ")) + "])";
+        String info = types.stream().map(CardType::toString).collect(Collectors.joining(", "));
+        if (!info.isEmpty()) {
+            text += " [" + info + "]";
+        }
+        text += ")";
         return text;
     }
 
@@ -110,7 +110,10 @@ class NethergoyfTarget extends TargetCardInYourGraveyard {
             return false;
         }
         // Check that exiling all the possible cards would have >= 4 different card types
-        return metCondition(this.possibleTargets(sourceControllerId, source, game), game);
+        Set<UUID> idsToCheck = new HashSet<>();
+        idsToCheck.addAll(this.getTargets());
+        idsToCheck.addAll(this.possibleTargets(sourceControllerId, source, game));
+        return metCondition(idsToCheck, game);
     }
 
     private static Set<CardType> typesAmongSelection(Collection<UUID> cardsIds, Game game) {

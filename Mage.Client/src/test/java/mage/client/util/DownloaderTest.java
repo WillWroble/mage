@@ -13,6 +13,7 @@ import java.io.InputStream;
 /**
  * @author JayDi85
  */
+@Ignore // TODO: too many fails due third party servers downtime, migrate to more stable resources or just run it manually
 public class DownloaderTest {
 
     @Test
@@ -40,6 +41,12 @@ public class DownloaderTest {
     public void test_DownloadText_ByRedirectUri() {
         String s = XmageURLConnection.downloadText("https://github.com/magefree/mage/issues/new");
         Assert.assertTrue("must have text data (redirect to login page)", s.contains("Sign in to GitHub"));
+    }
+
+    @Test
+    public void test_DownloadText_ScryfallUtf8() {
+        String s = XmageURLConnection.downloadText("https://api.scryfall.com/cards/sld/379★/en");
+        Assert.assertTrue("must have text data (utf8 url must work)", s.contains("Zndrsplt, Eye of Wisdom"));
     }
 
     @Test

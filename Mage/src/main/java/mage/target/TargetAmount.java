@@ -3,21 +3,25 @@ package mage.target;
 import mage.abilities.Ability;
 import mage.abilities.dynamicvalue.DynamicValue;
 import mage.abilities.dynamicvalue.common.StaticValue;
+import mage.cards.Cards;
 import mage.constants.Outcome;
 import mage.game.Game;
 import mage.players.Player;
+import mage.util.CardUtil;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * @author BetaSteward_at_googlemail.com
+ * Distribute value between targets list (damage, counters, etc)
+ *
+ * @author BetaSteward_at_googlemail.com, JayDi85
  */
 public abstract class TargetAmount extends TargetImpl {
 
     boolean amountWasSet = false;
     DynamicValue amount;
-    int remainingAmount;
+    int remainingAmount; // before any change to it - make sure you call prepareAmount
 
     protected TargetAmount(DynamicValue amount, int minNumberOfTargets, int maxNumberOfTargets) {
         this.amount = amount;
@@ -41,15 +45,47 @@ public abstract class TargetAmount extends TargetImpl {
 
     @Override
     public boolean isChosen(Game game) {
-        return doneChoosing(game);
+        if (!super.isChosen(game)) {
+            return false;
+        }
+
+        // selection not started
+        if (!amountWasSet) {
+            return false;
+        }
+
+        // distribution
+        if (getMinNumberOfTargets() == 0 && this.targets.isEmpty()) {
+            // allow 0 distribution, e.g. for "up to" targets like Vivien, Arkbow Ranger
+            return true;
+        } else {
+            // need full distribution
+            return remainingAmount == 0;
+        }
     }
 
     @Override
-    public boolean doneChoosing(Game game) {
-        return amountWasSet
-                && (remainingAmount == 0
-                || (getMinNumberOfTargets() < getMaxNumberOfTargets()
-                && getTargets().size() >= getMinNumberOfTargets()));
+    public boolean isChoiceCompleted(UUID abilityControllerId, Ability source, Game game, Cards fromCards) {
+        // make sure target request called one time minimum (for "up to" targets)
+        // choice is selected after any addTarget call (by test, AI or human players)
+        if (!isChoiceSelected()) {
+            return false;
+        }
+
+        // make sure selected targets are valid
+        if (!isChosen(game)) {
+            return false;
+        }
+
+        // already selected
+        if (this.getSize() >= getMaxNumberOfTargets()) {
+            return true;
+        }
+
+        // TODO: need auto-choose here? See super
+
+        // all other use cases are fine
+        return true;
     }
 
     @Override
@@ -63,9 +99,14 @@ public abstract class TargetAmount extends TargetImpl {
         this.amount = amount;
     }
 
-    public void setAmount(Ability source, Game game) {
-        remainingAmount = amount.calculate(game, source, null);
-        amountWasSet = true;
+    /**
+     * Prepare new targets for choosing
+     */
+    public void prepareAmount(Ability source, Game game) {
+        if (!amountWasSet) {
+            remainingAmount = amount.calculate(game, source, null);
+            amountWasSet = true;
+        }
     }
 
     public DynamicValue getAmount() {
@@ -78,12 +119,11 @@ public abstract class TargetAmount extends TargetImpl {
 
     @Override
     public void addTarget(UUID id, int amount, Ability source, Game game, boolean skipEvent) {
-        if (!amountWasSet) {
-            setAmount(source, game);
-        }
+        prepareAmount(source, game);
+
         if (amount <= remainingAmount) {
-            super.addTarget(id, amount, source, game, skipEvent);
             remainingAmount -= amount;
+            super.addTarget(id, amount, source, game, skipEvent);
         }
     }
 
@@ -95,68 +135,93 @@ public abstract class TargetAmount extends TargetImpl {
     }
 
     @Override
-    public boolean chooseTarget(Outcome outcome, UUID playerId, Ability source, Game game) {
-        Player player = game.getPlayer(playerId);
-        if (player == null) {
-            return false;
-        }
-
-        if (!amountWasSet) {
-            setAmount(source, game);
-        }
-        chosen = isChosen(game);
-        while (remainingAmount > 0) {
-            if (!player.canRespond()) {
-                return chosen;
-            }
-            if (!getTargetController(game, playerId).chooseTargetAmount(outcome, this, source, game)) {
-                return chosen;
-            }
-            chosen = isChosen(game);
-        }
-        return chosen;
+    public boolean choose(Outcome outcome, UUID playerId, UUID sourceId, Ability source, Game game) {
+        throw new IllegalArgumentException("Wrong code usage. TargetAmount must be called by player.chooseTarget, not player.choose");
     }
 
     @Override
-    public List<? extends TargetAmount> getTargetOptions(Ability source, Game game) {
+    @Deprecated // TODO: replace by player.chooseTargetAmount call
+    public boolean chooseTarget(Outcome outcome, UUID playerId, Ability source, Game game) {
+        Player targetController = getTargetController(game, playerId);
+        if (targetController == null) {
+            return false;
+        }
+
+        prepareAmount(source, game);
+
+        chosen = false;
+        do {
+            int prevTargetsCount = this.getTargets().size();
+
+            // stop by disconnect
+            if (!targetController.canRespond()) {
+                break;
+            }
+
+            // MAKE A CHOICE
+            if (isRandom()) {
+                // random choice
+                throw new IllegalArgumentException("Wrong code usage. TargetAmount do not support random choices");
+            } else {
+                // player's choice
+
+                // TargetAmount do not support auto-choice
+
+                // manual
+
+                // stop by cancel/done
+                if (!targetController.chooseTargetAmount(outcome, this, source, game)) {
+                    break;
+                }
+
+                // continue to next target
+            }
+
+            chosen = isChosen(game);
+
+            // stop by full complete
+            if (isChoiceCompleted(targetController.getId(), source, game, null)) {
+                break;
+            }
+
+            // stop by nothing to choose (actual for human and done button?)
+            if (prevTargetsCount == this.getTargets().size()) {
+                break;
+            }
+
+            // can select next target
+        } while (true);
+
+        chosen = isChosen(game);
+        return chosen && !this.getTargets().isEmpty();
+    }
+
+    @Override
+    final public List<? extends TargetAmount> getTargetOptions(Ability source, Game game) {
+        prepareAmount(source, game);
+
         List<TargetAmount> options = new ArrayList<>();
         Set<UUID> possibleTargets = possibleTargets(source.getControllerId(), source, game);
 
-        addTargets(this, possibleTargets, options, source, game);
+        // optimizations for less memory/cpu consumptions
+        TargetOptimization.printTargetsVariationsForTargetAmount("target amount - before optimize", game, possibleTargets, options, false);
+        // it must have additional threshold to keep more variations for analyse
+        // bad example:
+        // - Blessings of Nature
+        // - Distribute four +1/+1 counters among any number of target creatures.
+        // on low targets threshold AI can put 1/1 to opponent's creature instead own, see TargetAmountAITest.test_AI_SimulateTargets
+        int maxPossibleTargetsToSimulate = CardUtil.overflowMultiply(this.remainingAmount, 2);
+        TargetOptimization.optimizePossibleTargets(source, game, possibleTargets, maxPossibleTargetsToSimulate);
+        TargetOptimization.printTargetsVariationsForTargetAmount("target amount - after optimize", game, possibleTargets, options, false);
 
-        // debug target variations
-        //printTargetsVariations(possibleTargets, options);
+        // calc possible amount variations
+        addTargets(this, possibleTargets, options, source, game);
+        TargetOptimization.printTargetsVariationsForTargetAmount("target amount - after calc", game, possibleTargets, options, true);
 
         return options;
     }
 
-    private void printTargetsVariations(Set<UUID> possibleTargets, List<TargetAmount> options) {
-        // debug target variations
-        // permanent index + amount
-        // example: 7 -> 2; 8 -> 3; 9 -> 1
-        List<UUID> list = new ArrayList<>(possibleTargets);
-        HashMap<UUID, Integer> targetNumbers = new HashMap<>();
-        for (int i = 0; i < list.size(); i++) {
-            targetNumbers.put(list.get(i), i);
-        }
-        List<String> res = options
-                .stream()
-                .map(t -> t.getTargets()
-                        .stream()
-                        .map(id -> targetNumbers.get(id) + " -> " + t.getTargetAmount(id))
-                        .sorted()
-                        .collect(Collectors.joining("; ")))
-                .collect(Collectors.toList());
-        Collections.sort(res);
-        System.out.println();
-        System.out.println(res.stream().collect(Collectors.joining("\n")));
-        System.out.println();
-    }
-
-    protected void addTargets(TargetAmount target, Set<UUID> possibleTargets, List<TargetAmount> options, Ability source, Game game) {
-        if (!amountWasSet) {
-            setAmount(source, game);
-        }
+    final protected void addTargets(TargetAmount target, Set<UUID> possibleTargets, List<TargetAmount> options, Ability source, Game game) {
         Set<UUID> usedTargets = new HashSet<>();
         for (UUID targetId : possibleTargets) {
             usedTargets.add(targetId);
@@ -177,9 +242,8 @@ public abstract class TargetAmount extends TargetImpl {
     }
 
     public void setTargetAmount(UUID targetId, int amount, Ability source, Game game) {
-        if (!amountWasSet) {
-            setAmount(source, game);
-        }
+        prepareAmount(source, game);
+
         remainingAmount -= (amount - this.getTargetAmount(targetId));
         this.setTargetAmount(targetId, amount, game);
     }
@@ -202,5 +266,14 @@ public abstract class TargetAmount extends TargetImpl {
         // (such as damage or counters) among one or more targets, the player announces the division.
         // Each of these targets must receive at least one of whatever is being divided.
         return amount instanceof StaticValue && max == ((StaticValue) amount).getValue();
+    }
+
+    @Override
+    public String toString() {
+        if (amountWasSet) {
+            return super.toString() + String.format(" (remain amount %d of %s)", this.remainingAmount, this.amount.toString());
+        } else {
+            return super.toString() + String.format(" (remain not prepared, %s)", this.amount.toString());
+        }
     }
 }

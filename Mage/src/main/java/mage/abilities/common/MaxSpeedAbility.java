@@ -7,9 +7,13 @@ import mage.abilities.dynamicvalue.common.ControllerSpeedCount;
 import mage.abilities.effects.ContinuousEffectImpl;
 import mage.abilities.effects.Effect;
 import mage.cards.Card;
-import mage.constants.*;
+import mage.constants.Duration;
+import mage.constants.Layer;
+import mage.constants.Outcome;
+import mage.constants.SubLayer;
 import mage.game.Game;
 import mage.game.permanent.Permanent;
+import mage.util.CardUtil;
 
 /**
  * @author TheElk801
@@ -21,7 +25,7 @@ public class MaxSpeedAbility extends StaticAbility {
     }
 
     public MaxSpeedAbility(Ability ability) {
-        super(Zone.ALL, new MaxSpeedAbilityEffect(ability));
+        super(ability.getZone(), new MaxSpeedAbilityEffect(ability));
     }
 
     private MaxSpeedAbility(final MaxSpeedAbility ability) {
@@ -85,6 +89,6 @@ class MaxSpeedAbilityEffect extends ContinuousEffectImpl {
 
     @Override
     public String getText(Mode mode) {
-        return "Max speed &mdash; " + ability.getRule();
+        return "Max speed &mdash; " + CardUtil.getTextWithFirstCharUpperCase(ability.getRule());
     }
 }

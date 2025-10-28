@@ -4,7 +4,9 @@ import mage.cards.ExpansionSet;
 import mage.cards.RateCard;
 import mage.cards.Sets;
 import mage.cards.decks.DeckValidatorFactory;
-import mage.cards.repository.*;
+import mage.cards.repository.CardScanner;
+import mage.cards.repository.PluginClassloaderRegistery;
+import mage.cards.repository.RepositoryUtil;
 import mage.game.match.MatchType;
 import mage.game.tournament.TournamentType;
 import mage.interfaces.MageServer;
@@ -85,7 +87,8 @@ public final class Main {
     // - fast game buttons;
     // - cheat commands;
     // - no deck validation;
-    // - no connection validation by pings (no disconnects on IDE's debugger usage)
+    // - no draft's clicks protection timeout;
+    // - no connection validation by pings (no disconnects on IDE's debugger usage);
     // - load any deck in sideboarding;
     // - simplified registration and login (no password check);
     // - debug main menu for GUI and rendering testing (must use -debug arg for client app);
@@ -370,7 +373,7 @@ public final class Main {
                 // no need to keep session
                 logger.info("CLIENT DISCONNECTED - " + sessionInfo);
                 logger.debug("- cause: client called disconnect command");
-                managerFactory.sessionManager().disconnect(client.getSessionId(), DisconnectReason.DisconnectedByUser, true);
+                managerFactory.sessionManager().disconnect(client.getSessionId(), DisconnectReason.LostConnection, true);
             } else if (throwable == null) {
                 // lease timeout (ping), so server lost connection with a client
                 // must keep tables
@@ -506,8 +509,19 @@ public final class Main {
 
     private static Class<?> loadPlugin(Plugin plugin) {
         try {
-            classLoader.addURL(new File(pluginFolder, plugin.getJar()).toURI().toURL());
             logger.debug("Loading plugin: " + plugin.getClassName());
+            if (plugin.getName() == null || plugin.getName().isEmpty()
+                    || plugin.getJar() == null || plugin.getJar().isEmpty()
+                    || plugin.getClassName() == null || plugin.getClassName().isEmpty()
+            ) {
+                logger.error(String.format("Can't load plugin, found miss fields in config.xml: %s, %s, %s",
+                        plugin.getName(),
+                        plugin.getJar(),
+                        plugin.getClassName()
+                ));
+                return null;
+            }
+            classLoader.addURL(new File(pluginFolder, plugin.getJar()).toURI().toURL());
             return Class.forName(plugin.getClassName(), true, classLoader);
         } catch (ClassNotFoundException ex) {
             logger.warn(new StringBuilder("Plugin not Found: ").append(plugin.getClassName()).append(" - ").append(plugin.getJar()).append(" - check plugin folder"), ex);

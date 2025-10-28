@@ -741,7 +741,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     /**
      * Returns a list of all players of the game ignoring range or if a player
      * has lost or left the game.
-     *
+     * <p>
      * Warning, it's ignore range, must be used by game engine only.
      */
     public PlayerList getPlayerList() {
@@ -751,7 +751,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     /**
      * Returns a list of all active players of the game, setting the playerId to
      * the current player of the list.
-     *
+     * <p>
      * Warning, it's ignore range, must be used by game engine only.
      */
     public PlayerList getPlayerList(UUID playerId) {
@@ -1386,8 +1386,9 @@ public class GameState implements Serializable, Copyable<GameState> {
      * @param valueId
      * @param value
      */
-    public void setValue(String valueId, Object value) {
+    public <T> T setValue(String valueId, T value) {
         values.put(valueId, value);
+        return value;
     }
 
     /**
@@ -1656,14 +1657,14 @@ public class GameState implements Serializable, Copyable<GameState> {
             copiedParts.add(rightCopied);
             // sync parts
             ((ModalDoubleFacedCard) copiedCard).setParts(leftCopied, rightCopied);
-        } else if (copiedCard instanceof AdventureCard) {
+        } else if (copiedCard instanceof CardWithSpellOption) {
             // right
-            AdventureCardSpell rightOriginal = ((AdventureCard) copiedCard).getSpellCard();
-            AdventureCardSpell rightCopied = rightOriginal.copy();
+            SpellOptionCard rightOriginal = ((CardWithSpellOption) copiedCard).getSpellCard();
+            SpellOptionCard rightCopied = rightOriginal.copy();
             prepareCardForCopy(rightOriginal, rightCopied, newController);
             copiedParts.add(rightCopied);
             // sync parts
-            ((AdventureCard) copiedCard).setParts(rightCopied);
+            ((CardWithSpellOption) copiedCard).setParts(rightCopied);
         }
 
         // main part prepare (must be called after other parts cause it change ids for all)

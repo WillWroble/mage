@@ -24,11 +24,14 @@ import mage.game.events.GameEvent;
 import mage.game.events.NumberOfTriggersEvent;
 import mage.game.permanent.Permanent;
 import mage.target.Target;
+import mage.target.TargetPermanent;
 import mage.target.common.TargetControlledCreaturePermanent;
 import mage.target.common.TargetCreaturePermanent;
 import mage.util.CardUtil;
 
 import java.util.UUID;
+
+import static mage.filter.StaticFilters.FILTER_ANOTHER_CREATURE_TARGET_2;
 
 
 /**
@@ -60,7 +63,7 @@ public final class WaytaTrainerProdigy extends CardImpl {
         ability.addTarget(controlledTarget);
 
         Target secondTarget =
-                new TargetCreaturePermanent(StaticFilters.FILTER_ANOTHER_CREATURE_TARGET_2).setTargetTag(2);
+                new TargetPermanent(FILTER_ANOTHER_CREATURE_TARGET_2).setTargetTag(2);
         ability.addTarget(secondTarget);
 
         this.addAbility(ability);
@@ -101,7 +104,7 @@ enum WaytaTrainerProdigyAdjuster implements CostAdjuster {
     instance;
 
     @Override
-    public void adjustCosts(Ability ability, Game game) {
+    public void reduceCost(Ability ability, Game game) {
         if (game.inCheckPlayableState()) {
             int controllerTargets = 0; //number of possible targets controlled by the ability's controller
             for (UUID permId : CardUtil.getAllPossibleTargets(ability, game)) {

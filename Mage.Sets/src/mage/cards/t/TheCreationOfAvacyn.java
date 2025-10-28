@@ -81,7 +81,7 @@ class TheCreationOfAvacynOneEffect extends OneShotEffect {
             if (card != null) {
                 // exile it face down
                 card.setFaceDown(true, game);
-                UUID exileId = CardUtil.getExileZoneId(game, source, 1);
+                UUID exileId = CardUtil.getExileZoneId(game, source);
                 MageObject sourceObject = source.getSourceObject(game);
                 String exileName = sourceObject != null ? sourceObject.getName() : "";
                 controller.moveCardsToExile(card, source, game, false, exileId, exileName);
@@ -119,7 +119,7 @@ class TheCreationOfAvacynTwoEffect extends OneShotEffect {
         // ability (likely because the triggered ability was copied or the ability triggered a second time), the second
         // chapter ability will turn all of the exiled cards face up. If at least one of them is a creature card, you'll
         // lose life equal to the combined mana value of all the exiled cards.
-        UUID exileId = CardUtil.getExileZoneId(game, source.getSourceId(), source.getSourceObjectZoneChangeCounter());
+        UUID exileId = CardUtil.getExileZoneId(game, source.getSourceId(), source.getStackMomentSourceZCC());
         ExileZone exileZone = game.getExile().getExileZone(exileId);
         if (exileZone == null || exileZone.isEmpty()) {
             return false;
@@ -163,10 +163,10 @@ class TheCreationOfAvacynThreeEffect extends OneShotEffect {
         // when the third chapter ability resolves, if at least one of the exiled cards is a creature card, you may choose
         // to put all or none of the exiled cards that are permanent cards onto the battlefield. Regardless of what you
         // choose, any remaining exiled cards will be put into their owners' hands.
-        UUID exileId = CardUtil.getExileZoneId(game, source.getSourceId(), source.getSourceObjectZoneChangeCounter());
+        UUID exileId = CardUtil.getExileZoneId(game, source.getSourceId(), source.getStackMomentSourceZCC());
         ExileZone exileZone = game.getExile().getExileZone(exileId);
         Player controller = game.getPlayer(source.getControllerId());
-        if (exileZone == null || exileZone.isEmpty()) {
+        if (controller == null || exileZone == null || exileZone.isEmpty()) {
             return false;
         }
         boolean creatureCard = false;

@@ -1,10 +1,10 @@
 package mage.game.command.emblems;
 
+import mage.MageObject;
 import mage.abilities.Ability;
-import mage.abilities.triggers.BeginningOfFirstMainTriggeredAbility;
 import mage.abilities.condition.Condition;
-import mage.abilities.decorator.ConditionalInterveningIfTriggeredAbility;
 import mage.abilities.effects.OneShotEffect;
+import mage.abilities.triggers.BeginningOfFirstMainTriggeredAbility;
 import mage.cards.Cards;
 import mage.cards.FrameStyle;
 import mage.cards.repository.TokenInfo;
@@ -16,6 +16,7 @@ import mage.counters.CounterType;
 import mage.filter.StaticFilters;
 import mage.game.Game;
 import mage.game.command.Emblem;
+import mage.game.events.GameEvent;
 import mage.players.Player;
 
 /**
@@ -30,13 +31,17 @@ public class RadiationEmblem extends Emblem {
         super("Radiation");
         this.frameStyle = FrameStyle.M15_NORMAL;
 
-        this.getAbilities().add(new ConditionalInterveningIfTriggeredAbility(
-                new BeginningOfFirstMainTriggeredAbility(Zone.ALL, TargetController.YOU, new RadiationEffect(), false),
-                RadiationCondition.instance,
-                "At the beginning of your precombat main phase, if you have any rad counters, "
-                        + "mill that many cards. For each nonland card milled this way, you lose 1 life and a rad counter."
-        ));
+        this.getAbilities().add(new BeginningOfFirstMainTriggeredAbility(
+                Zone.ALL, TargetController.YOU, new RadiationEffect(), false
+        ).withInterveningIf(RadiationCondition.instance).setTriggerPhrase("At the beginning of each player's precombat main phase, "));
 
+        // radiation don't have source, so image can be initialized immediately
+        setSourceObjectAndInitImage(null);
+    }
+
+    @Override
+    public void setSourceObjectAndInitImage(MageObject sourceObject) {
+        this.sourceObject = sourceObject;
         TokenInfo foundInfo = TokenRepository.instance.findPreferredTokenInfoForXmage(TokenRepository.XMAGE_IMAGE_NAME_RADIATION, null);
         if (foundInfo != null) {
             this.setExpansionSetCode(foundInfo.getSetCode());
@@ -67,6 +72,11 @@ enum RadiationCondition implements Condition {
     public boolean apply(Game game, Ability source) {
         Player player = game.getPlayer(source.getControllerId());
         return player != null && player.getCountersCount(CounterType.RAD) > 0;
+    }
+
+    @Override
+    public String toString() {
+        return "that player has one or more rad counters";
     }
 }
 
@@ -106,8 +116,13 @@ class RadiationEffect extends OneShotEffect {
         Cards milled = player.millCards(amount, source, game);
         int countNonLand = milled.count(StaticFilters.FILTER_CARD_NON_LAND, player.getId(), source, game);
         if (countNonLand > 0) {
-            // TODO: support gaining life instead with [[Strong, the Brutish Thespian]]
-            player.loseLife(countNonLand, game, source, false);
+            GameEvent event = new GameEvent(GameEvent.EventType.RADIATION_GAIN_LIFE, null, source, player.getId(), amount, false);
+            if (game.replaceEvent(event)) {
+                player.gainLife(countNonLand, game, source);
+            } else {
+                player.loseLife(countNonLand, game, source, false);
+            }
+
             player.loseCounters(CounterType.RAD.getName(), countNonLand, source, game);
         }
         return true;

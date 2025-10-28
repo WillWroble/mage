@@ -18,7 +18,7 @@ import mage.constants.SubType;
 import mage.constants.SuperType;
 import mage.filter.FilterCard;
 import mage.filter.StaticFilters;
-import mage.filter.common.FilterNoncreatureCard;
+import mage.filter.predicate.Predicates;
 
 import java.util.UUID;
 
@@ -27,7 +27,10 @@ import java.util.UUID;
  */
 public final class SamutTheDrivingForce extends CardImpl {
 
-    private static final FilterCard filter = new FilterNoncreatureCard("noncreature spells");
+    private static final FilterCard filter = new FilterCard("noncreature spells");
+    static {
+        filter.add(Predicates.not(CardType.CREATURE.getPredicate()));
+    }
 
     public SamutTheDrivingForce(UUID ownerId, CardSetInfo setInfo) {
         super(ownerId, setInfo, new CardType[]{CardType.CREATURE}, "{3}{R}{G}{W}");
@@ -60,6 +63,7 @@ public final class SamutTheDrivingForce extends CardImpl {
         // Noncreature spells you cast cost {X} less to cast, where X is your speed.
         this.addAbility(new SimpleStaticAbility(
                 new SpellsCostReductionControllerEffect(filter, ControllerSpeedCount.instance)
+                        .setText("noncreature spells you cast cost {X} less to cast, where X is your speed")
         ));
     }
 

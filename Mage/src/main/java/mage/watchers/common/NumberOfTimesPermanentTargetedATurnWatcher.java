@@ -6,7 +6,6 @@ import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.game.permanent.Permanent;
 import mage.game.stack.StackObject;
-import mage.util.CardUtil;
 import mage.watchers.Watcher;
 
 import java.util.HashMap;
@@ -29,8 +28,8 @@ public class NumberOfTimesPermanentTargetedATurnWatcher extends Watcher {
         if (event.getType() != GameEvent.EventType.TARGETED) {
             return;
         }
-        StackObject targetingObject = CardUtil.getTargetingStackObject(event, game);
-        if (targetingObject == null || CardUtil.checkTargetedEventAlreadyUsed(this.getKey(), targetingObject, event, game)) {
+        StackObject targetingObject = game.findTargetingStackObject(this.getKey(), event);
+        if (targetingObject == null) {
             return;
         }
         Permanent permanent = game.getPermanent(event.getTargetId());

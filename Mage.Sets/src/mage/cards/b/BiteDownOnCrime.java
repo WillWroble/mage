@@ -12,13 +12,14 @@ import mage.cards.CardImpl;
 import mage.cards.CardSetInfo;
 import mage.constants.CardType;
 import mage.constants.Duration;
-import mage.filter.StaticFilters;
 import mage.game.Game;
+import mage.target.TargetPermanent;
 import mage.target.common.TargetControlledCreaturePermanent;
-import mage.target.common.TargetCreaturePermanent;
 import mage.util.CardUtil;
 
 import java.util.UUID;
+
+import static mage.filter.StaticFilters.FILTER_CREATURE_YOU_DONT_CONTROL;
 
 /**
  *
@@ -40,7 +41,7 @@ public final class BiteDownOnCrime extends CardImpl {
 
         // It deals damage equal to its power to target creature you don't control.
         this.getSpellAbility().addEffect(new DamageWithPowerFromOneToAnotherTargetEffect("It"));
-        this.getSpellAbility().addTarget(new TargetCreaturePermanent(StaticFilters.FILTER_CREATURE_YOU_DONT_CONTROL));
+        this.getSpellAbility().addTarget(new TargetPermanent(FILTER_CREATURE_YOU_DONT_CONTROL));
     }
 
     private BiteDownOnCrime(final BiteDownOnCrime card) {
@@ -60,9 +61,9 @@ enum BiteDownOnCrimeAdjuster implements CostAdjuster {
     private static final OptionalAdditionalCost collectEvidenceCost = CollectEvidenceAbility.makeCost(6);
 
     @Override
-    public void adjustCosts(Ability ability, Game game) {
+    public void reduceCost(Ability ability, Game game) {
         if (CollectedEvidenceCondition.instance.apply(game, ability)
-                || (game.inCheckPlayableState() && collectEvidenceCost.canPay(ability, null, ability.getControllerId(), game))) {
+                || (game.inCheckPlayableState() && collectEvidenceCost.canPay(ability, ability, ability.getControllerId(), game))) {
             CardUtil.reduceCost(ability, 2);
         }
     }

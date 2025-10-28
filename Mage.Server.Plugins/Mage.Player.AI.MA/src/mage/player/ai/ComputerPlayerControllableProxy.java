@@ -2,7 +2,6 @@ package mage.player.ai;
 
 import mage.MageObject;
 import mage.abilities.*;
-import mage.abilities.costs.VariableCost;
 import mage.abilities.costs.mana.ManaCost;
 import mage.cards.Card;
 import mage.cards.Cards;
@@ -13,10 +12,8 @@ import mage.constants.MultiAmountType;
 import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.combat.CombatGroup;
 import mage.game.draft.Draft;
 import mage.game.match.Match;
-import mage.game.permanent.Permanent;
 import mage.game.tournament.Tournament;
 import mage.players.Player;
 import mage.target.Target;
@@ -252,20 +249,11 @@ public class ComputerPlayerControllableProxy extends ComputerPlayer7 {
     }
 
     @Override
-    public int announceXMana(int min, int max, String message, Game game, Ability ability) {
+    public int announceX(int min, int max, String message, Game game, Ability source, boolean isManaPay) {
         if (isUnderMe(game)) {
-            return super.announceXMana(min, max, message, game, ability);
+            return super.announceX(min, max, message, game, source, isManaPay);
         } else {
-            return getControllingPlayer(game).announceXMana(min, max, message, game, ability);
-        }
-    }
-
-    @Override
-    public int announceXCost(int min, int max, String message, Game game, Ability ability, VariableCost variableCost) {
-        if (isUnderMe(game)) {
-            return super.announceXCost(min, max, message, game, ability, variableCost);
-        } else {
-            return getControllingPlayer(game).announceXCost(min, max, message, game, ability, variableCost);
+            return getControllingPlayer(game).announceX(min, max, message, game, source, isManaPay);
         }
     }
 
@@ -288,29 +276,11 @@ public class ComputerPlayerControllableProxy extends ComputerPlayer7 {
     }
 
     @Override
-    public UUID chooseAttackerOrder(java.util.List<Permanent> attackers, Game game) {
+    public int getAmount(int min, int max, String message, Ability source, Game game) {
         if (isUnderMe(game)) {
-            return super.chooseAttackerOrder(attackers, game);
+            return super.getAmount(min, max, message, source, game);
         } else {
-            return getControllingPlayer(game).chooseAttackerOrder(attackers, game);
-        }
-    }
-
-    @Override
-    public UUID chooseBlockerOrder(java.util.List<Permanent> blockers, CombatGroup combatGroup, java.util.List<UUID> blockerOrder, Game game) {
-        if (isUnderMe(game)) {
-            return super.chooseBlockerOrder(blockers, combatGroup, blockerOrder, game);
-        } else {
-            return getControllingPlayer(game).chooseBlockerOrder(blockers, combatGroup, blockerOrder, game);
-        }
-    }
-
-    @Override
-    public int getAmount(int min, int max, String message, Game game) {
-        if (isUnderMe(game)) {
-            return super.getAmount(min, max, message, game);
-        } else {
-            return getControllingPlayer(game).getAmount(min, max, message, game);
+            return getControllingPlayer(game).getAmount(min, max, message, source, game);
         }
     }
 

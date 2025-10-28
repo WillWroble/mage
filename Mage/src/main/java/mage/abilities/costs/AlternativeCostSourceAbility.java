@@ -203,7 +203,7 @@ public class AlternativeCostSourceAbility extends StaticAbility implements Alter
     }
 
     private String getActivatedKey(Ability source) {
-        return getActivatedKey(this.getOriginalId(), source.getSourceId(), source.getSourceObjectZoneChangeCounter());
+        return getActivatedKey(this.getOriginalId(), source.getSourceId(), source.getStackMomentSourceZCC());
     }
 
     private static String getActivatedKey(UUID alternativeCostOriginalId, UUID sourceId, int sourceZCC) {
@@ -217,7 +217,7 @@ public class AlternativeCostSourceAbility extends StaticAbility implements Alter
     }
 
     private String getDynamicCostActivatedKey(Ability source) {
-        return getDynamicCostActivatedKey(this.getOriginalId(), source.getSourceId(), source.getSourceObjectZoneChangeCounter());
+        return getDynamicCostActivatedKey(this.getOriginalId(), source.getSourceId(), source.getStackMomentSourceZCC());
     }
 
     private static String getDynamicCostActivatedKey(UUID alternativeCostOriginalId, UUID sourceId, int sourceZCC) {
@@ -243,7 +243,7 @@ public class AlternativeCostSourceAbility extends StaticAbility implements Alter
         String key = getActivatedKey(
                 alternativeCostOriginalId,
                 source.getSourceId(),
-                source.getSourceObjectZoneChangeCounter() + (searchPrevZCC ? -1 : 0)
+                source.getStackMomentSourceZCC() + (searchPrevZCC ? -1 : 0)
         );
         Boolean status = (Boolean) game.getState().getValue(key);
         return status != null && status;
@@ -284,7 +284,8 @@ public class AlternativeCostSourceAbility extends StaticAbility implements Alter
         }
         StringBuilder sb = new StringBuilder();
         if (condition != null) {
-            sb.append(condition.toString());
+            sb.append("if ");
+            sb.append(condition);
             if (alternateCosts.size() > 1) {
                 sb.append(", rather than pay this spell's mana cost, ");
             } else {
@@ -293,8 +294,6 @@ public class AlternativeCostSourceAbility extends StaticAbility implements Alter
         } else {
             sb.append("You may ");
         }
-        int numberCosts = 0;
-        String remarkText = "";
         sb.append(CardUtil.concatWithAnd(alternateCosts
                 .stream()
                 .map(cost -> cost.getCost() instanceof ManaCost
@@ -308,9 +307,6 @@ public class AlternativeCostSourceAbility extends StaticAbility implements Alter
             sb.append("cast this spell without paying its mana cost");
         }
         sb.append('.');
-        if (numberCosts == 1 && remarkText != null) {
-            sb.append(' ').append(remarkText);
-        }
         return sb.toString();
     }
 

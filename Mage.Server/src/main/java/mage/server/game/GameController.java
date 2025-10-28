@@ -85,11 +85,11 @@ public class GameController implements GameCallback {
 
     public GameController(ManagerFactory managerFactory, Game game, ConcurrentMap<UUID, UUID> userPlayerMap, UUID tableId, UUID choosingPlayerId, GameOptions gameOptions) {
         this.managerFactory = managerFactory;
-        gameExecutor = managerFactory.threadExecutor().getGameExecutor();
-        responseIdleTimeoutExecutor = managerFactory.threadExecutor().getTimeoutIdleExecutor();
-        gameSessionId = UUID.randomUUID();
+        this.gameExecutor = managerFactory.threadExecutor().getGameExecutor();
+        this.responseIdleTimeoutExecutor = managerFactory.threadExecutor().getTimeoutIdleExecutor();
+        this.gameSessionId = UUID.randomUUID();
         this.userPlayerMap = userPlayerMap;
-        chatId = managerFactory.chatManager().createChatSession("Game " + game.getId());
+        this.chatId = managerFactory.chatManager().createGameChatSession(game);
         this.userRequestingRollback = null;
         this.game = game;
         this.game.setSaveGame(managerFactory.configSettings().isSaveGameActivated());
@@ -591,7 +591,7 @@ public class GameController implements GameCallback {
                 if (playerId != null) {
                     Player player = game.getPlayer(playerId);
                     if (player != null) {
-                        game.informPlayers(player.getLogName() + " want to concede");
+                        game.informPlayers(player.getLogName() + " wants to concede");
                         game.setConcedingPlayer(getPlayerId(userId));
                     }
                 }

@@ -3,6 +3,7 @@ package mage.abilities.effects.common;
 import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.Mode;
+import mage.abilities.TriggeredAbility;
 import mage.abilities.costs.Cost;
 import mage.abilities.effects.ContinuousEffect;
 import mage.abilities.effects.Effect;
@@ -18,6 +19,7 @@ public class DoIfCostPaid extends OneShotEffect {
 
     protected final Effects executingEffects;
     protected final Effects otherwiseEffects;
+    protected String otherwiseText = "If you don't";
     protected final Cost cost;
     private final String chooseUseText;
     private final boolean optional;
@@ -78,6 +80,11 @@ public class DoIfCostPaid extends OneShotEffect {
         return this;
     }
 
+    public DoIfCostPaid setOtherwiseText(String otherwiseText) {
+        this.otherwiseText = otherwiseText;
+        return this;
+    }
+
     /**
      * Allow to add additional info in pay dialog, so user can split it in diff use cases to remember by right click
      * Example: ignore untap payment for already untapped permanent like Mana Vault
@@ -98,22 +105,19 @@ public class DoIfCostPaid extends OneShotEffect {
         if (player == null || mageObject == null) {
             return false;
         }
-
-        // nothing to pay (do not support mana cost - it's true all the time)
-        if (!this.cost.canPay(source, source, player.getId(), game)) {
-            return false;
-        }
-
         String message = CardUtil.replaceSourceName(makeChooseText(game, source), mageObject.getName());
         Outcome payOutcome = executingEffects.getOutcome(source, this.outcome);
+        // nothing to pay (do not support mana cost - it's true all the time)
+        boolean canPay = cost.canPay(source, source, player.getId(), game);
         boolean didPay = false;
-        if (!optional || player.chooseUse(payOutcome, message, source, game)) {
+        if (canPay && (!optional || player.chooseUse(payOutcome, message, source, game))) {
             cost.clearPaid();
             int bookmark = game.bookmarkState();
             if (cost.pay(source, game, source, player.getId(), false)) {
                 didPay = true;
                 game.informPlayers(player.getLogName() + " paid for " + mageObject.getLogName() + " - " + message);
                 applyEffects(game, source, executingEffects);
+                TriggeredAbility.setDidThisTurn(source, game);
                 player.resetStoredBookmark(game); // otherwise you can e.g. undo card drawn with Mentor of the Meek
             } else {
                 // Paying cost was cancels so try to undo payment so far
@@ -180,7 +184,7 @@ public class DoIfCostPaid extends OneShotEffect {
         return (optional ? "you may " : "")
                 + CardUtil.addCostVerb(cost.getText()) + "."
                 + (!executingEffects.isEmpty() ? " If you do, " + executingEffects.getText(mode) : "")
-                + (!otherwiseEffects.isEmpty() ? " If you don't, " + otherwiseEffects.getText(mode) : "");
+                + (!otherwiseEffects.isEmpty() ? " " + otherwiseText + ", " + otherwiseEffects.getText(mode) : "");
     }
 
     @Override
