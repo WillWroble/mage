@@ -13,6 +13,9 @@ import java.util.List;
 public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
     public void setup() {
+        //this is a test for Will
+
+        
         DISCOUNT_FACTOR = 0.97; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
