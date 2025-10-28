@@ -3,6 +3,7 @@ package mage.player.ai;
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
 import mage.abilities.costs.mana.GenericManaCost;
+import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
@@ -14,6 +15,7 @@ import mage.game.permanent.Permanent;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
+import mage.target.TargetCard;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
@@ -368,6 +370,11 @@ public class MCTSPlayer extends ComputerPlayer {
         //for discarding
         return chooseTarget(outcome, target, source, game);
 
+    }
+    @Override
+    public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+        //for tutoring
+        return chooseTarget(outcome, target, source, game);
     }
 
     @Override

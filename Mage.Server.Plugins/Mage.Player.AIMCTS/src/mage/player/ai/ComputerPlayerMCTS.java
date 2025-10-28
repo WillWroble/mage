@@ -6,6 +6,7 @@ import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
 import mage.abilities.mana.ManaAbility;
 import mage.cards.Card;
+import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
@@ -19,6 +20,7 @@ import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
+import mage.target.TargetCard;
 import mage.util.RandomUtil;
 import mage.util.ThreadUtils;
 import mage.util.XmageThreadFactory;
@@ -261,13 +263,18 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
         if(game.getTurnNum()>1) {
-            //reroute to mcts simulator
+            //reroute to mcts player
             return chooseTarget(outcome, target, source, game);
         } else {
             //reroute to default
             logger.info("falling back to default choose target");
             return super.choose(outcome, target, source, game, options);
         }
+    }
+    @Override
+    public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+        //for tutoring
+        return chooseTarget(outcome, target, source, game);
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
