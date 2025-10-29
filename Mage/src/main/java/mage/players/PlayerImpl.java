@@ -1910,7 +1910,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     @Override
     public void shuffleLibrary(Ability source, Game game) {
         if (!game.replaceEvent(GameEvent.getEvent(GameEvent.EventType.SHUFFLE_LIBRARY, playerId, source, playerId))) {
-            this.library.shuffle();
+            this.library.shuffle(game.getLocalRandom());
             if (!game.isSimulation()) {
                 game.informPlayers(getLogName() + "'s library is shuffled" + CardUtil.getSourceLogName(game, source));
             }

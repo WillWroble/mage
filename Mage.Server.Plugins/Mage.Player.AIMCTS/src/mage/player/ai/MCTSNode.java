@@ -47,7 +47,7 @@ public class MCTSNode {
 
     //action fields - how the node represents the state - only one is not null at a time
     public Ability action;
-    public Set<UUID>chooseTargetAction;
+    public UUID chooseTargetAction;
     public String choiceAction;
     public Boolean useAction;
     public Combat combat; //TODO:remove
@@ -275,11 +275,11 @@ public class MCTSNode {
                 children.add(new MCTSNode(this, newCombat));
             }
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-            Set<Set<UUID>> targetOptions = player.chooseTargetOptions;
-            for(Set<UUID> target : targetOptions) {
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + target.toString());
+            Set<UUID> targetOptions = player.chooseTargetOptions;
+            for(UUID target : targetOptions) {
+                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + game.getEntity(target));
                 MCTSNode node = new MCTSNode(this, action);
-                node.chooseTargetAction = new HashSet<>(target);
+                node.chooseTargetAction = target;
                 children.add(node);
             }
         } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
@@ -309,7 +309,7 @@ public class MCTSNode {
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
             idx = ActionEncoder.getActionIndex(node.getAction(), game.getPlayer(playerId).getName().equals("PlayerA"));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-            idx = ActionEncoder.getTargetIndex(game.getEntity(node.chooseTargetAction.iterator().next()).toString());
+            idx = ActionEncoder.getTargetIndex(game.getEntity(node.chooseTargetAction).toString());
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
             idx = node.useAction ? 1 : 0;
         } else {
@@ -411,11 +411,11 @@ public class MCTSNode {
         sb.append(baseGame.getTurnStepType().toString()).append(baseGame.getStack().toString()).append(" actions: ");
         for (MCTSNode node: children) {
             if(node.action != null) {
-                if(node.chooseTargetAction != null && !node.chooseTargetAction.isEmpty()) {
-                    if(baseGame.getEntity(node.chooseTargetAction.iterator().next()) != null) {
-                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntity(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
-                    } else if(baseGame.getPlayer(node.chooseTargetAction.iterator().next()) != null){
-                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction.iterator().next()).toString(), node.getScoreRatio(), node.visits));
+                if(node.chooseTargetAction != null) {
+                    if(baseGame.getEntity(node.chooseTargetAction) != null) {
+                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntity(node.chooseTargetAction).toString(), node.getScoreRatio(), node.visits));
+                    } else if(baseGame.getPlayer(node.chooseTargetAction) != null){
+                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction).toString(), node.getScoreRatio(), node.visits));
                     } else {
                         logger.error("target not found");
                     }
@@ -783,7 +783,7 @@ public class MCTSNode {
 
         GameState out = parent.getActionSequence(myScript, opponentScript);
 
-        if(chooseTargetAction != null && !chooseTargetAction.isEmpty()) {
+        if(chooseTargetAction != null) {
             if(parent.playerId.equals(targetPlayer)) {
                 myScript.targetSequence.add(chooseTargetAction);
             } else {

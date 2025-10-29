@@ -115,9 +115,11 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         if (deck.getMaindeckCards().size() < 40) {
             throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
         }
-        //pass is always 0
-        actionMap.put("Pass", 0);
-        int index = 1;
+        //null (wildcard/unknown) is always 0
+        actionMap.put("null", 0);
+        //pass is always 1
+        actionMap.put("Pass", 1);
+        int index = 2;
         List<Card> sortedCards = new ArrayList<>(deck.getCards());
         sortedCards.sort(Comparator.comparing(Card::getName));
         for(Card card : sortedCards) {
@@ -136,9 +138,11 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     }
     public void createAllTargetsFromDeckLists(String deckNameA, String deckNameB) throws GameException {
         String[] decks = new String[] {deckNameA, deckNameB};
-        ActionEncoder.targetMap.put("PlayerA", 0);
-        ActionEncoder.targetMap.put("PlayerB", 1);
-        int index = 2;
+        //null (wildcard/unknown) is always 0
+        ActionEncoder.targetMap.put("null", 0);
+        ActionEncoder.targetMap.put("PlayerA", 1);
+        ActionEncoder.targetMap.put("PlayerB", 2);
+        int index = 3;
         logger.debug("Loading decks...");
         for(String deckName : decks) {
             DeckCardLists list;
@@ -278,7 +282,6 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
-        ComputerPlayer.PRINT_DECISION_FALLBACKS = false;
         int maxTurn = 50;
         //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
         //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
@@ -447,7 +450,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
 
             // All game objects are local to this thread to prevent race conditions.
-            MatchOptions matchOptions = new MatchOptions("test match", "test game type", false, 2);
+            MatchOptions matchOptions = new MatchOptions("test match", "test game type", false);
             Match localMatch = new TwoPlayerMatch(matchOptions);
             game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
             TestPlayer playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);

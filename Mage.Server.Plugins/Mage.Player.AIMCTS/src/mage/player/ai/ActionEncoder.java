@@ -22,16 +22,16 @@ public class ActionEncoder {
         if(map.containsKey(name)) {
             return map.get(name);
         } else {
-            logger.error("unrecognized action: " + name);
-            return -1;
+            logger.warn("unrecognized action: " + name);
+            return 0;
         }
     }
     public static synchronized int getTargetIndex(String name) {
         if(targetMap.containsKey(name)) {
             return targetMap.get(name);
         } else {
-            logger.error("unrecognized target: " + name);
-            return -1;
+            logger.warn("unrecognized target: " + name);
+            return 0;
         }
     }
 }

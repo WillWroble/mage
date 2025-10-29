@@ -23,7 +23,8 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void test_single_game() {
-        super.test_single_game(-6072638497124130761L);
+        DECK_A = "WillS_Tempo";
+        super.test_single_game(-587981929397120825L);
     }
     @Test
     public void generateData() {
@@ -66,9 +67,9 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobinTest() {
-        DECK_A = "WillS_Tempo";
+        //DECK_A = "WillS_Tempo";
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
-        NUM_GAMES_TO_SIMULATE = 40;
+        NUM_GAMES_TO_SIMULATE = 8;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
             DATA_OUT_FILE = "testing/"+deckName+"_testing3.hdf5";

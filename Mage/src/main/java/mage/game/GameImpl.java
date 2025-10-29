@@ -480,7 +480,11 @@ public abstract class GameImpl implements Game {
     public String getEntity(UUID entityId) {
         MageObject obj = getObject(entityId);
         if(obj == null) {
-            return getPlayer(entityId).getName();
+            Player player = getPlayer(entityId);
+            if(player == null) {
+                return "null";
+            }
+            return player.getName();
         }
         return obj.getName();
     }

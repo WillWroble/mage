@@ -2,6 +2,7 @@ package mage.player.ai;
 
 import mage.*;
 import mage.abilities.*;
+import mage.abilities.common.PassAbility;
 import mage.abilities.costs.mana.*;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.abilities.mana.ManaOptions;
@@ -22,6 +23,7 @@ import mage.game.draft.Draft;
 import mage.game.match.Match;
 import mage.game.permanent.Permanent;
 import mage.game.tournament.Tournament;
+import mage.players.ChooseCreatureToBlockAbility;
 import mage.players.ManaPoolItem;
 import mage.players.Player;
 import mage.players.PlayerImpl;
@@ -30,6 +32,7 @@ import mage.players.net.UserGroup;
 import mage.target.Target;
 import mage.target.TargetAmount;
 import mage.target.TargetCard;
+import mage.target.common.TargetAttackingCreature;
 import mage.util.*;
 import org.apache.log4j.Logger;
 
@@ -47,7 +50,7 @@ import java.util.Map.Entry;
  */
 public class ComputerPlayer extends PlayerImpl {
     //for targeting microdecisions
-    public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
+    public Set<UUID> chooseTargetOptions = new HashSet<>();
     //for discrete choices
     public Set<String> choiceOptions = new HashSet<>();
     //for priorities
@@ -132,11 +135,7 @@ public class ComputerPlayer extends PlayerImpl {
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
         return makeChoice(outcome, target, source, game, null);
     }
-
-    /**
-     * Default choice logic for any choose dialogs due effect's outcome and possible target priority
-     */
-    private boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+    protected boolean makeChoiceHelper(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
         // choose itself for starting player all the time
         if (target.getMessage(game).equals("Select a starting player")) {
             target.add(this.getId(), game);
@@ -187,6 +186,16 @@ public class ComputerPlayer extends PlayerImpl {
     }
 
     /**
+     * Default choice logic for any choose dialogs due effect's outcome and possible target priority
+     */
+    protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+        boolean out = makeChoiceHelper(outcome, target, source, game, fromCards);
+        if(out) getPlayerHistory().targetSequence.addAll(target.getTargets());
+
+        return out;
+    }
+
+    /**
      * Default choice logic for X or amount values
      */
     private int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
@@ -212,7 +221,7 @@ public class ComputerPlayer extends PlayerImpl {
             xValue = Math.max(0, getAvailableManaProducers(game).size() - source.getManaCostsToPay().getUnpaid().manaValue());
         } else {
             // as X actions
-            xValue = RandomUtil.nextInt(realMax + 1);
+            xValue = game.getLocalRandom().nextInt(realMax + 1);
         }
 
         if (xValue > realMax) {
@@ -223,6 +232,8 @@ public class ComputerPlayer extends PlayerImpl {
         }
 
         return xValue;
+
+
     }
 
     @Override
@@ -782,11 +793,11 @@ public class ComputerPlayer extends PlayerImpl {
         // Be proactive! Always use abilities, the evaluation function will decide if it's good or not
         // Otherwise some abilities won't be used by AI like LoseTargetEffect that has "bad" outcome
         // but still is good when targets opponent
-        return outcome != Outcome.AIDontUseIt; // Added for Desecration Demon sacrifice ability
+        boolean out = outcome != Outcome.AIDontUseIt; // Added for Desecration Demon sacrifice ability
+        getPlayerHistory().useSequence.add(out);
+        return out;
     }
-
-    @Override
-    public boolean choose(Outcome outcome, Choice choice, Game game) {
+    public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
         //TODO: improve this
 
         // choose creature type
@@ -835,6 +846,13 @@ public class ComputerPlayer extends PlayerImpl {
         }
 
         return true;
+    }
+
+    @Override
+    public boolean choose(Outcome outcome, Choice choice, Game game) {
+        boolean out = chooseHelper(outcome, choice, game);
+        getPlayerHistory().choiceSequence.add(choice.getChoice());
+        return out;
     }
 
     protected boolean chooseCreatureType(Outcome outcome, Choice choice, Game game) {
@@ -920,7 +938,7 @@ public class ComputerPlayer extends PlayerImpl {
      * @param attackingPlayerId
      */
     public void selectAttackersOneAtATime(Game game, UUID attackingPlayerId) {
-        log.debug("selectAttackersOneAtATime");
+        logger.debug("selectAttackersOneAtATime");
         UUID opponentId = game.getCombat().getDefenders().iterator().next();
         List<Permanent> availableAttackers = getAvailableAttackers(game);
         availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
@@ -950,8 +968,8 @@ public class ComputerPlayer extends PlayerImpl {
         for(Permanent blocker : blockers) {
             boolean willBlock = chooseUse(Outcome.Neutral, "block with: " + blocker.getName() + "?", null, game);
             if(willBlock) {//now choose which creature to block
-                Target attackerTarget = new TargetAttackingCreature();
-                chooseTarget(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game);
+                Target attackerTarget = new TargetAttackingCreature(1);
+                makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game, null);
                 UUID attackerId = attackerTarget.getFirstTarget();
                 declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
             }
@@ -1399,5 +1417,57 @@ public class ComputerPlayer extends PlayerImpl {
         choiceOptions = new HashSet<>(cPlayer.choiceOptions);
         playables = new ArrayList<>(cPlayer.playables);
         this.human = false;
+    }
+    protected List<ActivatedAbility> getPlayableAbilities(Game game) {
+        List<ActivatedAbility> playables = getPlayable(game, true);
+        List<ActivatedAbility> out = new ArrayList<>();
+        for (ActivatedAbility aa : playables) {
+            if (!aa.isManaAbility()) {
+                out.add(aa);
+            }
+        }
+        out.add(new PassAbility());
+        return out;
+    }
+    //TODO: make this better
+    public List<Ability> getPlayableOptions(Game game) {
+        List<Ability> all = new ArrayList<>();
+        List<ActivatedAbility> playables = getPlayableAbilities(game);
+        for (ActivatedAbility ability : playables) {
+            List<Ability> options = game.getPlayer(playerId).getPlayableOptions(ability, game);
+            if (options.isEmpty()) {
+                if (!ability.getManaCosts().getVariableCosts().isEmpty()) {
+                    simulateVariableCosts(ability, all, game);
+                } else {
+                    all.add(ability);
+                }
+            } else {
+                for (Ability option : options) {
+                    if (!ability.getManaCosts().getVariableCosts().isEmpty()) {
+                        simulateVariableCosts(option, all, game);
+                    } else {
+                        all.add(option);
+                    }
+                }
+            }
+        }
+        return all;
+    }
+
+    protected void simulateVariableCosts(Ability ability, List<Ability> options, Game game) {
+        int numAvailable = getAvailableManaProducers(game).size() - ability.getManaCosts().manaValue();
+        int start = 0;
+        if (!(ability instanceof SpellAbility)) {
+            //only use x=0 on spell abilities
+            if (numAvailable == 0)
+                return;
+            else
+                start = 1;
+        }
+        for (int i = start; i < numAvailable; i++) {
+            Ability newAbility = ability.copy();
+            newAbility.addManaCostsToPay(new GenericManaCost(i));
+            options.add(newAbility);
+        }
     }
 }

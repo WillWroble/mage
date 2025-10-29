@@ -8,6 +8,7 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.player.ai.MCTSPlayer.NextAction;
+import mage.player.ai.score.GameStateEvaluator2;
 import mage.players.PlayerScript;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
@@ -99,7 +100,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 break;
             case CHOOSE_TARGET:
                 if(!ROUND_ROBIN_MODE ||
-                    myPlayer.chooseTargetOptions.stream().anyMatch(s -> s.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId)))) {
+                    myPlayer.chooseTargetOptions.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId))) {
                     node.policy = out.policy_target;
                 }
                 break;
@@ -246,10 +247,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int[] out = new int[128];
         Arrays.fill(out, 0);
         for (MCTSNode child : node.children) {
-            int idx = ActionEncoder.getTargetIndex(game.getEntity(child.chooseTargetAction.iterator().next()).toString());
-            if(idx == -1) {
-                idx=127;//unknown target bin
-            }
+            int idx = ActionEncoder.getTargetIndex(game.getEntity(child.chooseTargetAction).toString());
             int v = child.visits;
             out[idx%128] += v;
         }

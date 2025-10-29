@@ -11,7 +11,7 @@ import java.util.*;
  */
 public class PlayerScript {
     //for targeting decisions
-    public ArrayDeque<Set<UUID>> targetSequence;
+    public ArrayDeque<UUID> targetSequence;
     //for discrete choices
     public ArrayDeque<String> choiceSequence;
     //binary decisions
@@ -31,7 +31,7 @@ public class PlayerScript {
         choiceSequence = new ArrayDeque<>();
 
     }
-    public PlayerScript(List<Ability> prio, List<Combat> com, List<Set<UUID>> target, List<String> choice, List<Boolean> use) {
+    public PlayerScript(List<Ability> prio, List<Combat> com, List<UUID> target, List<String> choice, List<Boolean> use) {
         prioritySequence = new ArrayDeque<>(prio);
         combatSequence = new ArrayDeque<>(com);
         useSequence = new ArrayDeque<>(use);

@@ -63,6 +63,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     //adjust based on available RAM and threads running
     public static int MAX_TREE_NODES = 800;
 
+    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
+
     public transient MCTSNode root;
     protected int maxThinkTime;
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
@@ -108,9 +110,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         game.firePriorityEvent(playerId);
         //TODO: make more robust filtering
         //(some mana abilities have other effects)
-        List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
-        if(playableAbilities.isEmpty() &&
+        List<Ability> playableAbilities = getPlayableOptions(game);
+        if(playableAbilities.size() < 2 &&
                 !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//declare attackers and blockers are always checkpoint for perf reasons
+            logger.info("auto pass");
             pass(game);
             return false;
         }
@@ -233,48 +236,53 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         logger.info(sb.toString());
     }
     @Override
-    public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+    protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
         logger.info("base choose target " + (source == null ? "null" : source.toString()));
-        Set<UUID> possible = target.possibleTargets(getId(), game);
+        // choose itself for starting player all the time
+        if (target.getMessage(game).equals("Select a starting player")) {
+            target.add(this.getId(), game);
+            return true;
+        }
+        // nothing to choose
+        if (fromCards != null && fromCards.isEmpty()) {
+            return false;
+        }
+
+        UUID abilityControllerId = target.getAffectedAbilityControllerId(getId());
+
+        // nothing to choose, e.g. X=0
+        if (target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) {
+            return false;
+        }
+
+        Set<UUID> possible = target.possibleTargets(abilityControllerId, source, game, fromCards).stream().filter(id -> !target.contains(id)).collect(Collectors.toSet());
         logger.info("possible targets: " + possible.size());
-        if(possible.size() == 1) {
+        // nothing to choose, e.g. no valid targets
+        if (possible.isEmpty()) {
+            return false;
+        }
+        int n = possible.size();
+        n += target.isChosen(game) ? 1 : 0;
+
+        if (n == 1) {
             //if only one possible just choose it and leave
             target.addTarget(possible.iterator().next(), source, game);
             return true;
         }
-        chooseTargetOptions.clear();
-        MCTSPlayer.getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
-        if(chooseTargetOptions.isEmpty()) {
-            logger.info("no possible targets found");
-            return false;
-        }
-        getNextAction(game, NextAction.CHOOSE_TARGET);
-        Set<UUID> choice = root.chooseTargetAction;
-        for(UUID targetId : choice) {
-            Set<UUID> chosen = new HashSet<>();
-            target.addTarget(targetId, source, game);
-            chosen.add(targetId);
-            logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
 
-            getPlayerHistory().targetSequence.add(chosen);
+        getNextAction(game, NextAction.CHOOSE_TARGET);
+
+        UUID targetId = root.chooseTargetAction;
+        logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
+        getPlayerHistory().targetSequence.add(targetId);
+
+        if(!targetId.equals(STOP_CHOOSING)) {
+            target.addTarget(targetId, source, game);
+            makeChoice(outcome, target, source, game, fromCards);
         }
-        return target.isChosen(game);
-    }
-    @Override
-    public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-        if(game.getTurnNum()>1) {
-            //reroute to mcts player
-            return chooseTarget(outcome, target, source, game);
-        } else {
-            //reroute to default
-            logger.info("falling back to default choose target");
-            return super.choose(outcome, target, source, game, options);
-        }
-    }
-    @Override
-    public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        //for tutoring
-        return chooseTarget(outcome, target, source, game);
+
+        return target.isChosen(game) && !target.getTargets().isEmpty();
+
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {

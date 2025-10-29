@@ -47,6 +47,22 @@ public class Library implements Serializable {
     }
 
     /**
+     * deterministic shuffle for AI games
+     * @param random
+     */
+    public void shuffle(Random random) {
+        UUID[] shuffled = library.toArray(new UUID[0]);
+        for (int n = shuffled.length - 1; n > 0; n--) {
+            int r = random.nextInt(n + 1);
+            UUID temp = shuffled[n];
+            shuffled[n] = shuffled[r];
+            shuffled[r] = temp;
+        }
+        library.clear();
+        library.addAll(Arrays.asList(shuffled));
+    }
+
+    /**
      * Draws a card from the top of the library, removing it from the library.
      * If library is empty, returns null and sets flag for drawing from an empty library.
      */

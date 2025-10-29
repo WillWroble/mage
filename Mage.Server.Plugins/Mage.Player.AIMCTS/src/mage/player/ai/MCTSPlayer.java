@@ -20,6 +20,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * AI: server side bot with monte carlo logic (experimental, the latest version)
@@ -65,58 +66,6 @@ public class MCTSPlayer extends ComputerPlayer {
         return new MCTSPlayer(this);
     }
 
-    protected List<ActivatedAbility> getPlayableAbilities(Game game) {
-        List<ActivatedAbility> playables = getPlayable(game, true);
-        List<ActivatedAbility> out = new ArrayList<>();
-        for (ActivatedAbility aa : playables) {
-            if (!aa.isManaAbility()) {
-                out.add(aa);
-            }
-        }
-        out.add(new PassAbility());
-        return out;
-    }
-    //TODO: make this better
-    public List<Ability> getPlayableOptions(Game game) {
-        List<Ability> all = new ArrayList<>();
-        List<ActivatedAbility> playables = getPlayableAbilities(game);
-        for (ActivatedAbility ability : playables) {
-            List<Ability> options = game.getPlayer(playerId).getPlayableOptions(ability, game);
-            if (options.isEmpty()) {
-                if (!ability.getManaCosts().getVariableCosts().isEmpty()) {
-                    simulateVariableCosts(ability, all, game);
-                } else {
-                    all.add(ability);
-                }
-            } else {
-                for (Ability option : options) {
-                    if (!ability.getManaCosts().getVariableCosts().isEmpty()) {
-                        simulateVariableCosts(option, all, game);
-                    } else {
-                        all.add(option);
-                    }
-                }
-            }
-        }
-        return all;
-    }
-
-    protected void simulateVariableCosts(Ability ability, List<Ability> options, Game game) {
-        int numAvailable = getAvailableManaProducers(game).size() - ability.getManaCosts().manaValue();
-        int start = 0;
-        if (!(ability instanceof SpellAbility)) {
-            //only use x=0 on spell abilities
-            if (numAvailable == 0)
-                return;
-            else
-                start = 1;
-        }
-        for (int i = start; i < numAvailable; i++) {
-            Ability newAbility = ability.copy();
-            newAbility.addManaCostsToPay(new GenericManaCost(i));
-            options.add(newAbility);
-        }
-    }
 
     public List<List<UUID>> getAttacks(Game game) {
         List<List<UUID>> engagements = new ArrayList<>();
@@ -211,7 +160,6 @@ public class MCTSPlayer extends ComputerPlayer {
             game.getState().setPriorityPlayerId(playerId);
             //game.firePriorityEvent(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
-
             boolean success = activateAbility(ability, game);
             if(!success) {
                 logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
@@ -296,87 +244,75 @@ public class MCTSPlayer extends ComputerPlayer {
         nextAction = NextAction.SELECT_BLOCKERS;
     }
 
-    public static void getAllPossible(Set<Set<UUID>> out, Set<UUID> possible, Target target, Ability source, Game game, UUID myID) {
-        if (target.isChosen(game)) out.add(new HashSet<>(target.getTargets()));
-        for (UUID id : possible) {
-            if (!target.canTarget(myID, id, source, game)) continue;
-            target.add(id, game);
-            if (out.contains(new HashSet<>(target.getTargets()))) {
-                target.remove(id);
-                continue;
-            }
-            Set<UUID> copy = new HashSet<>(possible);
-            copy.remove(id);
-            getAllPossible(out, copy, target, source, game, myID);
-            target.remove(id);
-        }
-    }
-
     @Override
-    public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+    protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
         if (game.isPaused() || game.checkIfGameIsOver())
-            return super.chooseTarget(outcome, target, source, game); //if game is already paused don't overwrite last decision
-        //for choosing targets of triggered abilities
+            return makeChoiceHelper(outcome, target, source, game, fromCards); //if game is already paused don't overwrite last decision
+
         if (PRINT_CHOOSE_DIALOGUES)
             logger.debug("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
-        Set<UUID> possible = target.possibleTargets(getId(), game);
-        if(possible.size() == 1) {
+
+        // choose itself for starting player all the time
+        if (target.getMessage(game).equals("Select a starting player")) {
+            target.add(this.getId(), game);
+            return true;
+        }
+
+        // nothing to choose
+        if (fromCards != null && fromCards.isEmpty()) {
+            logger.info("no cards to choose from");
+            return false;
+        }
+
+        UUID abilityControllerId = target.getAffectedAbilityControllerId(getId());
+
+        // nothing to choose, e.g. X=0
+        if (target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) {
+            return false;
+        }
+
+        Set<UUID> possible = target.possibleTargets(abilityControllerId, source, game, fromCards).stream().filter(id -> !target.contains(id)).collect(Collectors.toSet());
+
+        // nothing to choose, e.g. no valid targets
+        if (possible.isEmpty()) {
+            logger.info("none possible - fizzle");
+            return false;
+        }
+        if(target.isChosen(game)) {
+            possible.add(ComputerPlayerMCTS.STOP_CHOOSING);//finish choosing early flag
+        }
+
+        if(possible.size()==1) {
             //if only one possible just choose it and leave
-            target.addTarget(possible.iterator().next(), source, game);
+            UUID id = possible.iterator().next();
+            target.addTarget(id, source, game); //id can never be terminal STOP_CHOOSING here
             return true;
         }
+
         if (!actionScript.targetSequence.isEmpty()) {
-            StringBuilder sb = PRINT_CHOOSE_DIALOGUES ? new StringBuilder() : null;
-            Set<UUID> targets = actionScript.targetSequence.pollFirst();
-            for (UUID id : targets) {
-                /*if (!target.canTarget(getId(), id, source, game)) {TODO: research. doesnt seem to work with choosing sac target
-                    logger.warn("target choice " + game.getEntity(id).toString() + " failed - skipping.");
-                    logger.warn("possible targets: ");
-                    for (UUID tid : target.possibleTargets(getId(), game)) {
-                        logger.warn(game.getEntity(tid).toString());
-                    }
-                    continue;
-                }*/
-                target.addTarget(id, source, game);
-                if (sb != null) {
-                    sb.append(String.format("tried target: %s ", game.getEntity(id).toString()));
-                }
+            UUID choice = actionScript.targetSequence.pollFirst();
+            if(PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried target: %s ", game.getEntity(choice).toString()));
+            getPlayerHistory().targetSequence.add(choice);
+            if(!choice.equals(ComputerPlayerMCTS.STOP_CHOOSING)) {
+                target.addTarget(choice, source, game);
+                //choose another?
+                makeChoice(outcome, target, source, game, fromCards);
             }
-            if (sb != null) {
-                logger.debug(sb.toString());
-            }
-            getPlayerHistory().targetSequence.add(targets);
-            return true;
+            return target.isChosen(game) && !target.getTargets().isEmpty();
         }
-        chooseTargetOptions.clear();
-        getAllPossible(chooseTargetOptions, possible, target.copy(), source, game, getId());
-        if(chooseTargetOptions.isEmpty()) {
-            return false; //fizzle
-        }
+
+        chooseTargetOptions = possible;
         if(source == null) {
             decisionText = "null";
         } else {
-            logger.warn("choose target source is null");
+            logger.debug("choose target source is null");
             decisionText = source.getRule();
         }
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;
-        return super.chooseTarget(outcome, target, source, game);//continue with default target until able to pause
+        return makeChoiceHelper(outcome, target, source, game, fromCards);//continue with default target until able to pause
     }
-
-    @Override
-    public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-        //for discarding
-        return chooseTarget(outcome, target, source, game);
-
-    }
-    @Override
-    public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        //for tutoring
-        return chooseTarget(outcome, target, source, game);
-    }
-
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
         if (outcome == Outcome.PutManaInPool || game.isPaused() || game.checkIfGameIsOver()) {
@@ -400,7 +336,7 @@ public class MCTSPlayer extends ComputerPlayer {
         game.pause();
         lastToAct = true;
         nextAction = NextAction.MAKE_CHOICE;
-        return super.choose(outcome, choice, game);
+        return chooseHelper(outcome, choice, game);
     }
     //TODO: needs special care when handling alternate costs (eg. phyrexian). Sometimes getPlayble() only returns an ability that can be payed with one cost option.
     @Override
