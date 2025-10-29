@@ -29,12 +29,10 @@ import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import java.util.*;
 
 /**
- * Deck specific state encoder for reinforcement learning.
- * Before vectors can be made, the encoder must learn all game features of
- * the given 60 card decks through a first pass of 1,000 simulated mcst and minimax games
+ * Global sparse state encoder for deep learning.
+ *
  */
 public class StateEncoder {
-    public static int indexCount;
     public static volatile ImmutableRoaringBitmap globalIgnore;
     public volatile RoaringBitmap seenFeatures;
     public static boolean perfectInfo = true;
@@ -62,7 +60,7 @@ public class StateEncoder {
     public synchronized UUID getMyPlayerID() {return myPlayerID;}
 
 
-    public void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
+    private void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
 
         //f.addFeature(manaCost.getText());
         f.addNumericFeature("ManaValue", manaCost.manaValue(), callParent);
@@ -70,7 +68,7 @@ public class StateEncoder {
             f.addFeature(mc.getText());
         }
     }
-    public void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f, Boolean callParent) {
+    private void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f, Boolean callParent) {
 
         //if(c.c) f.addFeature("CanPay"); //use c.canPay()
         if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, callParent);
@@ -79,7 +77,7 @@ public class StateEncoder {
             f.addFeature(cc.getText());
         }
     }
-    public void processAbility(Ability a, Game game, Features f) {
+    private void processAbility(Ability a, Game game, Features f) {
 
         Costs<Cost> c = a.getCosts();
         //for now lets not worry about encoding costs per abilities
@@ -94,13 +92,13 @@ public class StateEncoder {
             }
         }
     }
-    public void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
+    private void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
 
         processAbility(aa, game, f);
 
         if(aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
     }
-    public void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
+    private void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
 
         processAbility(ta, game, f);
 
@@ -109,7 +107,7 @@ public class StateEncoder {
         if(ta.getTriggerEvent() != null) f.addFeature(ta.getTriggerEvent().getType().name());
 
     }
-    public void processCard(Card c, Game game, Features f) {
+    private void processCard(Card c, Game game, Features f) {
 
         f.parent.addFeature("Card");//raw universal type of card added for counting purposes
 
@@ -144,7 +142,7 @@ public class StateEncoder {
         }
 
     }
-    public void processPermBattlefield(Permanent p, Game game, Features f) {
+    private void processPermBattlefield(Permanent p, Game game, Features f) {
 
         processCardInZone(p, Zone.BATTLEFIELD, game, f);
         //is tapped?
@@ -175,7 +173,7 @@ public class StateEncoder {
             f.addNumericFeature("Toughness", p.getToughness().getValue());
         }
     }
-    public void processCardInZone(Card c, Zone z, Game game, Features f) {
+    private void processCardInZone(Card c, Zone z, Game game, Features f) {
 
         //process as card
         processCard(c, game, f);
@@ -196,25 +194,25 @@ public class StateEncoder {
 
         }
     }
-    public void processBattlefield(Battlefield bf, Game game, Features f, UUID playerID) {
+    private void processBattlefield(Battlefield bf, Game game, Features f, UUID playerID) {
         for (Permanent p : bf.getAllActivePermanents(playerID)) {
             Features permFeatures = f.getSubFeatures(p.getName());
             processPermBattlefield(p, game, permFeatures);
         }
     }
-    public void processGraveyard(Graveyard gy, Game game, Features f) {
+    private void processGraveyard(Graveyard gy, Game game, Features f) {
         for (Card c : gy.getCards(game)) {
             Features graveCardFeatures = f.getSubFeatures(c.getName());
             processCardInZone(c, Zone.GRAVEYARD, game, graveCardFeatures);
         }
     }
-    public void processHand(Cards hand, Game game, Features f) {
+    private void processHand(Cards hand, Game game, Features f) {
         for (Card c : hand.getCards(game)) {
             Features handCardFeatures = f.getSubFeatures(c.getName());
             processCardInZone(c, Zone.HAND, game, handCardFeatures);
         }
     }
-    public void processStackObject(StackObject so, int stackPosition, Game game, Features f) {
+    private void processStackObject(StackObject so, int stackPosition, Game game, Features f) {
 
         f.addNumericFeature("StackPosition", stackPosition, false);
         if(so.getControllerId().equals(myPlayerID)) f.addFeature("isController");
@@ -231,7 +229,7 @@ public class StateEncoder {
             }
         }
     }
-    public void processStack(SpellStack stack, Game game, Features f) {
+    private void processStack(SpellStack stack, Game game, Features f) {
         Iterator<StackObject> itr = stack.descendingIterator();
         StackObject so;
         f.addNumericFeature("StackSize", stack.size());
@@ -243,20 +241,20 @@ public class StateEncoder {
             processStackObject(so, i, game, soFeatures);
         }
     }
-    public void processExileZone(ExileZone exileZone, Game game, Features f) {
+    private void processExileZone(ExileZone exileZone, Game game, Features f) {
         for (Card c : exileZone.getCards(game)) {
             Features graveCardFeatures = f.getSubFeatures(c.getName());
             processCardInZone(c, Zone.EXILED, game, graveCardFeatures);
         }
     }
-    public void processExile(Exile exile, Game game, Features f) {
+    private void processExile(Exile exile, Game game, Features f) {
 
         for (ExileZone ez : exile.getExileZones()) {
             Features exileZoneFeatures = f.getSubFeatures(ez.getName());
             processExileZone(ez, game, exileZoneFeatures);
         }
     }
-    public void processManaPool(ManaPool mp, Game game,  Features f) {
+    private void processManaPool(ManaPool mp, Game game,  Features f) {
         f.addNumericFeature("GreenMana", mp.getGreen());
         f.addNumericFeature("RedMana", mp.getRed());
         f.addNumericFeature("BlueMana", mp.getBlue());
@@ -265,7 +263,7 @@ public class StateEncoder {
         f.addNumericFeature("ColorlessMana", mp.getColorless());
         //TODO: deal with conditional mana
     }
-    public void processOpponentState(Game game, UUID activePlayerID) {
+    private void processOpponentState(Game game, UUID activePlayerID) {
         //switch for perspective reasons
         UUID temp = myPlayerID;
         myPlayerID = opponentID;
@@ -325,6 +323,11 @@ public class StateEncoder {
         features.addFeature(decisionType.toString());
         //decision state
         features.addFeature(decisionsText);
+        //current targets selected for when it's in the middle selecting multiple targets
+        Features chosenTargetsFeatures = features.getSubFeatures("ChosenTargets", false);
+        for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
+            chosenTargetsFeatures.addFeature(game.getEntity(targetID));
+        }
 
         //game metadata
         features.addFeature(game.getTurnStepType().toString()); //phases

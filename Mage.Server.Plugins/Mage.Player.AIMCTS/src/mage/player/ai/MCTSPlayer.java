@@ -285,7 +285,7 @@ public class MCTSPlayer extends ComputerPlayer {
         if(possible.size()==1) {
             //if only one possible just choose it and leave
             UUID id = possible.iterator().next();
-            target.addTarget(id, source, game); //id can never be terminal STOP_CHOOSING here
+            target.addTarget(id, source, game); //id can never be STOP_CHOOSING here
             return true;
         }
 
@@ -300,14 +300,16 @@ public class MCTSPlayer extends ComputerPlayer {
             }
             return target.isChosen(game) && !target.getTargets().isEmpty();
         }
-
+        StringBuilder sb = new StringBuilder();
         chooseTargetOptions = possible;
         if(source == null) {
-            decisionText = "null";
+            logger.warn("choose target source is null");
+            sb.append("null");
         } else {
-            logger.debug("choose target source is null");
-            decisionText = source.getRule();
+            sb.append(source.getRule());
         }
+        sb.append(":Choose a target:").append(target.getTargetName());
+        decisionText = sb.toString();
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;

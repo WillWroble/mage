@@ -34,8 +34,7 @@ import java.util.stream.Collectors;
 /**
  * traditional MCTS (Monte Carlo Tree Search), expanded to incorporate micro decisions
  *
- * @author BetaSteward_at_googlemail.com
- * @author WillWroble
+ * @author BetaSteward_at_googlemail.com, WillWroble
  *
  */
 public class ComputerPlayerMCTS extends ComputerPlayer {
@@ -51,10 +50,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)
     public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
     public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
-    //mcts tree doesn't save states if true; makes search slower but more memory efficient
-    //public static boolean USE_STATELESS_NODES =  false;
-    //tree search will now completely ignore states where passing is the only option. still logs the state in the base game for training
-    //public static boolean SKIP_TRANSITION_STATES = true;
     //dirichlet noise is applied once to the priors of the root node; this represents how much of those priors should be noise
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     //how spiky the dirichlet noise will be

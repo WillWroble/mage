@@ -171,7 +171,7 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
                 throw new IllegalArgumentException("Triggers integrity failed: can't finish event before start");
             }
 
-            // must use ability's id to check equal (rules can be diff due usage of dynamic values - alternative to card hints)
+            // must use ability's id to check equal (rules can be diff due usage of dynamic values - alternative to card hints) TODO: optimize, this code slows down simulations significantly.
             List<UUID> needIds = new ArrayList<>();
 //            String needInfo = this.processingNeed.stream()
 //                    .peek(a -> needIds.add(a.getId()))

@@ -1,9 +1,6 @@
 package mage.player.ai;
 
-import mage.abilities.Ability;
-import mage.abilities.ActivatedAbility;
-import mage.abilities.common.PassAbility;
-import mage.abilities.mana.ManaAbility;
+
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
@@ -32,9 +29,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private transient StateEncoder encoder = null;
     private static final int BASE_THREAD_TIMEOUT = 4;//seconds
     private static final int MAX_TREE_VISITS = 150;//per thread
-    public static final int[] PASS_ACTION = {100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    public static final int[] PASS_ACTION = {0,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     public static boolean SHOW_THREAD_INFO = false;
-    /**if offline mode is on won't use a neural network and will instead use a heuristic value function and even priors.
+    /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
     is enabled by default if no network is found*/
     public static boolean OFFLINE_MODE = false;
     public transient RemoteModelEvaluator nn;
@@ -119,27 +116,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     public void setEncoder(StateEncoder enc) {
         encoder = enc;
     }
-    public double diffVisits(List<Integer> children) {
-        int max = -1;
-        int max2 = -1;//second highest
-        for(int n : children) {
-            if(n > max) {
-                max2 = max;
-                max = n;
-            } else if(n > max2) {
-                max2 = n;
-            }
-        }
-        return (max*1.0)/max2;
-    }
-    public int averageVisits(List<Integer> children) {
-        int sum = 0;
-        if(children.isEmpty()) return 0;
-        for(int c : children) {
-            sum += c;
-        }
-        return sum/children.size();
-    }
     @Override
     public boolean priority(Game game) {
         if (game.getTurnStepType() == PhaseStep.END_TURN) {
@@ -182,13 +158,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             // selection
             while (!current.isLeaf()) {
                 current = current.select(this.playerId);
-                //if(current.action != null)logger.info("selected: " + current.action.toString());
             }
             //temporary reference to a game that represents this nodes state
             Game tempGame = null;
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
                 tempGame = current.getGame(); //can become terminal here
-                if(!current.isTerminal() && ((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed) {
+                if(!current.isTerminal() && ((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed) {//remove child if failed
                     current.getParent().children.remove(current);
                     continue;
                 }
@@ -226,10 +201,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     + " seconds - Average: " + (totalThinkTime > 0 ? totalSimulations / totalThinkTime : 0));
         }
         MCTSNode.logHitMiss();
-    }
-
-    int[] getActionVec(MCTSNode node) {
-        return getActionVec(node, true);
     }
     int[] getActionVec(MCTSNode node, boolean isPlayer) {
         int[] out = new int[128];
@@ -296,22 +267,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         } else {
             logger.error("no root found somehow?");
         }
-    }
-    private List<Integer> getChildVisits(List<MCTSExecutor> tasks) {
-        List<Integer> childVisits = new ArrayList<>();
-        int min = Integer.MAX_VALUE;
-        for(MCTSExecutor task : tasks) {
-            if(task.root.children.size()< min) min = task.root.children.size();
-        }
-
-        for(int i = 0; i <  min; i++) {
-            int visitSum = 0;
-            for(int j = 0; j < poolSize; j++) {
-                visitSum += tasks.get(j).root.children.get(i).visits;
-            }
-            childVisits.add(visitSum);
-        }
-        return childVisits;
     }
     /**
      * Helper method to get the visit counts of the root's children for a single tree.

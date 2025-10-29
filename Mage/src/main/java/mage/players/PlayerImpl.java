@@ -1176,7 +1176,7 @@ public abstract class PlayerImpl implements Player, Serializable {
             if (!anyOrder) {
                 // random order
                 List<UUID> ids = new ArrayList<>(cards);
-                Collections.shuffle(ids);
+                Collections.shuffle(ids);//TODO: make deterministic
                 for (UUID id : ids) {
                     moveObjectToLibrary(id, source, game, true);
                 }

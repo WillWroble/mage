@@ -19,7 +19,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         DISCOUNT_FACTOR = 0.97; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
+        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
     }
     @Test
     public void test_single_game() {
@@ -58,7 +58,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         NUM_GAMES_TO_SIMULATE = 200;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
-            DATA_OUT_FILE = "training/"+deckName+"_training3.hdf5";
+            DATA_OUT_FILE = "training/"+deckName+"_training.hdf5";
             DECK_B = deckName;
             super.generateData();
             writeResults("round_robin_train_results.txt", "WR with " + DECK_A + " vs " +
@@ -69,10 +69,10 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     public void roundRobinTest() {
         //DECK_A = "WillS_Tempo";
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
-        NUM_GAMES_TO_SIMULATE = 8;
+        NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
-            DATA_OUT_FILE = "testing/"+deckName+"_testing3.hdf5";
+            DATA_OUT_FILE = "testing/"+deckName+"_testing.hdf5";
             DECK_B = deckName;
             super.generateData();
             writeResults("round_robin_test_results.txt", "WR with " + DECK_A + " vs " +
