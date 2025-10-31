@@ -48,9 +48,9 @@ import static java.nio.file.StandardOpenOption.READ;
 public class ParallelDataGenerator extends CardTestPlayerBaseAI {
 
     // ============================ DATA GENERATION SETTINGS ============================
-    protected static int NUM_GAMES_TO_SIMULATE = 100;
+    protected static int NUM_GAMES_TO_SIMULATE = 250;
     protected static int MAX_GAME_TURNS = 50;
-    protected static int MAX_CONCURRENT_GAMES = 8;
+    protected static int MAX_CONCURRENT_GAMES = 6;
     // =============================== AI SETTINGS ===============================
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
@@ -60,7 +60,7 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // =============================== MATCH SETTINGS ===============================
     protected static boolean ALWAYS_GO_FIRST = false;
     protected static boolean ALLOW_MULLIGANS = false; //TODO: implement mulligans
-    protected static String DECK_A = "UWTempo";
+    protected static String DECK_A = "elfballing";
     protected static String DECK_B = "MTGA_MonoU";
     protected static String MODEL_URL_A = "http://127.0.0.1:50052";
     protected static String MODEL_URL_B = "http://127.0.0.1:50053";
