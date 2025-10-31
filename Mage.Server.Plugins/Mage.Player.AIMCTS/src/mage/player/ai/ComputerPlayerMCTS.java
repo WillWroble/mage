@@ -103,11 +103,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
-        //TODO: make more robust filtering
         //(some mana abilities have other effects)
         List<Ability> playableAbilities = getPlayableOptions(game);
-        if(playableAbilities.size() < 2 &&
-                !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//declare attackers and blockers are always checkpoint for perf reasons
+        if(playableAbilities.size() < 2 && !game.isCheckPoint()) {
             logger.info("auto pass");
             pass(game);
             return false;
@@ -232,12 +230,15 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
-        logger.info("base choose target " + (source == null ? "null" : source.toString()));
         // choose itself for starting player all the time
         if (target.getMessage(game).equals("Select a starting player")) {
             target.add(this.getId(), game);
             return true;
         }
+        if(game.getPhase() == null) {//TODO: implement pre-game decisions properly
+            return super.makeChoice(outcome, target, source, game, fromCards);
+        }
+
         // nothing to choose
         if (fromCards != null && fromCards.isEmpty()) {
             return false;
@@ -249,7 +250,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) {
             return false;
         }
-
+        logger.info("base choose target " + (source == null ? "null" : source.toString()));
         Set<UUID> possible = target.possibleTargets(abilityControllerId, source, game, fromCards).stream().filter(id -> !target.contains(id)).collect(Collectors.toSet());
         logger.info("possible targets: " + possible.size());
         // nothing to choose, e.g. no valid targets
@@ -268,6 +269,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         getNextAction(game, NextAction.CHOOSE_TARGET);
 
         UUID targetId = root.chooseTargetAction;
+        if(targetId == null) {
+            logger.error("target id is null");
+        }
         logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
         getPlayerHistory().targetSequence.add(targetId);
 
@@ -281,8 +285,13 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if(outcome == Outcome.PutManaInPool || choice.getChoices().size() == 1) {
-            return super.choose(outcome, choice, game);
+        if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1) {
+            return chooseHelper(outcome, choice, game);
+        }
+        if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
+            if (chooseCreatureType(outcome, choice, game)) {
+                return true;
+            }
         }
         logger.info("base make choice " + choice.toString());
         choiceOptions = new HashSet<>(choice.getChoices());
@@ -301,9 +310,14 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         logger.info("base choose use " + message);
-
+        if(game.getPhase() == null) {//TODO: implement pre-game decisions properly
+            return true;
+        }
         getNextAction(game, NextAction.CHOOSE_USE);
         Boolean chosen = root.useAction;
+        if(chosen == null) {
+            logger.error("chosen is null");
+        }
         logger.info("use " + message + ": " + chosen);
         getPlayerHistory().useSequence.add(chosen);
         return chosen;

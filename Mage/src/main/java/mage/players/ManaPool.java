@@ -31,7 +31,7 @@ public class ManaPool implements Serializable {
 
     private final UUID playerId;
 
-    private final List<ManaPoolItem> manaItems = new ArrayList<>();
+    private final ManaItems manaItems = new ManaItems();
 
     private boolean autoPayment; // auto payment from mana pool: true - mode is active
     private boolean autoPaymentRestricted; // auto payment from mana pool: true - if auto Payment is on, it will only pay if one kind of mana is in the pool
@@ -110,6 +110,7 @@ public class ManaPool implements Serializable {
      * @return
      */
     public boolean pay(ManaType manaType, Ability ability, Filter filter, Game game, Cost costToPay, Mana usedManaToPay) {
+        //for MCTS determinism TODO: optimize
         if (!isAutoPayment() && manaType != unlockedManaType) {
             // if manual payment and the needed mana type was not unlocked, nothing will be paid
             return false;
@@ -414,6 +415,7 @@ public class ManaPool implements Serializable {
                 manaEvent.setData(mana.toString());
                 game.fireEvent(manaEvent);
             }
+            //manaItems.sort(Comparator.comparing(ManaPoolItem::getSourceId));
         }
     }
 

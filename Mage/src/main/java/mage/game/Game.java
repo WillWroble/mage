@@ -50,6 +50,7 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
 //    void setMacroState(Game game);
 //    void setMacroPlayerId(UUID id);
 //    void setLastAction(Ability ability);
+    boolean isCheckPoint();
     Random getLocalRandom();
     void setLocalRandom(Random random);
     Game getLastPriority();

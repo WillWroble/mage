@@ -3660,6 +3660,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         availableMana.remove(new Mana()); // Remove any empty mana that was left over from the way the code is written
 
         // make sure it independent of sim game
+        ManaOptions out = availableMana.copy();
         return availableMana.copy();
     }
 

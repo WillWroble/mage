@@ -308,6 +308,14 @@ public abstract class GameImpl implements Game {
             lastPriority = this.copy();
         }
     }
+    public boolean isCheckPoint() {
+        boolean isStarting = getTurnNum()==1 && getTurnStepType().equals(PhaseStep.UPKEEP);
+        //forced checkpoint before combat decisions
+        boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT); //&& getStack().isEmpty();
+        boolean isPreBlock = getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS); //&& getStack().isEmpty();
+        boolean isPostBlock = getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS);
+        return isStarting || isPreAttack ||  isPreBlock || isPostBlock;
+    }
     @Override
     public boolean isSimulation() {
         return simulation;
@@ -1817,11 +1825,6 @@ public abstract class GameImpl implements Game {
                                 if (isPaused() || checkIfGameIsOver()) {
                                     return;
                                 }
-//                                if(!isSimulation()) {
-//                                    lastPriorityPlayerId = player.getId();
-//                                    lastPriority = this.copy();
-//                                }
-                                //clearHistory();
                                 state.priorityCounter++;
                                 // resetPassed should be called if player performs any action
                                 if (player.priority(this)) {

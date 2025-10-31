@@ -236,7 +236,7 @@ public class MCTSNode {
         List<MCTSNode> children = new ArrayList<>();
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
             for(Ability playable : player.playables) {
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + playable.toString());
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + playable.toString());
                 MCTSNode node = new MCTSNode(this, playable);
                 children.add(node);
             }
@@ -248,7 +248,7 @@ public class MCTSNode {
                 for (UUID attackerId: attack) {
                     newCombat.addAttackerToCombat(attackerId, defenderId, game);
                 }
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + newCombat.toString());
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + newCombat.toString());
                 MCTSNode node = new MCTSNode(this, newCombat);
                 children.add(node);
             }
@@ -261,7 +261,7 @@ public class MCTSNode {
                     //group = attacker
                     CombatGroup group = groups.get(i);
                     if(group.getAttackers().isEmpty()) {//failsafe
-                        logger.warn("empty attacking group");
+                        logger.debug("empty attacking group");
                         continue;
                     }
                     if (i < block.size()) {
@@ -271,13 +271,13 @@ public class MCTSNode {
                         }
                     }
                 }
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + newCombat.toString());
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + newCombat.toString());
                 children.add(new MCTSNode(this, newCombat));
             }
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
             Set<UUID> targetOptions = player.chooseTargetOptions;
             for(UUID target : targetOptions) {
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + game.getEntity(target));
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + game.getEntity(target));
                 MCTSNode node = new MCTSNode(this, action);
                 node.chooseTargetAction = target;
                 children.add(node);
@@ -285,7 +285,7 @@ public class MCTSNode {
         } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
             Set<String> choiceOptions = player.choiceOptions;
             for(String choice : choiceOptions) {
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + choice);
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + choice);
                 MCTSNode node = new MCTSNode(this, action);
                 node.choiceAction = choice;
                 children.add(node);
@@ -297,8 +297,8 @@ public class MCTSNode {
             nodeFalse.useAction = false;
             children.add(nodeTrue);
             children.add(nodeFalse);
-            logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: true");
-            logger.debug(game.getTurn().getValue(game.getTurnNum()) + " expanding: false");
+            logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: true");
+            logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: false");
         } else {
             logger.error("unknown nextAction");
         }
@@ -309,7 +309,7 @@ public class MCTSNode {
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
             idx = ActionEncoder.getActionIndex(node.getAction(), game.getPlayer(playerId).getName().equals("PlayerA"));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
-            idx = ActionEncoder.getTargetIndex(game.getEntity(node.chooseTargetAction).toString());
+            idx = ActionEncoder.getTargetIndex(game.getEntity(node.chooseTargetAction));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
             idx = node.useAction ? 1 : 0;
         } else {
@@ -491,6 +491,16 @@ public class MCTSNode {
         if (parent != null) {
             this.parent.children.remove(this);
             this.parent = null;
+        }
+    }
+    public void purge(MCTSNode node) {
+        if(!children.contains(node)) {
+            logger.error("invalid purge");
+            return;
+        }
+        children.remove(node);
+        if(children.isEmpty()) {
+            parent.purge(this);
         }
     }
     public MCTSNode getRoot() {

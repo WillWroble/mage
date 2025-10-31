@@ -164,7 +164,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
                 tempGame = current.getGame(); //can become terminal here
                 if(!current.isTerminal() && ((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed) {//remove child if failed
-                    current.getParent().children.remove(current);
+                    current.getParent().purge(current);
                     continue;
                 }
             }

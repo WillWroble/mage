@@ -330,7 +330,7 @@ public class StateEncoder {
         }
 
         //game metadata
-        features.addFeature(game.getTurnStepType().toString()); //phases
+        if(game.getPhase() != null) features.addFeature(game.getTurnStepType().toString()); //phases
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
         if(actingPlayerID.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());

@@ -39,6 +39,7 @@ import org.apache.log4j.Logger;
 import java.io.Serializable;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 /**
  * AI: basic server side bot with simple actions support (game, draft, construction/sideboarding).
@@ -697,7 +698,7 @@ public class ComputerPlayer extends PlayerImpl {
         Abilities<ActivatedManaAbilityImpl> manaAbilities = mageObject.getAbilities().getAvailableActivatedManaAbilities(Zone.BATTLEFIELD, playerId, game);
         if (manaAbilities.size() > 1) {
             // Sort mana abilities by number of produced manas, to use ability first that produces most mana (maybe also conditional if possible)
-            Collections.sort(manaAbilities, (a1, a2) -> {
+            manaAbilities.sort((a1, a2) -> {
                 int a1Max = 0;
                 for (Mana netMana : a1.getNetMana(game)) {
                     if (netMana.count() > a1Max) {
@@ -709,6 +710,9 @@ public class ComputerPlayer extends PlayerImpl {
                     if (netMana.count() > a2Max) {
                         a2Max = netMana.count();
                     }
+                }
+                if(a1Max == a2Max){
+                    return a1.getId().compareTo(a2.getId());
                 }
                 return CardUtil.overflowDec(a2Max, a1Max);
             });
@@ -760,13 +764,14 @@ public class ComputerPlayer extends PlayerImpl {
     }
 
     private List<MageObject> sortByValue(Map<MageObject, Integer> map) {
-        List<Entry<MageObject, Integer>> list = new LinkedList<>(map.entrySet());
-        Collections.sort(list, Comparator.comparing(Entry::getValue));
-        List<MageObject> result = new ArrayList<>();
-        for (Entry<MageObject, Integer> entry : list) {
-            result.add(entry.getKey());
-        }
-        return result;
+        Comparator<MageObject> keyCompare = Comparator.comparing(MageItem::getId);
+        return map.entrySet().stream()
+                .sorted(Comparator
+                        .comparing(Entry<MageObject,Integer>::getValue)
+                        .thenComparing(Entry.comparingByKey(keyCompare))
+                )
+                .map(Entry::getKey)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -850,6 +855,14 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
+        if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
+            if (chooseCreatureType(outcome, choice, game)) {
+                return true;
+            }
+        }
+        if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1) {
+            return chooseHelper(outcome, choice, game);
+        }
         boolean out = chooseHelper(outcome, choice, game);
         getPlayerHistory().choiceSequence.add(choice.getChoice());
         return out;
@@ -924,6 +937,7 @@ public class ComputerPlayer extends PlayerImpl {
     @Override
     public boolean choosePile(Outcome outcome, String message, List<? extends Card> pile1, List<? extends Card> pile2, Game game) {
         //TODO: improve this
+        logger.error("choosePile");
         return true; // select left pile all the time
     }
 
@@ -979,6 +993,8 @@ public class ComputerPlayer extends PlayerImpl {
     @Override
     public int chooseReplacementEffect(Map<String, String> effectsMap, Map<String, MageObject> objectsMap, Game game) {
         //TODO: implement this
+        logger.warn("chooseReplacementEffect");
+
         return 0; // select first effect all the time
     }
 
@@ -1372,6 +1388,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public SpellAbility chooseAbilityForCast(Card card, Game game, boolean noMana) {
+        logger.warn("chooseAbilityForCast");
         Map<UUID, SpellAbility> usable = PlayerImpl.getCastableSpellAbilities(game, this.getId(), card, game.getState().getZone(card.getId()), noMana);
         return usable.values().stream()
                 .filter(a -> a.getTargets().canChoose(getId(), a, game))

@@ -893,11 +893,19 @@ public class ContinuousEffects implements Serializable {
                 Map<String, MageObject> objectsMap = new LinkedHashMap<>();
                 prepareReplacementEffectMaps(rEffects, game, effectsMap, objectsMap);
                 index = player.chooseReplacementEffect(effectsMap, objectsMap, game);
+                rEffects = rEffects.entrySet().stream().sorted(Comparator.comparing(e -> e.getKey().toString())).
+                        collect(Collectors.toMap(
+                                Map.Entry::getKey,
+                                Map.Entry::getValue,
+                                (a, b) -> a,
+                                LinkedHashMap::new
+                        ));
             }
             // get the selected effect
             int checked = 0;
             ReplacementEffect rEffect = null;
             Ability rAbility = null;
+            //rEffects.entrySet().stream().sorted(Comparator.comparing(Auto i -> i))
             for (Map.Entry<ReplacementEffect, Set<Ability>> entry : rEffects.entrySet()) {
                 if (entry.getValue() == null) {
                     if (checked == index) {

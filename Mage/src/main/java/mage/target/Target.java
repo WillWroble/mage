@@ -204,7 +204,7 @@ public interface Target extends Copyable<Target>, Serializable {
      * Priority method to make a choice from cards and other places, not a player.chooseXXX
      */
     default boolean choose(Outcome outcome, UUID playerId, Ability source, Game game) {
-        return choose(outcome, playerId, source == null ? null : source.getSourceId(), source, game);
+        return chooseTarget(outcome, playerId, source, game);
     }
 
     /**

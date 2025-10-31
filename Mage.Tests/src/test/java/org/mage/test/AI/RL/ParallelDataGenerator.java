@@ -60,8 +60,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     // =============================== MATCH SETTINGS ===============================
     protected static boolean ALWAYS_GO_FIRST = false;
     protected static boolean ALLOW_MULLIGANS = false; //TODO: implement mulligans
-    protected static String DECK_A = "UWTempo";
-    protected static String DECK_B = "MTGA_MonoU";
+    protected static String DECK_A = "GBLegends";
+    protected static String DECK_B = "MTGA_MonoR";
     protected static String MODEL_URL_A = "http://127.0.0.1:50052";
     protected static String MODEL_URL_B = "http://127.0.0.1:50053";
     // ================================== FILE PATHS ==================================

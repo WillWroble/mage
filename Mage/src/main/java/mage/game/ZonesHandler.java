@@ -411,9 +411,12 @@ public final class ZonesHandler {
                 else if (card instanceof ModalDoubleFacedCard) {
                     // main mdf card must be processed before that call (e.g. only halves can be moved to battlefield)
                     throw new IllegalStateException("Unexpected trying of move mdf card to battlefield instead half");
-                } else if (card instanceof Permanent) {
-                    throw new IllegalStateException("Unexpected trying of move permanent to battlefield instead card");
-                } else {
+                }
+                //TODO: safe to remove @JayDi? (mdfc vorinclex triggered this)
+//                else if (card instanceof Permanent) {
+//                    throw new IllegalStateException("Unexpected trying of move permanent to battlefield instead card");
+//                }
+                else {
                     permanent = new PermanentCard(card, event.getPlayerId(), game);
                 }
 

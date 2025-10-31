@@ -161,8 +161,8 @@ public class MCTSPlayer extends ComputerPlayer {
             //game.firePriorityEvent(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
             boolean success = activateAbility(ability, game);
-            if(!success) {
-                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
+            if(!success && !lastToAct) {//if decision costs need to be resolved let them simulate out
+                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
                 scriptFailed = true;
                 game.pause();
                 lastToAct = true;
@@ -173,8 +173,7 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         playables = getPlayableOptions(game);
-        if(playables.size() == 1 && //skip transition states
-                !(game.getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS) || game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS))) {//forced checkpoint before combat
+        if(playables.size() == 1 && !game.isCheckPoint()) {//forced checkpoint at start
             pass(game);
             return false;
         }
@@ -249,9 +248,6 @@ public class MCTSPlayer extends ComputerPlayer {
         if (game.isPaused() || game.checkIfGameIsOver())
             return makeChoiceHelper(outcome, target, source, game, fromCards); //if game is already paused don't overwrite last decision
 
-        if (PRINT_CHOOSE_DIALOGUES)
-            logger.debug("CALLING CHOOSE TARGET: " + (source == null ? "null" : source.toString()));
-
         // choose itself for starting player all the time
         if (target.getMessage(game).equals("Select a starting player")) {
             target.add(this.getId(), game);
@@ -260,7 +256,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
         // nothing to choose
         if (fromCards != null && fromCards.isEmpty()) {
-            logger.info("no cards to choose from");
+            logger.debug("no cards to choose from");
             return false;
         }
 
@@ -275,7 +271,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
         // nothing to choose, e.g. no valid targets
         if (possible.isEmpty()) {
-            logger.info("none possible - fizzle");
+            logger.debug("none possible - fizzle");
             return false;
         }
         if(target.isChosen(game)) {
@@ -303,7 +299,7 @@ public class MCTSPlayer extends ComputerPlayer {
         StringBuilder sb = new StringBuilder();
         chooseTargetOptions = possible;
         if(source == null) {
-            logger.warn("choose target source is null");
+            logger.debug("choose target source is null");
             sb.append("null");
         } else {
             sb.append(source.getRule());
@@ -317,8 +313,13 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if (outcome == Outcome.PutManaInPool || game.isPaused() || game.checkIfGameIsOver()) {
-            return super.choose(outcome, choice, game);
+        if (outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1 || game.isPaused() || game.checkIfGameIsOver()) {
+            return chooseHelper(outcome, choice, game);
+        }
+        if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
+            if (chooseCreatureType(outcome, choice, game)) {
+                return true;
+            }
         }
         //for choosing colors/types etc
         if (PRINT_CHOOSE_DIALOGUES) logger.debug("CALLING MAKE CHOICE: " + choice.toString());
@@ -331,7 +332,7 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         choiceOptions = new HashSet<>(choice.getChoices());
         if(choiceOptions.isEmpty()) {
-            logger.warn("no choice options - fizzle");
+            logger.debug("no choice options - fizzle");
             return false; //fizzle
         }
         decisionText = choice.toString();
@@ -340,7 +341,6 @@ public class MCTSPlayer extends ComputerPlayer {
         nextAction = NextAction.MAKE_CHOICE;
         return chooseHelper(outcome, choice, game);
     }
-    //TODO: needs special care when handling alternate costs (eg. phyrexian). Sometimes getPlayble() only returns an ability that can be payed with one cost option.
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) {
