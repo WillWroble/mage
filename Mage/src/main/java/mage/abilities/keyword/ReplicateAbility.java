@@ -1,13 +1,12 @@
 package mage.abilities.keyword;
 
-import mage.abilities.Ability;
-import mage.abilities.SpellAbility;
-import mage.abilities.StaticAbility;
-import mage.abilities.TriggeredAbilityImpl;
+import mage.Mana;
+import mage.abilities.*;
 import mage.abilities.costs.*;
 import mage.abilities.costs.mana.ManaCostsImpl;
 import mage.abilities.effects.Effect;
 import mage.abilities.effects.OneShotEffect;
+import mage.abilities.mana.ManaOptions;
 import mage.cards.Card;
 import mage.constants.Outcome;
 import mage.constants.Zone;
@@ -17,8 +16,11 @@ import mage.game.stack.Spell;
 import mage.game.stack.StackObject;
 import mage.players.Player;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.UUID;
+
+import static java.lang.Integer.max;
 
 /**
  * @author LevelX2
@@ -88,6 +90,8 @@ public class ReplicateAbility extends StaticAbility implements OptionalAdditiona
 
         this.resetReplicate();
         boolean again = true;
+        ManaOptions manaOptions = player.getManaAvailable(game);
+        Mana base = ability.getManaCostsToPay().getMana().copy();
         while (player.canRespond() && again) {
             String times = "";
             if (additionalCost.isRepeatable()) {
@@ -96,17 +100,19 @@ public class ReplicateAbility extends StaticAbility implements OptionalAdditiona
             }
             String payPrompt = "Pay " + times + additionalCost.getText(false) + " ?";
 
-            // TODO: add AI support to find max number of possible activations (from available mana)
-            //  canPay checks only single mana available, not total mana usage
-            boolean canPay = additionalCost.canPay(ability, this, ability.getControllerId(), game);
+            // TODO: add AI support for non mana costs
+
+            boolean canPay = manaOptions.stream().anyMatch(m -> m.includesMana(base));
+
             if (!canPay || !player.chooseUse(/*Outcome.Benefit*/Outcome.AIDontUseIt, payPrompt, ability, game)) {
                 again = false;
             } else {
                 additionalCost.activate();
-                for (Iterator it = ((Costs) additionalCost).iterator(); it.hasNext(); ) {
-                    Cost cost = (Cost) it.next();
+                for (Object o : (Costs) additionalCost) {
+                    Cost cost = (Cost) o;
                     if (cost instanceof ManaCostsImpl) {
                         ability.addManaCostsToPay((ManaCostsImpl) cost.copy());
+                        base.add(((ManaCostsImpl<?>) cost).getMana());
                     } else {
                         ability.addCost(cost.copy());
                     }

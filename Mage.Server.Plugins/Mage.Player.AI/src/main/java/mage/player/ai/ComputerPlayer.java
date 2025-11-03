@@ -20,6 +20,7 @@ import mage.constants.*;
 import mage.filter.common.FilterLandCard;
 import mage.game.Game;
 import mage.game.draft.Draft;
+import mage.game.events.GameEvent;
 import mage.game.match.Match;
 import mage.game.permanent.Permanent;
 import mage.game.tournament.Tournament;
@@ -622,8 +623,7 @@ public class ComputerPlayer extends PlayerImpl {
         // GUI: user see "special" button while pay spell's cost
         // TODO: AI can't prioritize special mana types to pay, e.g. it will use first available
         SpecialAction specialAction = game.getState().getSpecialActions().getControlledBy(this.getId(), true).values()
-                .stream()
-                .findFirst()
+                .stream().min(Comparator.comparing(SpecialAction::toString))
                 .orElse(null);
         ManaOptions specialMana = specialAction == null ? null : specialAction.getManaOptions(ability, game, unpaid);
         if (specialMana != null) {
@@ -952,15 +952,20 @@ public class ComputerPlayer extends PlayerImpl {
      * @param attackingPlayerId
      */
     public void selectAttackersOneAtATime(Game game, UUID attackingPlayerId) {
-        logger.debug("selectAttackersOneAtATime");
-        UUID opponentId = game.getCombat().getDefenders().iterator().next();
-        List<Permanent> availableAttackers = getAvailableAttackers(game);
-        availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
-        for(Permanent attacker : availableAttackers) {
-            boolean willAttack = chooseUse(Outcome.Neutral, "attack with: " + attacker.getName() + "?", null, game);
-            if(willAttack) {
-                this.declareAttacker(attacker.getId(), opponentId, game, false);
+
+        game.fireEvent(new GameEvent(GameEvent.EventType.DECLARE_ATTACKERS_STEP_PRE, null, null, attackingPlayerId));
+        if (!game.replaceEvent(GameEvent.getEvent(GameEvent.EventType.DECLARING_ATTACKERS, attackingPlayerId, attackingPlayerId))) {
+            logger.debug("selectAttackersOneAtATime");
+            UUID opponentId = game.getCombat().getDefenders().iterator().next();
+            List<Permanent> availableAttackers = getAvailableAttackers(game);
+            availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
+            for (Permanent attacker : availableAttackers) {
+                boolean willAttack = chooseUse(Outcome.Neutral, "attack with: " + attacker.getName() + "?", null, game);
+                if (willAttack) {
+                    this.declareAttacker(attacker.getId(), opponentId, game, false);
+                }
             }
+            game.getPlayers().resetPassed();
         }
     }
 
@@ -977,16 +982,20 @@ public class ComputerPlayer extends PlayerImpl {
      */
     public void selectBlockersOneAtATime(Ability source, Game game, UUID defendingPlayerId) {
         logger.debug("selectBlockersOneAtATime");
-        List<Permanent> blockers = getAvailableBlockers(game);
-        blockers.sort(Comparator.comparing(Permanent::getId));
-        for(Permanent blocker : blockers) {
-            boolean willBlock = chooseUse(Outcome.Neutral, "block with: " + blocker.getName() + "?", null, game);
-            if(willBlock) {//now choose which creature to block
-                Target attackerTarget = new TargetAttackingCreature(1);
-                makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game, null);
-                UUID attackerId = attackerTarget.getFirstTarget();
-                declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
+        game.fireEvent(new GameEvent(GameEvent.EventType.DECLARE_BLOCKERS_STEP_PRE, null, null, defendingPlayerId));
+        if (!game.replaceEvent(GameEvent.getEvent(GameEvent.EventType.DECLARING_BLOCKERS, defendingPlayerId, defendingPlayerId))) {
+            List<Permanent> blockers = getAvailableBlockers(game);
+            blockers.sort(Comparator.comparing(Permanent::getId));
+            for (Permanent blocker : blockers) {
+                boolean willBlock = chooseUse(Outcome.Neutral, "block with: " + blocker.getName() + "?", null, game);
+                if (willBlock) {//now choose which creature to block
+                    Target attackerTarget = new TargetAttackingCreature(1);
+                    makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game, null);
+                    UUID attackerId = attackerTarget.getFirstTarget();
+                    declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
+                }
             }
+            game.getPlayers().resetPassed();
         }
     }
 
@@ -1389,11 +1398,28 @@ public class ComputerPlayer extends PlayerImpl {
     @Override
     public SpellAbility chooseAbilityForCast(Card card, Game game, boolean noMana) {
         logger.warn("chooseAbilityForCast");
-        Map<UUID, SpellAbility> usable = PlayerImpl.getCastableSpellAbilities(game, this.getId(), card, game.getState().getZone(card.getId()), noMana);
-        return usable.values().stream()
-                .filter(a -> a.getTargets().canChoose(getId(), a, game))
-                .findFirst()
-                .orElse(null);
+
+        Map<UUID, SpellAbility> usable = PlayerImpl.getCastableSpellAbilities(
+                game, this.getId(), card, game.getState().getZone(card.getId()), noMana);
+
+        // Prefer entries that can currently choose targets (if any)
+        Optional<Map.Entry<UUID, SpellAbility>> best = usable.entrySet().stream()
+                .filter(e -> {
+                    SpellAbility sa = e.getValue();
+                    return sa.getTargets() == null || sa.getTargets().canChoose(getId(), sa, game);
+                })
+                .min(Map.Entry.comparingByKey());
+
+        if (best.isPresent()) {
+            return best.get().getValue();
+        }
+
+        // Fallback: pick a deterministic variant even if targets can’t be chosen yet
+        return usable.entrySet().stream()
+                .min(Map.Entry.comparingByKey())
+                .map(Map.Entry::getValue)
+                .orElse(null); // if truly no variants, let caller handle gracefully
+
     }
 
     @Override

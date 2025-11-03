@@ -8,6 +8,7 @@ import mage.cards.Card;
 import mage.cards.decks.Deck;
 import mage.cards.decks.DeckCardLists;
 import mage.cards.decks.importer.DeckImporter;
+import mage.cards.repository.CardInfo;
 import mage.constants.*;
 import mage.game.*;
 import mage.game.match.Match;
@@ -15,12 +16,15 @@ import mage.game.match.MatchOptions;
 import mage.game.mulligan.MulliganType;
 import mage.game.permanent.token.Token;
 import mage.player.ai.*;
+import mage.players.Player;
 import mage.util.RandomUtil;
+import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 import org.mage.test.player.TestComputerPlayer8;
 import org.mage.test.player.TestPlayer;
 import org.mage.test.serverside.base.CardTestPlayerBaseAI;
+import org.mage.test.serverside.base.MageTestPlayerBase;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
@@ -29,7 +33,6 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
@@ -45,7 +48,7 @@ import static java.nio.file.StandardOpenOption.READ;
  * for how to use
  *
  */
-public class ParallelDataGenerator extends CardTestPlayerBaseAI {
+public class ParallelDataGenerator {
 
     // ============================ DATA GENERATION SETTINGS ============================
     protected static int NUM_GAMES_TO_SIMULATE = 100;
@@ -79,6 +82,14 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
     private RemoteModelEvaluator remoteModelEvaluatorB;
     private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(32);
     private final AtomicBoolean stop = new AtomicBoolean(false);
+
+    protected static Map<String, DeckCardLists> loadedDecks = new HashMap<>(); // deck's cache
+    protected static Map<String, CardInfo> loadedCardInfo = new HashMap<>(); // db card's cache
+
+    protected TestPlayer playerA;
+    protected TestPlayer playerB;
+
+    protected static Logger logger = Logger.getLogger(ParallelDataGenerator.class);
 
 
 
@@ -309,15 +320,15 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         threadEncoder.setOpponent(playerB.getId());
 
 
-        setStrictChooseMode(true);
-        setStopAt(maxTurn, PhaseStep.END_TURN);
+        //setStrictChooseMode(true);
+        //setStopAt(maxTurn, PhaseStep.END_TURN);
         /* usage example for manual card insertion
         GameImpl.drawHand = false;
         addCard(Zone.BATTLEFIELD, playerA, "Island", 2);
         addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
         addCard(Zone.HAND, playerA, "Combat Research", 7);
          */
-        execute();
+        //execute();
         //saveRoaring(threadEncoder.seenFeatures, SEEN_FEATURES_PATH);
 
     }
@@ -453,8 +464,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
             MatchOptions matchOptions = new MatchOptions("test match", "test game type", false);
             Match localMatch = new TwoPlayerMatch(matchOptions);
             game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-            TestPlayer playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
-            TestPlayer playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
+            Player playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
+            Player playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
 
             threadEncoder.seenFeatures = seenFeatures.clone();
 
@@ -502,18 +513,18 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
     }
 
-    private void configurePlayer(TestPlayer player, StateEncoder encoder) {
-        if (player.getComputerPlayer() instanceof ComputerPlayerMCTS2) {
-            ((ComputerPlayerMCTS2) player.getComputerPlayer()).setEncoder(encoder);
+    private void configurePlayer(Player player, StateEncoder encoder) {
+        if (player.getRealPlayer() instanceof ComputerPlayerMCTS2) {
+            ((ComputerPlayerMCTS2) player.getRealPlayer()).setEncoder(encoder);
             if(player.getName().equals("PlayerA")) {
-                ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluatorA;
+                ((ComputerPlayerMCTS2) player.getRealPlayer()).nn = remoteModelEvaluatorA;
             } else {
-                ((ComputerPlayerMCTS2) player.getComputerPlayer()).nn = remoteModelEvaluatorB;
+                ((ComputerPlayerMCTS2) player.getRealPlayer()).nn = remoteModelEvaluatorB;
             }
-        } else if (player.getComputerPlayer() instanceof ComputerPlayer8) {
-            ((ComputerPlayer8) player.getComputerPlayer()).setEncoder(encoder);
+        } else if (player.getRealPlayer() instanceof ComputerPlayer8) {
+            ((ComputerPlayer8) player.getRealPlayer()).setEncoder(encoder);
         } else  {
-            logger.warn("unexpected player type" + player.getComputerPlayer().getClass().getName());
+            logger.warn("unexpected player type" + player.getRealPlayer().getClass().getName());
         }
     }
     private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
@@ -549,19 +560,8 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
                         .thenComparing(Map.Entry::getKey)) // tie-breaker: key asc
                 .forEach(e -> System.out.printf("%-" + maxKeyLen + "s  : %,d%n", e.getKey(), e.getValue()));
     }
-    @Override
-    public List<String> getFullSimulatedPlayers() {
-        return Arrays.asList("PlayerA", "PlayerB");
-    }
-    @Override
-    protected Game createNewGameAndPlayers() throws GameException, FileNotFoundException {
-        Game game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-        playerA = createPlayer(game, "PlayerA", DECK_A_PATH);
-        playerB = createPlayer(game, "PlayerB", DECK_B_PATH);
-        return game;
-    }
-    protected TestPlayer createLocalPlayer(Game game, String name, String deckName, Match match) throws GameException {
-        TestPlayer player = createNewPlayer(name, game.getRangeOfInfluence());
+    protected Player createLocalPlayer(Game game, String name, String deckName, Match match) throws GameException {
+        Player player = createPlayer(name, game.getRangeOfInfluence());
         player.setTestMode(true);
 
         logger.debug("Loading deck...");
@@ -600,18 +600,17 @@ public class ParallelDataGenerator extends CardTestPlayerBaseAI {
         }
     }
     // This is the correct override to use for choosing our AI types.
-    @Override
-    protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
+    protected Player createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (name.equals("PlayerA")) {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(t8);
-            testPlayer.setAIPlayer(true);
-            return testPlayer;
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, 6);
+            //Player testPlayer = new Player(t8);
+            //testPlayer.setAIPlayer(true);
+            return t8;
         } else {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(t8);
-            testPlayer.setAIPlayer(true);
-            return testPlayer;
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, 6);
+            //Player testPlayer = new Player(t8);
+            //testPlayer.setAIPlayer(true);
+            return t8;
         }
     }
 }

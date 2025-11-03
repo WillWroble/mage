@@ -357,7 +357,7 @@ public class MCTSPlayer extends ComputerPlayer {
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_USE;
-        return true; //defaults to use since this seems to avoid most mana cost handling issues
+        return false; //defaults to try to avoid infinite use issues from poorly implemented abilities
     }
 }
 

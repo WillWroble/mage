@@ -90,6 +90,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 act(game);
                 return true;
             case DECLARE_BLOCKERS:
+                log.info("DECLARE_BLOCKERS CP8");
                 //printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);

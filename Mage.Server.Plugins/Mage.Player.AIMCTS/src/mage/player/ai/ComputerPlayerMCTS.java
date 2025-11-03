@@ -56,7 +56,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static double POLICY_PRIOR_TEMP = 1.5;
     public static boolean ROUND_ROBIN_MODE = false;
     //adjust based on available RAM and threads running
-    public static int MAX_TREE_NODES = 800;
+    public static int MAX_TREE_NODES = 10000;
 
     public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
 
@@ -65,6 +65,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
     public int poolSize = 2;
     protected transient ExecutorService threadPoolSimulations = null;
+    public int visitBudget = 150;
 
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
@@ -110,13 +111,37 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             pass(game);
             return false;
         }
+        if(game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS)) {
+            logger.info("DECLARE_BLOCKERS CPMCTS");
+        }
         game.setLastPriority(playerId);
-        getNextAction(game, NextAction.PRIORITY);
+        Ability ability = null;
+        MCTSNode best = getNextAction(game, NextAction.PRIORITY);
+        MCTSNode oldRoot = root;
+        root.emancipate();
+        boolean success = false;
+        while (!success) {
+            if(best != null && best.getAction() != null) {
+                ability = best.getAction().copy();
+                if (ability == null)
+                    logger.fatal("null ability");
+                success = activateAbility((ActivatedAbility) ability, game);
+            }
+            if(!success) {
+                logger.info("Failed to resolve micro decisions for ability looking again for legal path");
+                root = oldRoot;
+                getPlayerHistory().clear();
+                getPlayerHistory().append(root.prefixScript);
+                Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+                opponent.getPlayerHistory().clear();
+                opponent.getPlayerHistory().append(root.opponentPrefixScript);
+                visitBudget+=150;
+                best = calculateActions(game, NextAction.PRIORITY);
+            }
+        }
+        root = best;
+        visitBudget=150;
 
-        Ability ability = root.getAction();
-        if (ability == null)
-            logger.fatal("null ability");
-        activateAbility((ActivatedAbility) ability, game);
         if(getPlayerHistory().prioritySequence.isEmpty()) {
             logger.error("priority sequence update failure");
         }
@@ -137,42 +162,34 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         return true;
     }
-    protected void calculateActions(Game game, NextAction action) {
-        if (root == null) {
+    protected MCTSNode calculateActions(Game game, NextAction action) {
+
+        applyMCTS(game, action);
+
+        if (root != null && root.bestChild(game) != null) {
+            return root.bestChild(game);
+            //root.emancipate();
+        } else {
+            logger.fatal("no root found");
+            return null;
+        }
+    }
+
+    protected MCTSNode getNextAction(Game game, NextAction nextAction) {
+        if (root != null) {
+            root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+        }
+        if (root == null || root.getStateValue() == null) {
             Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-            player.setNextAction(action);//can remove this
+            player.setNextAction(nextAction);//can remove this
             root = new MCTSNode(playerId, sim);
             root.prefixScript = new PlayerScript(getPlayerHistory());
             root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             logger.info("prefix at root: " + root.prefixScript.toString());
             logger.info("opponent prefix at root: " + root.opponentPrefixScript.toString());
         }
-        applyMCTS(game, action);
-
-        if (root != null && root.bestChild(game) != null) {
-            root = root.bestChild(game);
-            root.emancipate();
-        } else {
-            logger.fatal("no root found");
-        }
-    }
-
-    protected void getNextAction(Game game, NextAction nextAction) {
-        MCTSNode newRoot;
-        if (root != null) {
-            newRoot = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
-            if (newRoot != null) {
-                newRoot.emancipate();
-                 //when we are using stateless nodes, even if no new tree is needed we still should establish this game as the new anchor for MCTS
-                newRoot.rootGame = createMCTSGame(game.getLastPriority());
-                newRoot.rootState = newRoot.rootGame.getState().copy();
-            } else {
-                logger.info("unable to find matching state");
-            }
-            root = newRoot;
-        }
-        calculateActions(game, nextAction);
+        return calculateActions(game, nextAction);
     }
 
     @Override
@@ -235,7 +252,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             target.add(this.getId(), game);
             return true;
         }
-        if(game.getPhase() == null) {//TODO: implement pre-game decisions properly
+        if(game.getPhase() == null || game.isSimulation()) {//TODO: implement pre-game decisions properly
             return super.makeChoice(outcome, target, source, game, fromCards);
         }
 
@@ -266,7 +283,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return true;
         }
 
-        getNextAction(game, NextAction.CHOOSE_TARGET);
+        root = getNextAction(game, NextAction.CHOOSE_TARGET);
+        if(root == null) {
+            return false;
+        }
 
         UUID targetId = root.chooseTargetAction;
         if(targetId == null) {
@@ -285,7 +305,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1) {
+        if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1 || game.isSimulation()) {
             return chooseHelper(outcome, choice, game);
         }
         if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
@@ -299,7 +319,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.info("choice is empty, spell fizzled");
             return false;
         }
-        getNextAction(game, NextAction.MAKE_CHOICE);
+        root = getNextAction(game, NextAction.MAKE_CHOICE);
+        if(root == null) {
+            return false;
+        }
         String chosen = root.choiceAction;
         logger.info(String.format("Choosing %s", chosen));
         getPlayerHistory().choiceSequence.add(chosen);
@@ -310,10 +333,13 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         logger.info("base choose use " + message);
-        if(game.getPhase() == null) {//TODO: implement pre-game decisions properly
+        if(game.getPhase() == null || game.isSimulation()) {//TODO: implement pre-game decisions properly
             return true;
         }
-        getNextAction(game, NextAction.CHOOSE_USE);
+        root = getNextAction(game, NextAction.CHOOSE_USE);
+        if(root == null) {
+            return false;
+        }
         Boolean chosen = root.useAction;
         if(chosen == null) {
             logger.error("chosen is null");

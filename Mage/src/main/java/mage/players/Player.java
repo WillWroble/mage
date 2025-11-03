@@ -61,8 +61,6 @@ public interface Player extends MageItem, Copyable<Player> {
     enum PayLifeCostRestriction {
         CAST_SPELLS, ACTIVATE_NON_MANA_ABILITIES, ACTIVATE_MANA_ABILITIES
     }
-    Ability getLastActivated();
-    void setLastActivated(Ability a);
     /**
      * Current player is real life player (human). Try to use in GUI and network engine only.
      * <p>

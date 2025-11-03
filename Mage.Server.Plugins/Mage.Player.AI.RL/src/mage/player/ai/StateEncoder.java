@@ -95,8 +95,8 @@ public class StateEncoder {
     private void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
 
         processAbility(aa, game, f);
-
-        if(aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
+        //TODO: seems broken with new cards?
+        //if(aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
     }
     private void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
 

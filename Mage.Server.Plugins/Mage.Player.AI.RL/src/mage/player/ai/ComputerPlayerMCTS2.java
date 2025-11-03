@@ -145,7 +145,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         // --- Run simulations for one cycle (e.g., 1 second) ---
         while (System.nanoTime() < endTime) {
-            if(simCount + initialVisits >= MAX_TREE_VISITS) {
+            if(simCount + initialVisits >= visitBudget) {
                 logger.info("required visits reached, ending search");
                 break;
             }
@@ -235,22 +235,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         return out;
     }
     @Override
-    protected void calculateActions(Game game, NextAction action) {
-        if (root == null) {
-            Game sim = createMCTSGame(game.getLastPriority());
-            MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-            player.setNextAction(action);
-            //this creates a new root with its own saved state to replay from.
-            root = new MCTSNode(playerId, sim);
-            root.prefixScript = new PlayerScript(getPlayerHistory());
-            root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
-            logger.debug("prefix at root: " + root.prefixScript.toString());
-            logger.debug("opponent prefix at root: " + root.opponentPrefixScript.toString());
-        }
+    protected MCTSNode calculateActions(Game game, NextAction action) {
         applyMCTS(game, action);
         if (root != null) {
             MCTSNode best = root.bestChild(game);
-            if(best == null) return;
+            if(best == null) return null;
             int[] actionVec = null;
             if (action == NextAction.PRIORITY) {
                 actionVec = getActionVec(root, name.equals("PlayerA"));
@@ -262,10 +251,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 actionVec = getUseActionVec(root);
             }
             if(actionVec != null) encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, getName().equals("PlayerA"));
-            root = best;
-            root.emancipate();
+            return best;
+            //root.emancipate();
         } else {
             logger.error("no root found somehow?");
+            return null;
         }
     }
     /**

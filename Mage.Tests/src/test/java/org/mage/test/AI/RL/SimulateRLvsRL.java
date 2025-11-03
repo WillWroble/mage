@@ -1,6 +1,7 @@
 package org.mage.test.AI.RL;
 
 import mage.constants.RangeOfInfluence;
+import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
@@ -45,14 +46,14 @@ public class SimulateRLvsRL extends ParallelDataGenerator {
 
     // This is the correct override to use for creating players within our self-contained games.
     @Override
-    protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
+    protected Player createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if(name.equals("PlayerA")) {
-            TestComputerPlayerMonteCarlo2 mcts2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestComputerPlayerMonteCarlo2 mcts2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, 6);
             TestPlayer testPlayer = new TestPlayer(mcts2);
             testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
             return testPlayer;
         } else {
-            TestComputerPlayerMonteCarlo2 mcts2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestComputerPlayerMonteCarlo2 mcts2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, 6);
             TestPlayer testPlayer = new TestPlayer(mcts2);
             testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
             return testPlayer;

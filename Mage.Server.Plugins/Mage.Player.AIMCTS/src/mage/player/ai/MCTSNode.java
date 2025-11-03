@@ -98,6 +98,7 @@ public class MCTSNode {
 
         this.parent = parent;
         this.action = action;
+        this.rootGame=parent.rootGame;
 
     }
 
@@ -106,6 +107,7 @@ public class MCTSNode {
 
         this.combat = combat;
         this.parent = parent;
+        this.rootGame=parent.rootGame;
     }
 
     /**
@@ -499,7 +501,8 @@ public class MCTSNode {
             return;
         }
         children.remove(node);
-        if(children.isEmpty()) {
+        node.parent=null;
+        if(children.isEmpty() && parent != null) {
             parent.purge(this);
         }
     }
@@ -776,7 +779,6 @@ public class MCTSNode {
         if(children.isEmpty()) return 0;
         return visits/children.size();
     }
-
     /**
      * populates action lists by back tracing through the tree (opponent player is the non-target player)
      * @param myScript

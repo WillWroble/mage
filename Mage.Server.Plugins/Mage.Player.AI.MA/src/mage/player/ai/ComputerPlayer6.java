@@ -965,9 +965,10 @@ public class ComputerPlayer6 extends ComputerPlayer {
                     }
                 }
             }
-            if (blocked) {
-                game.getPlayers().resetPassed();
-            }
+            logger.info("PLAYER B BLOCKS: " + game.getCombat().toString());
+            //if (blocked) {
+            game.getPlayers().resetPassed();
+            //}
         }
     }
 

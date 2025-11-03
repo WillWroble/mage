@@ -309,12 +309,16 @@ public abstract class GameImpl implements Game {
         }
     }
     public boolean isCheckPoint() {
+
         boolean isStarting = getTurnNum()==1 && getTurnStepType().equals(PhaseStep.UPKEEP);
         //forced checkpoint before combat decisions
         boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT); //&& getStack().isEmpty();
         boolean isPreBlock = getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS); //&& getStack().isEmpty();
         boolean isPostBlock = getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS);
-        return isStarting || isPreAttack ||  isPreBlock || isPostBlock;
+        boolean isStack = !getStack().isEmpty();
+        //boolean isCombat = !getCombat().getGroups().isEmpty() || getTurnPhaseType().equals(TurnPhase.COMBAT) || !getCombat().noAttackers();
+        //boolean isPostDamage = getTurnStepType().equals(PhaseStep.COMBAT_DAMAGE) || getTurnStepType().equals(PhaseStep.FIRST_COMBAT_DAMAGE);
+        return  isStarting || isPreAttack ||  isPreBlock || isPostBlock || isStack;
     }
     @Override
     public boolean isSimulation() {
