@@ -75,3 +75,4 @@ Mage.Tests/training.bin
 Mage.Tests/training.bin
 Mage.Tests/testing.bin
 *.hdf5
+*.roar
