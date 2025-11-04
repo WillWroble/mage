@@ -62,3 +62,18 @@ WR with GBLegends vs MTGA_MonoB: 0.525 in 40 games
 WR with GBLegends vs MTGA_MonoB: 0.4 in 40 games
 WR with GBLegends vs MTGA_MonoG: 0.475 in 40 games
 WR with GBLegends vs MTGA_MonoB: 0.35 in 40 games
+WR with WillS_Tempo vs MTGA_MonoB: 0.125 in 40 games
+WR with WillS_Tempo vs MTGA_MonoG: 0.375 in 40 games
+WR with WillS_Tempo vs MTGA_MonoR: 0.2 in 40 games
+WR with WillS_Tempo vs MTGA_MonoU: 0.2 in 40 games
+WR with WillS_Tempo vs MTGA_MonoW: 0.275 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoB: 0.0 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoG: 0.025 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoR: 0.025 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoU: 0.025 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoW: 0.0 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoB: 0.05 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoG: 0.025 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoR: 0.025 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoU: 0.025 in 40 games
+WR with Deck - Izzet Storm vs MTGA_MonoW: 0.0 in 40 games

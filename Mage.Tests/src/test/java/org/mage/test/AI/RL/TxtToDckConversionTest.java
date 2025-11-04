@@ -16,7 +16,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 public class TxtToDckConversionTest {
-    public static String DECK_NAME = "GBLegends";
+    public static String DECK_NAME = "Deck - Izzet Storm";
     public static String DECK_IN_PATH = DECK_NAME+".txt";
     public static String DECK_OUT_PATH = "decks/"+DECK_NAME+".dck";
 
