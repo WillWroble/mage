@@ -1,14 +1,13 @@
 package org.mage.test.AI.RL;
 
 import mage.constants.RangeOfInfluence;
+import mage.player.ai.ComputerPlayer8;
 import mage.player.ai.ComputerPlayerMCTS;
+import mage.player.ai.ComputerPlayerMCTS2;
+import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
@@ -16,10 +15,10 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         //this is a test for Will
 
 
-        DISCOUNT_FACTOR = 0.97; //default for dense states; might be worth lowering for particularly fast decks
+        DISCOUNT_FACTOR = 0.98; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
+        DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
 
 
         DECK_A = "GBLegends";
@@ -59,7 +58,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobin() {
-        DECK_A = "WillS_Tempo";
+        DECK_A = "UWTempo";
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 200;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
@@ -73,7 +72,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobinTest() {
-        DECK_A = "Deck - Izzet Storm";
+        DECK_A = "UWTempo";
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
@@ -88,17 +87,17 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
 
     // This is the correct override to use for creating players within our self-contained games.
     @Override
-    protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
+    protected Player createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if(name.equals("PlayerA")) {
-            TestComputerPlayerMonteCarlo2 mcts2 = new TestComputerPlayerMonteCarlo2(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(mcts2);
-            testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
-            return testPlayer;
+            ComputerPlayerMCTS2 mcts2 = new ComputerPlayerMCTS2(name, RangeOfInfluence.ONE, 6);
+            //TestPlayer testPlayer = new TestPlayer(mcts2);
+            //testPlayer.setAIPlayer(true); // enable full AI support (game simulations) for all turns by default
+            return mcts2;
         } else {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
-            TestPlayer testPlayer = new TestPlayer(t8);
-            testPlayer.setAIPlayer(true);
-            return testPlayer;
+            ComputerPlayer8 t8 = new ComputerPlayer8(name, RangeOfInfluence.ONE, 6);
+            //TestPlayer testPlayer = new TestPlayer(t8);
+            //testPlayer.setAIPlayer(true);
+            return t8;
         }
     }
 }

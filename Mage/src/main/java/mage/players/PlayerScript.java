@@ -33,6 +33,9 @@ public class PlayerScript {
     }
     public PlayerScript(List<Ability> prio, List<Combat> com, List<UUID> target, List<String> choice, List<Boolean> use) {
         prioritySequence = new ArrayDeque<>(prio);
+        for(Ability a : prio) {//need to copy ability for certain edge cases unfortunately
+            this.prioritySequence.add(a.copy());
+        }
         combatSequence = new ArrayDeque<>(com);
         useSequence = new ArrayDeque<>(use);
         targetSequence = new ArrayDeque<>(target);
@@ -40,7 +43,11 @@ public class PlayerScript {
     }
 
     public PlayerScript(PlayerScript playerScript) {
-        prioritySequence = new ArrayDeque<>(playerScript.prioritySequence);
+        //prioritySequence = new ArrayDeque<>(playerScript.prioritySequence);
+        prioritySequence = new ArrayDeque<>();
+        for(Ability a : playerScript.prioritySequence) {//need to copy ability for certain edge cases unfortunately
+            this.prioritySequence.add(a.copy());
+        }
         combatSequence = new  ArrayDeque<>(playerScript.combatSequence);
         useSequence = new ArrayDeque<>(playerScript.useSequence);
         targetSequence = new ArrayDeque<>(playerScript.targetSequence);
@@ -51,9 +58,11 @@ public class PlayerScript {
         this.targetSequence.addAll(playerScript.targetSequence);
         this.choiceSequence.addAll(playerScript.choiceSequence);
         this.useSequence.addAll(playerScript.useSequence);
-        this.prioritySequence.addAll(playerScript.prioritySequence);
+        //this.prioritySequence.addAll(playerScript.prioritySequence);
         this.combatSequence.addAll(playerScript.combatSequence);
-
+        for(Ability a : playerScript.prioritySequence) {//need to copy ability for certain edge cases unfortunately
+            this.prioritySequence.add(a.copy());
+        }
         return this;
     }
     public void clear() {

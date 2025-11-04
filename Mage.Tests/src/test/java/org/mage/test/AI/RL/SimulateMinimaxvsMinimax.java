@@ -1,6 +1,7 @@
 package org.mage.test.AI.RL;
 
 import mage.constants.RangeOfInfluence;
+import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
@@ -38,14 +39,14 @@ public class SimulateMinimaxvsMinimax extends ParallelDataGenerator {
         createTrainDataSet();
     }
     @Override
-    protected TestPlayer createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
+    protected Player createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (name.equals("PlayerA")) {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, 6);
             TestPlayer testPlayer = new TestPlayer(t8);
             testPlayer.setAIPlayer(true);
             return testPlayer;
         } else {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, getSkillLevel());
+            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, 6);
             TestPlayer testPlayer = new TestPlayer(t8);
             testPlayer.setAIPlayer(true);
             return testPlayer;

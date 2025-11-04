@@ -174,14 +174,7 @@ public class TestPlayer implements Player {
         return computerPlayer.getPlayerHistory();
     }
 
-    @Override
-    public Ability getLastActivated() {
-        return computerPlayer.getLastActivated();
-    }
-    @Override
-    public void setLastActivated(Ability a) {
-        computerPlayer.setLastActivated(a);
-    }
+
 
     @Override
     public void resetMicroActions() {

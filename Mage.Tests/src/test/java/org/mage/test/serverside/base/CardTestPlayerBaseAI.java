@@ -13,9 +13,7 @@ import org.mage.test.serverside.base.impl.CardTestPlayerAPIImpl;
 
 import java.io.FileNotFoundException;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * PlayerA is full AI player and process all actions as AI logic. You don't need aiXXX commands in that tests.

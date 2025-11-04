@@ -94,6 +94,7 @@ public abstract class GameImpl implements Game {
     //the state of the game at the last priority window where there was a decision. last priority + playerHistories should always equal the current game.
     private Game lastPriority = this;
     private UUID lastPriorityPlayerId;
+    public Set<StackObject> decisionStackObjects;
 
     public static boolean drawHand = true;
 
@@ -308,13 +309,23 @@ public abstract class GameImpl implements Game {
             lastPriority = this.copy();
         }
     }
+    public boolean willLeadToDecision(StackObject stackObject) {
+        return decisionStackObjects.contains(stackObject);
+    }
+
+    /**
+     * determinse wether this state should be used as an anchor for MCTS Nodes
+     * @return
+     */
     public boolean isCheckPoint() {
+
         boolean isStarting = getTurnNum()==1 && getTurnStepType().equals(PhaseStep.UPKEEP);
         //forced checkpoint before combat decisions
-        boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT); //&& getStack().isEmpty();
-        boolean isPreBlock = getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS); //&& getStack().isEmpty();
+        boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT);
+        boolean isPreBlock = getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS);
         boolean isPostBlock = getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS);
-        return isStarting || isPreAttack ||  isPreBlock || isPostBlock;
+        boolean isStack = false; //TODO: replace with dynamic cache of Stack-Object to save decision state
+        return  isStarting || isPreAttack ||  isPreBlock || isPostBlock || isStack;
     }
     @Override
     public boolean isSimulation() {
@@ -485,7 +496,7 @@ public abstract class GameImpl implements Game {
         return player;
     }
     @Override
-    public String getEntity(UUID entityId) {
+    public String getEntityName(UUID entityId) {
         MageObject obj = getObject(entityId);
         if(obj == null) {
             Player player = getPlayer(entityId);
@@ -493,6 +504,12 @@ public abstract class GameImpl implements Game {
                 return "null";
             }
             return player.getName();
+        }
+        if(obj instanceof StackObject) {
+            MageObject out = getObject(((StackObject) obj).getSourceId());
+            if(out == null) {
+                return "null";
+            }
         }
         return obj.getName();
     }

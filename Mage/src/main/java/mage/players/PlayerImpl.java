@@ -83,7 +83,6 @@ public abstract class PlayerImpl implements Player, Serializable {
     static final Map<PhaseStep, Step.StepPart> SILENT_PHASES_STEPS = ImmutableMap.<PhaseStep, Step.StepPart>builder().
             put(PhaseStep.DECLARE_ATTACKERS, Step.StepPart.PRE).build();
 
-    private Ability lastActivated;
     public int autoPassed = 0;
     /**
      * Used to cancel waiting requests send to the player
@@ -225,7 +224,6 @@ public abstract class PlayerImpl implements Player, Serializable {
 
     protected PlayerImpl(final PlayerImpl player) {
 
-        this.lastActivated = player.lastActivated;
         playerHistory = new PlayerScript(player.playerHistory);
 
         this.abort = player.abort;
@@ -313,12 +311,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     public PlayerScript getPlayerHistory() {
         return playerHistory;
     }
-    public Ability getLastActivated() {
-        return lastActivated;
-    }
-    public void setLastActivated(Ability a) {
-        lastActivated = a;
-    }
+
     /**
      * Restore on rollback
      *
@@ -329,7 +322,6 @@ public abstract class PlayerImpl implements Player, Serializable {
         if (!(player instanceof PlayerImpl)) {
             throw new IllegalArgumentException("Wrong code usage: can't restore from player class " + player.getClass().getName());
         }
-        this.lastActivated = player.getLastActivated();
         this.playerHistory = new PlayerScript(player.getPlayerHistory());
         this.name = player.getName();
         this.human = player.isHuman();
@@ -1640,14 +1632,16 @@ public abstract class PlayerImpl implements Player, Serializable {
             return false;
         }
         //logger.info("last activated: " + (lastActivated == null ? "null" : this.lastActivated.toString()));
-        lastActivated = ability.copy();
+
         boolean result;
         if (ability instanceof PassAbility) {
             pass(game);
             return true;
         }
         //needs to happen after pass since pass() logs ability separately
-        if(!(ability instanceof ManaAbility)) playerHistory.prioritySequence.add(ability.copy());
+        if(!(ability instanceof ManaAbility) && !game.isPaused() && !game.checkIfGameIsOver()) {
+            playerHistory.prioritySequence.add(ability.copy());
+        }
         Card card = game.getCard(ability.getSourceId());
         if (ability instanceof PlayLandAsCommanderAbility) {
 

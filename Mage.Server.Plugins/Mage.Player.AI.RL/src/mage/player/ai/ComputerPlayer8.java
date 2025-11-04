@@ -90,6 +90,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 act(game);
                 return true;
             case DECLARE_BLOCKERS:
+                log.info("DECLARE_BLOCKERS CP8");
                 //printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
@@ -147,7 +148,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
                     MCTSNode root = mcts2.root;
-                    if(root != null) root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+                    if(root != null) root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), MCTSPlayer.NextAction.PRIORITY, getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
                     if (root != null) {
                         log.info("found matching root with {} visits", root.visits);
                         root.emancipate();

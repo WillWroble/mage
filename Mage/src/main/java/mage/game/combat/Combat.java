@@ -689,7 +689,7 @@ public class Combat implements Serializable, Copyable<Combat> {
             while (true) {
                 aiTries++;
 
-                if (controller.isComputer() && aiTries > 20) {
+                if (false && controller.isComputer() && aiTries > 20) {
                     // TODO: AI must use real attacker/blocker configuration with all possible combination
                     //  (current human like logic will fail sometime, e.g. with menace and big/low creatures)
                     // real game: send warning
@@ -702,7 +702,6 @@ public class Combat implements Serializable, Copyable<Combat> {
                     }
                     break;
                 }
-
                 // declare normal blockers
                 // TODO: need research - is it possible to concede on bad blocker configuration (e.g. user can't continue)
                 controller.selectBlockers(source, game, defenderId);
