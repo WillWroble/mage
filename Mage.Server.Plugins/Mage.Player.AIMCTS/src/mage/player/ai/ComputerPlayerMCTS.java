@@ -4,7 +4,6 @@ import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.common.PassAbility;
-import mage.abilities.mana.ManaAbility;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
@@ -13,20 +12,14 @@ import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.constants.Zone;
 import mage.game.Game;
-import mage.game.GameImpl;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
-import mage.target.TargetCard;
-import mage.util.RandomUtil;
-import mage.util.ThreadUtils;
-import mage.util.XmageThreadFactory;
 import org.apache.log4j.Logger;
 
-import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -39,6 +32,8 @@ import java.util.stream.Collectors;
  */
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
+    public static final int BASE_THREAD_TIMEOUT = 4;//seconds
+    public static final int MAX_TREE_VISITS = 150;//per thread
     //these aren't used for RL, see ComputerPlayerMCTS2
     protected static final int THINK_MIN_RATIO = 100; //was originally 40
     protected static final int THINK_MAX_RATIO = 140; //was 80
@@ -65,7 +60,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
     public int poolSize = 2;
     protected transient ExecutorService threadPoolSimulations = null;
-    public int visitBudget = 150;
+    public int maxVisits = MAX_TREE_VISITS;
 
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
@@ -123,9 +118,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         while (!success) {
             if(best != null && best.getAction() != null) {
                 ability = best.getAction().copy();
-                if (ability == null)
-                    logger.fatal("null ability");
                 success = activateAbility((ActivatedAbility) ability, game);
+            }
+            if (ability == null) {
+                logger.fatal("null ability");
+                return false;
             }
             if(!success) {
                 logger.info("Failed to resolve micro decisions for ability looking again for legal path");
@@ -135,12 +132,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
                 opponent.getPlayerHistory().clear();
                 opponent.getPlayerHistory().append(root.opponentPrefixScript);
-                visitBudget+=150;
+                maxVisits +=150;
                 best = calculateActions(game, NextAction.PRIORITY);
             }
         }
         root = best;
-        visitBudget=150;
+        maxVisits =MAX_TREE_VISITS;
 
         if(getPlayerHistory().prioritySequence.isEmpty()) {
             logger.error("priority sequence update failure");
@@ -152,8 +149,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(root.getAction().getTargets().isEmpty()) {
             logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
         } else {
-            if(game.getEntity(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntity(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
+            if(game.getEntityName(root.getAction().getTargets().getFirstTarget()) != null) {
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntityName(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
             } else if (game.getPlayer(root.getAction().getTargets().getFirstTarget()) != null) {
                 logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
             } else {
@@ -177,13 +174,13 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     protected MCTSNode getNextAction(Game game, NextAction nextAction) {
         if (root != null) {
-            root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+            root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), nextAction, getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
         }
         if (root == null || root.getStateValue() == null) {
             Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(nextAction);//can remove this
-            root = new MCTSNode(playerId, sim);
+            root = new MCTSNode(playerId, sim, nextAction);
             root.prefixScript = new PlayerScript(getPlayerHistory());
             root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             logger.info("prefix at root: " + root.prefixScript.toString());
@@ -292,7 +289,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(targetId == null) {
             logger.error("target id is null");
         }
-        logger.info(String.format("Targeting %s", game.getEntity(targetId).toString()));
+        logger.info(String.format("Targeting %s", game.getEntityName(targetId).toString()));
         getPlayerHistory().targetSequence.add(targetId);
 
         if(!targetId.equals(STOP_CHOOSING)) {
@@ -352,95 +349,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected long totalSimulations = 0;
 
     protected void applyMCTS(final Game game, final NextAction action) {
-
-        int thinkTime = calculateThinkTime(game, action);
-        //thinkTime = 5;
-        if (thinkTime > 0) {
-            if (USE_MULTIPLE_THREADS) {
-                if (this.threadPoolSimulations == null) {
-                    // same params as Executors.newFixedThreadPool
-                    // no needs errors check in afterExecute here cause that pool used for FutureTask with result check already
-                    this.threadPoolSimulations = new ThreadPoolExecutor(
-                            poolSize,
-                            poolSize,
-                            0L,
-                            TimeUnit.MILLISECONDS,
-                            new LinkedBlockingQueue<>(),
-                            new XmageThreadFactory(ThreadUtils.THREAD_PREFIX_AI_SIMULATION_MCTS) // TODO: add player/game to thread name?
-                    );
-                }
-
-                List<MCTSExecutor> tasks = new ArrayList<>();
-                for (int i = 0; i < poolSize; i++) {
-                    Game sim = createMCTSGame(game.getLastPriority());
-                    MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-                    player.setNextAction(action);
-                    MCTSExecutor exec = new MCTSExecutor(sim, playerId, thinkTime);
-                    tasks.add(exec);
-                }
-                try {
-                    List<Future<Boolean>> runningTasks = threadPoolSimulations.invokeAll(tasks, thinkTime, TimeUnit.SECONDS);
-                    for (Future<Boolean> runningTask : runningTasks) {
-                        runningTask.get();
-                    }
-                } catch (InterruptedException | CancellationException e) {
-                    logger.warn("applyMCTS timeout");
-                } catch (ExecutionException e) {
-                    // real games: must catch and log
-                    // unit tests: must raise again for fast fail
-                    if (this.isTestMode() && this.isFastFailInTestMode()) {
-                        throw new IllegalStateException("One of the simulated games raise the error: " + e, e);
-                    }
-                }
-
-                int simCount = 0;
-                for (MCTSExecutor task : tasks) {
-                    simCount += task.getSimCount();
-                    root.merge(task.getRoot());
-                    task.clear();
-                }
-                tasks.clear();
-                totalThinkTime += thinkTime;
-                totalSimulations += simCount;
-                logger.info("Player: " + name + " Simulated " + simCount + " games in " + thinkTime + " seconds - nodes in tree: " + root.size());
-                logger.info("Total: Simulated " + totalSimulations + " games in " + totalThinkTime + " seconds - Average: " + totalSimulations / totalThinkTime);
-                MCTSNode.logHitMiss();
-            } else {
-                long startTime = System.nanoTime();
-                long endTime = startTime + (thinkTime * 1000000000l);
-                MCTSNode current;
-                int simCount = 0;
-                while (true) {
-                    long currentTime = System.nanoTime();
-                    if (currentTime > endTime)
-                        break;
-                    current = root;
-
-                    // Selection
-                    while (!current.isLeaf()) {
-                        current = current.select(this.playerId);
-                    }
-
-                    int result;
-                    if (!current.isTerminal()) {
-                        Game tempGame = current.getGame();
-
-                        // Simulation
-                        result = current.simulate(this.playerId, game);
-                        // Expansion
-                        current.expand(game);
-                        simCount++;
-                    } else {
-                        //logger.info("Terminal State Reached!");
-                        result = current.isWinner() ? 100000000 : -100000000;
-                    }
-                    // Backpropagation
-                    current.backpropagate(result);
-                }
-                logger.info("Simulated " + simCount + " games - nodes in tree: " + root.size());
-            }
-//            displayMemory();
-        }
+        //TODO: implement. right now only
 
     }
 

@@ -25,6 +25,7 @@ import mage.players.ManaPool;
 import mage.players.Player;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
+import org.apache.log4j.Logger;
 
 import java.util.*;
 
@@ -34,6 +35,7 @@ import java.util.*;
  */
 public class StateEncoder {
     public static volatile ImmutableRoaringBitmap globalIgnore;
+    protected static Logger logger = Logger.getLogger(StateEncoder.class);
     public volatile RoaringBitmap seenFeatures;
     public static boolean perfectInfo = true;
     private final Features features;
@@ -96,7 +98,11 @@ public class StateEncoder {
 
         processAbility(aa, game, f);
         //TODO: seems broken with new cards?
-        //if(aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
+        try {
+            if (aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
+        } catch (Exception e) {
+            logger.warn("failed activation check in encoder");
+        }
     }
     private void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
 
@@ -309,12 +315,12 @@ public class StateEncoder {
      * vectorizes (hashes) the entire game state in a neural network-learnable way. These vectors are massive and sparse -
      * they are designed to have redundant features masked before training and used with a massive embedding bag in pytorch
      * @param game S
-     * @param actingPlayerID the player who is making the decision at this state
+     * @param decisionPlayerId the player who is making the decision at this state
      * @param decisionType type of decision being made at this state (choose_target, choose_use, choose etc.)
      * @param decisionsText informative context about the micro decision being made to be hashed as its own feature for the network
      * @return set of active indices in the sparse binary vector
      */
-    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID, MCTSPlayer.NextAction decisionType, String decisionsText) {
+    public synchronized Set<Integer> processState(Game game, UUID decisionPlayerId, MCTSPlayer.NextAction decisionType, String decisionsText) {
         features.stateRefresh();
         featureVector.clear();
 
@@ -325,14 +331,14 @@ public class StateEncoder {
         features.addFeature(decisionsText);
         //current targets selected for when it's in the middle selecting multiple targets
         Features chosenTargetsFeatures = features.getSubFeatures("ChosenTargets", false);
-        for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
-            chosenTargetsFeatures.addFeature(game.getEntity(targetID));
+        for(UUID targetID : game.getPlayer(decisionPlayerId).getPlayerHistory().targetSequence) {
+            chosenTargetsFeatures.addFeature(game.getEntityName(targetID));
         }
 
         //game metadata
         if(game.getPhase() != null) features.addFeature(game.getTurnStepType().toString()); //phases
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
-        if(actingPlayerID.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
+        if(decisionPlayerId.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand");
 
@@ -355,7 +361,7 @@ public class StateEncoder {
         processGraveyard(gy, game, gyFeatures);
 
         //now do hand
-        if(myPlayerID==actingPlayerID || perfectInfo) { //keep perspective
+        if(myPlayerID==decisionPlayerId || perfectInfo) { //keep perspective
             Cards hand = myPlayer.getHand();
             Features handFeatures = features.getSubFeatures("Hand");
             processHand(hand, game, handFeatures);
@@ -367,7 +373,7 @@ public class StateEncoder {
         processExile(game.getExile(), game, exileFeatures);
 
         //lastly do opponent
-        processOpponentState(game, actingPlayerID);
+        processOpponentState(game, decisionPlayerId);
 
         return new HashSet<>(featureVector);
 

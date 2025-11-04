@@ -97,7 +97,7 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     MageObject getObject(UUID objectId);
 
     MageObject getObject(Ability source);
-    String getEntity(UUID entityId);
+    String getEntityName(UUID entityId);
 
     MageObject getBaseObject(UUID objectId);
 

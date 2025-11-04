@@ -86,8 +86,6 @@ public class ParallelDataGenerator {
     protected static Map<String, DeckCardLists> loadedDecks = new HashMap<>(); // deck's cache
     protected static Map<String, CardInfo> loadedCardInfo = new HashMap<>(); // db card's cache
 
-    protected TestPlayer playerA;
-    protected TestPlayer playerB;
 
     protected static Logger logger = Logger.getLogger(ParallelDataGenerator.class);
 
@@ -218,6 +216,9 @@ public class ParallelDataGenerator {
 
         //create the action map from the provided decklists
         try {
+            ActionEncoder.playerActionMap.clear();
+            ActionEncoder.opponentActionMap.clear();
+            ActionEncoder.targetMap.clear();
             createAllActionsFromDeckList(DECK_A_PATH, ActionEncoder.playerActionMap);
             createAllActionsFromDeckList(DECK_B_PATH, ActionEncoder.opponentActionMap);
             createAllTargetsFromDeckLists(DECK_A_PATH, DECK_B_PATH);
@@ -293,43 +294,17 @@ public class ParallelDataGenerator {
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
-        int maxTurn = 50;
-        //ComputerPlayer.PRINT_DECISION_FALLBACKS = true;
-        //MCTSPlayer.PRINT_CHOOSE_DIALOGUES = false;
-        //Features.printOldFeatures = false;
-        //long seed = System.nanoTime();
-        //seed = 751314143315900L; //opponent turn priority order bug
-        //seed = -4411935635951101274L; //blocking bug
-        //seed = 5401683921170803014L; //unable to find matching
-        //seed = 1405302846091300L; //chooseTarget() and chooseUse() are used
-        //seed = 1489032704055400L; //illegal block targets
 
-
-
-        StateEncoder threadEncoder = new StateEncoder();
-        threadEncoder.seenFeatures = seenFeatures;
 
         // Use a thread-safe random number generator for the seed.
         logger.info("Using seed: " + seed);
-        RandomUtil.setSeed(seed);
+        try {
+            runSingleGame(seed);
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+            throw new RuntimeException(e);
+        }
 
-
-        configurePlayer(playerA, threadEncoder);
-        configurePlayer(playerB, threadEncoder);
-        threadEncoder.setAgent(playerA.getId());
-        threadEncoder.setOpponent(playerB.getId());
-
-
-        //setStrictChooseMode(true);
-        //setStopAt(maxTurn, PhaseStep.END_TURN);
-        /* usage example for manual card insertion
-        GameImpl.drawHand = false;
-        addCard(Zone.BATTLEFIELD, playerA, "Island", 2);
-        addCard(Zone.BATTLEFIELD, playerA, "Malcolm, Alluring Scoundrel", 1);
-        addCard(Zone.HAND, playerA, "Combat Research", 7);
-         */
-        //execute();
-        //saveRoaring(threadEncoder.seenFeatures, SEEN_FEATURES_PATH);
 
     }
     @Test

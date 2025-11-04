@@ -15,10 +15,10 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         //this is a test for Will
 
 
-        DISCOUNT_FACTOR = 0.97; //default for dense states; might be worth lowering for particularly fast decks
+        DISCOUNT_FACTOR = 0.98; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
+        DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
 
 
         DECK_A = "GBLegends";
@@ -58,6 +58,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobin() {
+        DECK_A = "UWTempo";
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 200;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
@@ -71,7 +72,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobinTest() {
-        DECK_A = "UBArtifacts";
+        DECK_A = "UWTempo";
         ComputerPlayerMCTS.ROUND_ROBIN_MODE = true;
         NUM_GAMES_TO_SIMULATE = 40;
         String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};

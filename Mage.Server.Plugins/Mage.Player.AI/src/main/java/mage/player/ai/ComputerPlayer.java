@@ -845,9 +845,10 @@ public class ComputerPlayer extends PlayerImpl {
             }
         }
 
-        // choose by random
+        // choose first in alphabetical order
         if (!choice.isChosen()) {
-            choice.setRandomChoice();
+            String chosen = choice.getChoices().stream().min(Comparator.naturalOrder()).orElse("");
+            choice.setChoice(chosen);
         }
 
         return true;
@@ -1009,6 +1010,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
+        logger.warn("chooseMode");
         if (modes.getMode() != null && modes.getMaxModes(game, source) == modes.getSelectedModes().size()) {
             // mode was already set by the AI
             return modes.getMode();
@@ -1020,6 +1022,7 @@ public class ComputerPlayer extends PlayerImpl {
         return modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game))
+                .sorted(Comparator.comparing(Mode::getModeTag))
                 .findFirst()
                 .orElse(null);
     }

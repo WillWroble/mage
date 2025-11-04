@@ -162,3 +162,13 @@ WR with UBArtifacts vs MTGA_MonoG: 0.425 in 40 games
 WR with UBArtifacts vs MTGA_MonoR: 0.15 in 40 games
 WR with UBArtifacts vs MTGA_MonoU: 0.5 in 40 games
 WR with UBArtifacts vs MTGA_MonoW: 0.3 in 40 games
+WR with UWTempo vs MTGA_MonoB: 0.225 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.3 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.325 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.1 in 40 games
+WR with UWTempo vs MTGA_MonoW: 0.2 in 40 games
+WR with UWTempo vs MTGA_MonoB: 0.45 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.35 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.425 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.225 in 40 games
+WR with UWTempo vs MTGA_MonoW: 0.35 in 40 games

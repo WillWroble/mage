@@ -2,23 +2,18 @@ package mage.player.ai;
 
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
-import mage.abilities.costs.mana.GenericManaCost;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
-import mage.constants.PhaseStep;
 import mage.game.Game;
-import mage.game.GameImpl;
 import mage.game.combat.Combat;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
-import mage.target.TargetCard;
 import org.apache.log4j.Logger;
 
-import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -287,7 +282,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
         if (!actionScript.targetSequence.isEmpty()) {
             UUID choice = actionScript.targetSequence.pollFirst();
-            if(PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried target: %s ", game.getEntity(choice).toString()));
+            if(PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried target: %s ", game.getEntityName(choice).toString()));
             getPlayerHistory().targetSequence.add(choice);
             if(!choice.equals(ComputerPlayerMCTS.STOP_CHOOSING)) {
                 target.addTarget(choice, source, game);

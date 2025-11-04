@@ -6,7 +6,6 @@ import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.player.ai.score.GameStateEvaluator2;
-import mage.players.PlayerScript;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 
@@ -27,8 +26,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
     private transient StateEncoder encoder = null;
-    private static final int BASE_THREAD_TIMEOUT = 4;//seconds
-    private static final int MAX_TREE_VISITS = 150;//per thread
     public static final int[] PASS_ACTION = {0,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     public static boolean SHOW_THREAD_INFO = false;
     /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
@@ -145,7 +142,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         // --- Run simulations for one cycle (e.g., 1 second) ---
         while (System.nanoTime() < endTime) {
-            if(simCount + initialVisits >= visitBudget) {
+            if(simCount + initialVisits >= maxVisits) {
                 logger.info("required visits reached, ending search");
                 break;
             }
@@ -218,7 +215,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int[] out = new int[128];
         Arrays.fill(out, 0);
         for (MCTSNode child : node.children) {
-            int idx = ActionEncoder.getTargetIndex(game.getEntity(child.chooseTargetAction).toString());
+            int idx = ActionEncoder.getTargetIndex(game.getEntityName(child.chooseTargetAction).toString());
             int v = child.visits;
             out[idx%128] += v;
         }
