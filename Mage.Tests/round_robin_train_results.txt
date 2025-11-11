@@ -23,3 +23,9 @@ WR with UWTempo vs MTGA_MonoU: 0.27 in 200 games
 WR with UWTempo vs MTGA_MonoW: 0.3 in 200 games
 WR with UWTempo vs MTGA_MonoB: 0.405 in 200 games
 WR with UWTempo vs MTGA_MonoG: 0.41 in 200 games
+WR with WillS_Tempo vs MTGA_MonoB: 0.24 in 200 games
+WR with WillS_Tempo vs MTGA_MonoB: 0.185 in 200 games
+WR with WillS_Tempo vs MTGA_MonoG: 0.125 in 200 games
+WR with WillS_Tempo vs MTGA_MonoR: 0.28 in 200 games
+WR with WillS_Tempo vs MTGA_MonoU: 0.23 in 200 games
+WR with WillS_Tempo vs MTGA_MonoW: 0.215 in 200 games

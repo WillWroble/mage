@@ -352,10 +352,14 @@ public class ParallelDataGenerator {
     private Thread getWriter(LabeledStateWriter fw) {
         Thread writer = new Thread(() -> {
             try {
-                while (!stop.get() || !LSQueue.isEmpty()) {
-                    List<LabeledState> batch = LSQueue.take();
-                    for (LabeledState s : batch) fw.writeRecord(s);
-                    fw.flush(); // flush per game to keep data durable
+                while (true) {
+                    if(!LSQueue.isEmpty()){
+                        List<LabeledState> batch = LSQueue.take();
+                        for (LabeledState s : batch) fw.writeRecord(s);
+                        fw.flush(); // flush per game to keep data durable
+                    }else if(!stop.get()){
+                        break;
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();

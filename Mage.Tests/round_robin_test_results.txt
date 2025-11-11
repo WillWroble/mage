@@ -77,3 +77,13 @@ WR with Deck - Izzet Storm vs MTGA_MonoG: 0.025 in 40 games
 WR with Deck - Izzet Storm vs MTGA_MonoR: 0.025 in 40 games
 WR with Deck - Izzet Storm vs MTGA_MonoU: 0.025 in 40 games
 WR with Deck - Izzet Storm vs MTGA_MonoW: 0.0 in 40 games
+WR with WillS_Tempo vs MTGA_MonoB: 0.25 in 40 games
+WR with WillS_Tempo vs MTGA_MonoG: 0.2 in 40 games
+WR with WillS_Tempo vs MTGA_MonoR: 0.325 in 40 games
+WR with WillS_Tempo vs MTGA_MonoU: 0.25 in 40 games
+WR with WillS_Tempo vs MTGA_MonoW: 0.3 in 40 games
+WR with WillS_Tempo vs MTGA_MonoB: 0.0 in 6 games
+WR with WillS_Tempo vs MTGA_MonoG: 0.3333333333333333 in 6 games
+WR with WillS_Tempo vs MTGA_MonoR: 0.16666666666666666 in 6 games
+WR with WillS_Tempo vs MTGA_MonoU: 0.16666666666666666 in 6 games
+WR with WillS_Tempo vs MTGA_MonoW: 0.16666666666666666 in 6 games
