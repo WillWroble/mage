@@ -18,7 +18,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         DISCOUNT_FACTOR = 0.98; //default for dense states; might be worth lowering for particularly fast decks
         VALUE_LAMBDA = 0.5; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
+        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
 
 
         DECK_A = "GBLegends";

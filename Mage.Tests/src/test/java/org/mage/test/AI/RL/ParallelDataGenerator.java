@@ -80,7 +80,7 @@ public class ParallelDataGenerator {
     public final AtomicInteger winCount = new AtomicInteger(0);
     private RemoteModelEvaluator remoteModelEvaluatorA;
     private RemoteModelEvaluator remoteModelEvaluatorB;
-    private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(32);
+    private final BlockingQueue<List<LabeledState>> LSQueue = new ArrayBlockingQueue<>(128);
     private final AtomicBoolean stop = new AtomicBoolean(false);
 
     protected static Map<String, DeckCardLists> loadedDecks = new HashMap<>(); // deck's cache
@@ -352,13 +352,15 @@ public class ParallelDataGenerator {
     private Thread getWriter(LabeledStateWriter fw) {
         Thread writer = new Thread(() -> {
             try {
-                while (true) {
-                    if(!LSQueue.isEmpty()){
-                        List<LabeledState> batch = LSQueue.take();
+                while(!LSQueue.isEmpty() || !stop.get()) {
+                    List<LabeledState> batch = LSQueue.take();
+                    for (LabeledState s : batch) fw.writeRecord(s);
+                    fw.flush(); // flush per game to keep data durable
+                }
+                if(!stop.get()) {
+                    for(List<LabeledState> batch : LSQueue) {
                         for (LabeledState s : batch) fw.writeRecord(s);
-                        fw.flush(); // flush per game to keep data durable
-                    }else if(!stop.get()){
-                        break;
+                        fw.flush();
                     }
                 }
             } catch (Exception e) {
