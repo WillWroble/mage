@@ -34,3 +34,8 @@ WR with WillS_Tempo vs MTGA_MonoG: 0.065 in 200 games
 WR with WillS_Tempo vs MTGA_MonoR: 0.21 in 200 games
 WR with WillS_Tempo vs MTGA_MonoU: 0.195 in 200 games
 WR with WillS_Tempo vs MTGA_MonoW: 0.16 in 200 games
+WR with WillS_Tempo vs MTGA_MonoB: 0.185 in 200 games
+WR with WillS_Tempo vs MTGA_MonoG: 0.2 in 200 games
+WR with WillS_Tempo vs MTGA_MonoR: 0.345 in 200 games
+WR with WillS_Tempo vs MTGA_MonoU: 0.245 in 200 games
+WR with WillS_Tempo vs MTGA_MonoW: 0.305 in 200 games
