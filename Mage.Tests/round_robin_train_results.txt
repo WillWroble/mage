@@ -16,10 +16,142 @@ WR with UWTempo vs MTGA_MonoW: 0.275 in 200 games
 WR with UWTempo vs MTGA_MonoB: 0.38333333333333336 in 180 games
 WR with UWTempo vs MTGA_MonoB: 0.47 in 200 games
 WR with UWTempo vs MTGA_MonoG: 0.37 in 200 games
+feature test (gen0)
+WR with UWTempo vs MTGA_MonoB: 0.4 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.3 in 200 games
+WR with UWTempo vs MTGA_MonoB: 0.49 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.385 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.34 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.31 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.245 in 200 games
+gen0
 WR with UWTempo vs MTGA_MonoB: 0.415 in 200 games
 WR with UWTempo vs MTGA_MonoG: 0.415 in 200 games
 WR with UWTempo vs MTGA_MonoR: 0.335 in 200 games
 WR with UWTempo vs MTGA_MonoU: 0.27 in 200 games
 WR with UWTempo vs MTGA_MonoW: 0.3 in 200 games
+gen1
 WR with UWTempo vs MTGA_MonoB: 0.405 in 200 games
 WR with UWTempo vs MTGA_MonoG: 0.41 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.425 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.285 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.28 in 200 games
+gen2
+WR with UWTempo vs MTGA_MonoB: 0.47 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.465 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.49 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.345 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.425 in 200 games
+gen 3
+WR with UWTempo vs MTGA_MonoB: 0.565 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.52 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.485 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.455 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.485 in 200 games
+gen 4
+WR with UWTempo vs MTGA_MonoB: 0.56 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.585 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.525 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.475 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.39 in 200 games
+gen 5
+WR with UWTempo vs MTGA_MonoB: 0.6 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.54 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.6 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.47 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.41 in 200 games
+gen6
+WR with UWTempo vs MTGA_MonoB: 0.655 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.55 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.595 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.48 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.435 in 200 games
+
+WR with UWTempo vs MTGA_MonoB: 0.605 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.535 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.57 in 200 games
+
+gen7 - no policy
+*random bad game?*
+WR with UWTempo vs MTGA_MonoB: 0.465 in 200 games
+
+WR with UWTempo vs MTGA_MonoB: 0.585 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.565 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.455 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.33 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.435 in 200 games
+gen7 - no target policy
+WR with UWTempo vs MTGA_MonoB: 0.575 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.595 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.45 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.555 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.44 in 200 games
+
+**SWITCHED SEARCH BUDGET FROM 150 TO 300**
+
+gen7 - no policy
+WR with UWTempo vs MTGA_MonoB: 0.575 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.55 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.49 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.455 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.375 in 200 games
+gen8 - no policy
+WR with UWTempo vs MTGA_MonoB: 0.5965909090909091 in 176 games
+WR with UWTempo vs MTGA_MonoG: 0.6 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.505 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.48 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.465 in 200 games
+gen9
+WR with UWTempo vs MTGA_MonoB: 0.595 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.615 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.48 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.48 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.51 in 200 games
+gen10
+WR with UWTempo vs MTGA_MonoB: 0.61 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.64 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.575 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.46 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.535 in 200 games
+gen11
+WR with UWTempo vs MTGA_MonoB: 0.59 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.67 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.595 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.565 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.575 in 200 games
+gen12 - target was turned on
+WR with UWTempo vs MTGA_MonoB: 0.745 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.625 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.62 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.53 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.52 in 200 games
+gen13
+WR with UWTempo vs MTGA_MonoB: 0.595 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.665 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.59 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.53 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.49 in 200 games
+gen14
+WR with UWTempo vs MTGA_MonoB: 0.705 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.62 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.555 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.56   200 games
+WR with UWTempo vs MTGA_MonoW: 0.55 in 200 games
+gen15
+WR with UWTempo vs MTGA_MonoB: 0.62 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.68 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.62 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.52 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.585 in 200 games
+gen16
+WR with UWTempo vs MTGA_MonoB: 0.705 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.7 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.685 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.545 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.575 in 200 games
+gen17
+WR with UWTempo vs MTGA_MonoB: 0.655 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.68 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.645 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.65 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.6 in 200 games

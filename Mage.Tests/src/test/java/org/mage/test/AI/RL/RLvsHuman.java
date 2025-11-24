@@ -7,9 +7,8 @@ import mage.player.ai.ComputerPlayerMCTS2;
 import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
-import org.mage.test.player.*;
 
-public class SimulateRLvsMinimax extends ParallelDataGenerator {
+public class RLvsHuman extends ParallelDataGenerator {
     @Before
     public void setup() {
         //this is a test for Will

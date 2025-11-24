@@ -33,15 +33,15 @@ import java.util.stream.Collectors;
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
     public static final int BASE_THREAD_TIMEOUT = 4;//seconds
-    public static final int MAX_TREE_VISITS = 150;//per thread
+    public static final int MAX_TREE_VISITS = 300;//per thread
     //these aren't used for RL, see ComputerPlayerMCTS2
     protected static final int THINK_MIN_RATIO = 100; //was originally 40
     protected static final int THINK_MAX_RATIO = 140; //was 80
     protected static final double THINK_TIME_MULTIPLIER = 1.0;
-    protected static final boolean USE_MULTIPLE_THREADS = true;
     //these flags should be set in ParallelDataGenerator.java
     public static boolean NO_NOISE = false;
     public static boolean NO_POLICY = false;
+    public static boolean NO_POLICY_TARGET_HEAD = false;
     //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)
     public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
     public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
@@ -50,6 +50,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     //how spiky the dirichlet noise will be
     public static double POLICY_PRIOR_TEMP = 1.5;
     public static boolean ROUND_ROBIN_MODE = false;
+    //exploration constant
+    public static double C_PUCT = 1.0;
     //adjust based on available RAM and threads running
     public static int MAX_TREE_NODES = 10000;
 

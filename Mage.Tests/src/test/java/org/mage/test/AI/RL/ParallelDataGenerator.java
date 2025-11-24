@@ -57,13 +57,14 @@ public class ParallelDataGenerator {
     // =============================== AI SETTINGS ===============================
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
+    protected static boolean DONT_USE_POLICY_TARGET = true;
     protected static double DISCOUNT_FACTOR = 0.95;
     protected static double VALUE_LAMBDA = 0.5;
     /**MCTS settings in ComputerPlayerMCTS.java*/
     // =============================== MATCH SETTINGS ===============================
     protected static boolean ALWAYS_GO_FIRST = false;
     protected static boolean ALLOW_MULLIGANS = false; //TODO: implement mulligans
-    protected static String DECK_A = "GBLegends";
+    protected static String DECK_A = "UWTempo";
     protected static String DECK_B = "MTGA_MonoR";
     protected static String MODEL_URL_A = "http://127.0.0.1:50052";
     protected static String MODEL_URL_B = "http://127.0.0.1:50053";
@@ -316,6 +317,7 @@ public class ParallelDataGenerator {
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         ComputerPlayerMCTS.NO_NOISE = DONT_USE_NOISE;
         ComputerPlayerMCTS.NO_POLICY = DONT_USE_POLICY;
+        ComputerPlayerMCTS.NO_POLICY_TARGET_HEAD = DONT_USE_POLICY_TARGET;
 
         LabeledStateWriter fw;
         try {
@@ -463,7 +465,12 @@ public class ParallelDataGenerator {
             if(ALWAYS_GO_FIRST) {
                 game.start(null);
             } else {
-                int dieRoll = ThreadLocalRandom.current().nextInt()%2;
+                int dieRoll;
+                if(gameCount.get()==0) {
+                    dieRoll = (int)(Thread.currentThread().getId()%2);
+                } else {
+                    dieRoll = gameCount.get() % 2;
+                }
                 if(dieRoll==0) {
                     logger.info("Player A won the die roll");
                     game.setStartingPlayerId(playerA.getId());
@@ -538,6 +545,7 @@ public class ParallelDataGenerator {
     protected Player createLocalPlayer(Game game, String name, String deckName, Match match) throws GameException {
         Player player = createPlayer(name, game.getRangeOfInfluence());
         player.setTestMode(true);
+
 
         logger.debug("Loading deck...");
         DeckCardLists list;

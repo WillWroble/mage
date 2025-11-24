@@ -30,7 +30,6 @@ import static java.lang.Math.*;
 public class MCTSNode {
 
     public static final boolean USE_ACTION_CACHE = false;
-    private static final double selectionCoefficient = 1.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
 
 
@@ -216,7 +215,7 @@ public class MCTSNode {
                     ? (child.getScoreRatio())
                     : 0.0;
             // exploration term
-            double u = selectionCoefficient * (child.prior) * (sqrtN / (1 + child.visits));
+            double u = ComputerPlayerMCTS.C_PUCT * (child.prior) * (sqrtN / (1 + child.visits));
 
             // combined PUCT
             double val = sign * q + u;
@@ -332,7 +331,7 @@ public class MCTSNode {
             node.depth = depth + 1;
             node.prior = 1.0/children.size();
         }
-        if (policy != null && !ComputerPlayerMCTS.NO_POLICY && nextAction != MCTSPlayer.NextAction.MAKE_CHOICE) {
+        if (policy != null && !ComputerPlayerMCTS.NO_POLICY && nextAction != MCTSPlayer.NextAction.MAKE_CHOICE && !(nextAction.equals(MCTSPlayer.NextAction.CHOOSE_TARGET) && ComputerPlayerMCTS.NO_POLICY_TARGET_HEAD)) {
 
             double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
 

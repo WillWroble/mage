@@ -424,6 +424,11 @@ public class HumanPlayer extends PlayerImpl {
     }
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
+        boolean out = chooseUseHelper(outcome, message, secondMessage, trueText, falseText, source, game);
+        getPlayerHistory().useSequence.add(out);
+        return out;
+    }
+    private boolean chooseUseHelper(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -621,6 +626,11 @@ public class HumanPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
+        boolean out = chooseHelper(outcome, choice, game);
+        getPlayerHistory().choiceSequence.add(choice.getChoice());
+        return out;
+    }
+    private boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -930,10 +940,7 @@ public class HumanPlayer extends PlayerImpl {
 
         return false;
     }
-
-    // choose one or multiple target cards
-    @Override
-    public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+    private boolean chooseTargetHelper(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -998,6 +1005,14 @@ public class HumanPlayer extends PlayerImpl {
         }
 
         return false;
+    }
+
+    // choose one or multiple target cards
+    @Override
+    public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
+        boolean out = chooseTargetHelper(outcome, cards, target, source, game);
+        getPlayerHistory().targetSequence.addAll(target.getTargets());
+        return out;
     }
 
     @Override
@@ -1159,6 +1174,16 @@ public class HumanPlayer extends PlayerImpl {
         // TODO: check and change all "this" to controling player calls, many bugs with hand, mana, skips - https://github.com/magefree/mage/issues/2088
         // TODO: use controlling player in all choose dialogs (and canRespond too, what's with take control of player AI?!)
         UserData controllingUserData = this.getControllingPlayersUserData(game);
+
+        //for MCTS opponent
+        List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
+        if(playableAbilities.isEmpty() && !game.isCheckPoint()) {//just pass when only option
+            pass(game);
+            return false;
+        }
+        game.setLastPriority(playerId);
+
+
         if (canRespond()) {
             // TODO: check that all skips and stops used from real controlling player
             //  like holdingPriority (is it a bug here?)
