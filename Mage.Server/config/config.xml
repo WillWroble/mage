@@ -68,6 +68,7 @@
         <playerType name="Human" jar="mage-player-human.jar" className="mage.player.human.HumanPlayer"/>
         <playerType name="Computer - mad" jar="mage-player-ai-ma.jar" className="mage.player.ai.ComputerPlayerControllableProxy"/>
         <playerType name="Computer - monte carlo" jar="mage-player-aimcts.jar" className="mage.player.ai.ComputerPlayerMCTS"/>
+        <playerType name="Computer - MageZero" jar="mage-player-ai-rl.jar" className="mage.player.ai.ComputerPlayerMCTS2"/>
         <playerType name="Computer - draftbot" jar="mage-player-ai-draft-bot.jar" className="mage.player.ai.ComputerDraftPlayer"/>
     </playerTypes>
     <gameTypes>

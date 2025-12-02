@@ -243,7 +243,7 @@ public class ParallelDataGenerator {
         }
         try {
             remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
-            //if(this instanceof SimulateRLvsRL) remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
+            if(this instanceof SimulateRLvsRL) remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
         } catch (Exception e) {
             e.printStackTrace();
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
@@ -354,10 +354,16 @@ public class ParallelDataGenerator {
     private Thread getWriter(LabeledStateWriter fw) {
         Thread writer = new Thread(() -> {
             try {
-                while (!stop.get() || !LSQueue.isEmpty()) {
+                while(!LSQueue.isEmpty() || !stop.get()) {
                     List<LabeledState> batch = LSQueue.take();
                     for (LabeledState s : batch) fw.writeRecord(s);
                     fw.flush(); // flush per game to keep data durable
+                }
+                if(!stop.get()) {
+                    for(List<LabeledState> batch : LSQueue) {
+                        for (LabeledState s : batch) fw.writeRecord(s);
+                        fw.flush();
+                    }
                 }
             } catch (Exception e) {
                 e.printStackTrace();

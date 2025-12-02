@@ -191,6 +191,16 @@ public class MCTSNode {
         }
         return rootGame;
     }
+    public boolean containsPriorityNode() {
+        boolean found = false;
+        for(MCTSNode child : children) {
+            if(child.isTerminal() || (child.nextAction != null && child.nextAction.equals(MCTSPlayer.NextAction.PRIORITY))) {
+                return true;
+            }
+            found |= child.containsPriorityNode();
+        }
+        return found;
+    }
     public MCTSNode select(UUID targetPlayerId) {
         if(children.isEmpty()) {
             logger.error("no children available for selection");

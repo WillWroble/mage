@@ -108,9 +108,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             pass(game);
             return false;
         }
-        if(game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS)) {
-            logger.info("DECLARE_BLOCKERS CPMCTS");
-        }
         game.setLastPriority(playerId);
         Ability ability = null;
         MCTSNode best = getNextAction(game, NextAction.PRIORITY);
@@ -120,7 +117,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         while (!success) {
             if(best != null && best.getAction() != null) {
                 ability = best.getAction().copy();
-                success = activateAbility((ActivatedAbility) ability, game);
+                boolean madeItToPriority = root.containsPriorityNode();
+                success = activateAbility((ActivatedAbility) ability, game) && madeItToPriority;
+
             }
             if (ability == null) {
                 logger.fatal("null ability");
@@ -351,7 +350,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected long totalSimulations = 0;
 
     protected void applyMCTS(final Game game, final NextAction action) {
-        //TODO: implement. right now only
+        //TODO: implement. right now only RL version supported
 
     }
 
