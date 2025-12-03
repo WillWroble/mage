@@ -93,6 +93,7 @@ public interface Player extends MageItem, Copyable<Player> {
     default boolean isComputer() {
         return !isHuman();
     }
+    void illegalGameState(Game game);
 
     String getName();
 

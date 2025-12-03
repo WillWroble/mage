@@ -38,10 +38,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final int THINK_MIN_RATIO = 100; //was originally 40
     protected static final int THINK_MAX_RATIO = 140; //was 80
     protected static final double THINK_TIME_MULTIPLIER = 1.0;
-    protected static final boolean USE_MULTIPLE_THREADS = true;
     //these flags should be set in ParallelDataGenerator.java
-    public static boolean NO_NOISE = false;
+    public static boolean NO_NOISE = true;
     public static boolean NO_POLICY = false;
+    public static boolean NO_POLICY_TARGET_HEAD = false;
     //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)
     public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
     public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
@@ -50,6 +50,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     //how spiky the dirichlet noise will be
     public static double POLICY_PRIOR_TEMP = 1.5;
     public static boolean ROUND_ROBIN_MODE = false;
+    //exploration constant
+    public static double C_PUCT = 1.0;
     //adjust based on available RAM and threads running
     public static int MAX_TREE_NODES = 10000;
 
@@ -106,9 +108,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             pass(game);
             return false;
         }
-        if(game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS)) {
-            logger.info("DECLARE_BLOCKERS CPMCTS");
-        }
         game.setLastPriority(playerId);
         Ability ability = null;
         MCTSNode best = getNextAction(game, NextAction.PRIORITY);
@@ -118,7 +117,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         while (!success) {
             if(best != null && best.getAction() != null) {
                 ability = best.getAction().copy();
-                success = activateAbility((ActivatedAbility) ability, game);
+                boolean madeItToPriority = root.containsPriorityNode();
+                success = activateAbility((ActivatedAbility) ability, game) && madeItToPriority;
+
             }
             if (ability == null) {
                 logger.fatal("null ability");
@@ -349,7 +350,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected long totalSimulations = 0;
 
     protected void applyMCTS(final Game game, final NextAction action) {
-        //TODO: implement. right now only
+        //TODO: implement. right now only RL version supported
 
     }
 

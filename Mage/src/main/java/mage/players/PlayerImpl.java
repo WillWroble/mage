@@ -647,6 +647,14 @@ public abstract class PlayerImpl implements Player, Serializable {
         this.turnControllers.add(playerId);
     }
 
+    /**
+     * only used for MCTS sims. only implement for MCTSPlayer
+     * @param game
+     */
+    public void illegalGameState(Game game) {
+        logger.warn("Illegal game state: " + game);
+    }
+
     @Override
     public List<UUID> getTurnControllers() {
         return this.turnControllers;

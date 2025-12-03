@@ -220,6 +220,7 @@ public abstract class MatchImpl implements Match {
         }
         game.setPriorityTime(options.getMatchTimeLimit().getPrioritySecs());
         game.setBufferTime(options.getMatchBufferTime().getBufferSecs());
+
     }
 
     protected void shufflePlayers() {

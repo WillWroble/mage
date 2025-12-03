@@ -856,10 +856,8 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
-            if (chooseCreatureType(outcome, choice, game)) {
-                return true;
-            }
+        if (choice.getMessage() != null && (choice.getMessage().equalsIgnoreCase("Choose creature type") || choice.getMessage().equalsIgnoreCase("Choose a creature type"))) {
+            return  chooseCreatureType(outcome, choice, game);
         }
         if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1) {
             return chooseHelper(outcome, choice, game);
@@ -976,7 +974,7 @@ public class ComputerPlayer extends PlayerImpl {
     }
 
     /**
-     * for each possible blocker, decides: should I block with this creature? (chooseUse) then decides which attacker to block (chooseTarget)
+     * for each possible blocker,  decides which attacker to block (chooseTarget). it can choose to block nothing.
      * @param source
      * @param game
      * @param defendingPlayerId
@@ -988,13 +986,10 @@ public class ComputerPlayer extends PlayerImpl {
             List<Permanent> blockers = getAvailableBlockers(game);
             blockers.sort(Comparator.comparing(Permanent::getId));
             for (Permanent blocker : blockers) {
-                boolean willBlock = chooseUse(Outcome.Neutral, "block with: " + blocker.getName() + "?", null, game);
-                if (willBlock) {//now choose which creature to block
-                    Target attackerTarget = new TargetAttackingCreature(1);
-                    makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game, null);
-                    UUID attackerId = attackerTarget.getFirstTarget();
-                    declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
-                }
+                Target attackerTarget = new TargetAttackingCreature(0, 1);
+                makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game, null);
+                UUID attackerId = attackerTarget.getFirstTarget();
+                declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
             }
             game.getPlayers().resetPassed();
         }
@@ -1458,10 +1453,12 @@ public class ComputerPlayer extends PlayerImpl {
 
         // restore used in AI simulations
         // all human players converted to computer and analyse
-        ComputerPlayer cPlayer = (ComputerPlayer)player;
-        chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
-        choiceOptions = new HashSet<>(cPlayer.choiceOptions);
-        playables = new ArrayList<>(cPlayer.playables);
+        if(player instanceof ComputerPlayer) {
+            ComputerPlayer cPlayer = (ComputerPlayer) player;
+            chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
+            choiceOptions = new HashSet<>(cPlayer.choiceOptions);
+            playables = new ArrayList<>(cPlayer.playables);
+        }
         this.human = false;
     }
     protected List<ActivatedAbility> getPlayableAbilities(Game game) {

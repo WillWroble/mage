@@ -30,7 +30,6 @@ import static java.lang.Math.*;
 public class MCTSNode {
 
     public static final boolean USE_ACTION_CACHE = false;
-    private static final double selectionCoefficient = 1.0;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
 
 
@@ -192,6 +191,16 @@ public class MCTSNode {
         }
         return rootGame;
     }
+    public boolean containsPriorityNode() {
+        boolean found = false;
+        for(MCTSNode child : children) {
+            if(child.isTerminal() || (child.nextAction != null && child.nextAction.equals(MCTSPlayer.NextAction.PRIORITY))) {
+                return true;
+            }
+            found |= child.containsPriorityNode();
+        }
+        return found;
+    }
     public MCTSNode select(UUID targetPlayerId) {
         if(children.isEmpty()) {
             logger.error("no children available for selection");
@@ -216,7 +225,7 @@ public class MCTSNode {
                     ? (child.getScoreRatio())
                     : 0.0;
             // exploration term
-            double u = selectionCoefficient * (child.prior) * (sqrtN / (1 + child.visits));
+            double u = ComputerPlayerMCTS.C_PUCT * (child.prior) * (sqrtN / (1 + child.visits));
 
             // combined PUCT
             double val = sign * q + u;
@@ -308,7 +317,7 @@ public class MCTSNode {
     private int nodeToIdx(MCTSNode node, MCTSPlayer.NextAction nextAction, Game game) {
         int idx;
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
-            idx = ActionEncoder.getActionIndex(node.getAction(), game.getPlayer(playerId).getName().equals("PlayerA"));
+            idx = ActionEncoder.getActionIndex(node.getAction(), playerId.equals(targetPlayer));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
             idx = ActionEncoder.getTargetIndex(game.getEntityName(node.chooseTargetAction));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
@@ -332,7 +341,7 @@ public class MCTSNode {
             node.depth = depth + 1;
             node.prior = 1.0/children.size();
         }
-        if (policy != null && !ComputerPlayerMCTS.NO_POLICY && nextAction != MCTSPlayer.NextAction.MAKE_CHOICE) {
+        if (policy != null && !ComputerPlayerMCTS.NO_POLICY && nextAction != MCTSPlayer.NextAction.MAKE_CHOICE && !(nextAction.equals(MCTSPlayer.NextAction.CHOOSE_TARGET) && ComputerPlayerMCTS.NO_POLICY_TARGET_HEAD)) {
 
             double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
 

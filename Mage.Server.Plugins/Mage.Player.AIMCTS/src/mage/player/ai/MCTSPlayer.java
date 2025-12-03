@@ -18,12 +18,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * AI: server side bot with monte carlo logic (experimental, the latest version)
- * <p>
- * Simple implementation for random play, outdate and do not support,
- * see <a href="https://github.com/magefree/mage/issues/7075">more details here</a>
+ * Dummy player for MCTS sims. replays through micro-decisions with deterministic action scripts created by
+ * controlling/thinking player.
  *
- * @author BetaSteward_at_googlemail.com
+ * @author willwroble@gmail.com
  */
 public class MCTSPlayer extends ComputerPlayer {
 
@@ -179,7 +177,7 @@ public class MCTSPlayer extends ComputerPlayer {
         nextAction = NextAction.PRIORITY;
         return false;
     }
-
+    @Deprecated
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
@@ -202,7 +200,7 @@ public class MCTSPlayer extends ComputerPlayer {
         lastToAct = true;
         nextAction = NextAction.SELECT_ATTACKERS;
     }
-
+    @Deprecated
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
@@ -353,6 +351,11 @@ public class MCTSPlayer extends ComputerPlayer {
         lastToAct = true;
         nextAction = NextAction.CHOOSE_USE;
         return false; //defaults to try to avoid infinite use issues from poorly implemented abilities
+    }
+    @Override
+    public void illegalGameState(Game game) {
+        scriptFailed = true;
+        game.pause();
     }
 }
 
