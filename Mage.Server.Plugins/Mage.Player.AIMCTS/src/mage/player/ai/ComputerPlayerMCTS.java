@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 public class ComputerPlayerMCTS extends ComputerPlayer {
 
     public static final int BASE_THREAD_TIMEOUT = 4;//seconds
-    public static final int MAX_TREE_VISITS = 250;//per thread
+    public static final int MAX_TREE_VISITS = 300;//per thread
     //these aren't used for RL, see ComputerPlayerMCTS2
     protected static final int THINK_MIN_RATIO = 100; //was originally 40
     protected static final int THINK_MAX_RATIO = 140; //was 80
