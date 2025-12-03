@@ -39,7 +39,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected static final int THINK_MAX_RATIO = 140; //was 80
     protected static final double THINK_TIME_MULTIPLIER = 1.0;
     //these flags should be set in ParallelDataGenerator.java
-    public static boolean NO_NOISE = false;
+    public static boolean NO_NOISE = true;
     public static boolean NO_POLICY = false;
     public static boolean NO_POLICY_TARGET_HEAD = false;
     //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)

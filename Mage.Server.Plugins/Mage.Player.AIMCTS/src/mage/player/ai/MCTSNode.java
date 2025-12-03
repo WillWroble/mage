@@ -317,7 +317,7 @@ public class MCTSNode {
     private int nodeToIdx(MCTSNode node, MCTSPlayer.NextAction nextAction, Game game) {
         int idx;
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
-            idx = ActionEncoder.getActionIndex(node.getAction(), game.getPlayer(playerId).getName().equals("PlayerA"));
+            idx = ActionEncoder.getActionIndex(node.getAction(), playerId.equals(targetPlayer));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
             idx = ActionEncoder.getTargetIndex(game.getEntityName(node.chooseTargetAction));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {

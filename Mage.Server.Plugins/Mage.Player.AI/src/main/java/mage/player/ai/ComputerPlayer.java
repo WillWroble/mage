@@ -1453,10 +1453,12 @@ public class ComputerPlayer extends PlayerImpl {
 
         // restore used in AI simulations
         // all human players converted to computer and analyse
-        ComputerPlayer cPlayer = (ComputerPlayer)player;
-        chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
-        choiceOptions = new HashSet<>(cPlayer.choiceOptions);
-        playables = new ArrayList<>(cPlayer.playables);
+        if(player instanceof ComputerPlayer) {
+            ComputerPlayer cPlayer = (ComputerPlayer) player;
+            chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
+            choiceOptions = new HashSet<>(cPlayer.choiceOptions);
+            playables = new ArrayList<>(cPlayer.playables);
+        }
         this.human = false;
     }
     protected List<ActivatedAbility> getPlayableAbilities(Game game) {

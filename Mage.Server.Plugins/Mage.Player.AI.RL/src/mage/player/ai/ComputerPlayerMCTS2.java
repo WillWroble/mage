@@ -20,6 +20,7 @@ import mage.players.Library;
 import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
+import org.roaringbitmap.RoaringBitmap;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -62,6 +63,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         encoder = player.encoder;
     }
     public void createAllActionsFromDeck(Deck deck, Map<String, Integer> actionMap) throws GameException {
+        logger.warn("createAllActionsFromDeck; deck size: " + deck.getCards().size());
         logger.debug("Done!");
         if (deck.getMaindeckCards().size() < 40) {
             throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
@@ -81,18 +83,18 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     String name = aa.toString();
                     if (!actionMap.containsKey(name)) {
                         actionMap.put(name, index++);
-                        logger.info("mapping " + name + " to " + (index - 1));
+                        logger.warn("mapping " + name + " to " + (index - 1));
                     }
                 }
             }
         }
     }
-    public void createAllTargetsFromDecks(Deck deckA, Deck deckB) throws GameException {
+    public void createAllTargetsFromDecks(Deck deckA, Deck deckB, Game game) throws GameException {
         Deck[] decks = new Deck[] {deckA, deckB};
         //null (wildcard/unknown) is always 0
         ActionEncoder.targetMap.put("null", 0);
-        ActionEncoder.targetMap.put("PlayerA", 1);
-        ActionEncoder.targetMap.put("PlayerB", 2);
+        ActionEncoder.targetMap.put(getName(), 1);
+        ActionEncoder.targetMap.put(game.getPlayer(game.getOpponents(playerId).iterator().next()).getName(), 2);
         int index = 3;
         logger.debug("Loading decks...");
         for(Deck deck : decks) {
@@ -131,32 +133,31 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             }
         }
     }
-    @Override
-    public void init(Game game) {
-        super.init(game);
-        if(encoder == null) {//fallback init for human vs RL
-            //make action maps
-            try {
-                ActionEncoder.playerActionMap.clear();
-                ActionEncoder.opponentActionMap.clear();
-                ActionEncoder.targetMap.clear();
-                Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
-                createAllActionsFromDeck(getMatchPlayer().getDeck(), ActionEncoder.playerActionMap);
-                createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), ActionEncoder.opponentActionMap);
-                createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck());
-            } catch (GameException e) {
-                throw new RuntimeException(e);
-            }
-            //make encoder
-            encoder = new StateEncoder();
-            //find model endpoint
-            try {
-                nn = new RemoteModelEvaluator(MODEL_URL);
-            } catch (Exception e) {
-                e.printStackTrace();
-                logger.warn("Failed to establish connection to network model; falling back to offline mode");
-                ComputerPlayerMCTS2.OFFLINE_MODE = true;
-            }
+    public void RLInit(Game game) {
+        Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+        //make action maps
+        try {
+            ActionEncoder.playerActionMap.clear();
+            ActionEncoder.opponentActionMap.clear();
+            ActionEncoder.targetMap.clear();
+            createAllActionsFromDeck(getMatchPlayer().getDeck(), ActionEncoder.playerActionMap);
+            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), ActionEncoder.opponentActionMap);
+            createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck(), game);
+        } catch (GameException e) {
+            throw new RuntimeException(e);
+        }
+        //make encoder
+        encoder = new StateEncoder();
+        encoder.setAgent(getId());
+        encoder.setOpponent(opponent.getId());
+        encoder.seenFeatures = null;
+        //find model endpoint
+        try {
+            nn = new RemoteModelEvaluator(MODEL_URL);
+        } catch (Exception e) {
+            e.printStackTrace();
+            logger.warn("Failed to establish connection to network model; falling back to offline mode");
+            ComputerPlayerMCTS2.OFFLINE_MODE = true;
         }
     }
 
@@ -194,6 +195,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
 
         RemoteModelEvaluator.InferenceResult out = nn.infer(nnIndices);
+        logger.warn("INFER");
         switch (myPlayer.getNextAction()) {
             case PRIORITY:
                 if(node.playerId.equals(playerId)) {
@@ -238,6 +240,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      */
     @Override
     protected void applyMCTS(final Game game, final NextAction action) {
+        if(encoder == null) {
+            RLInit(game);
+        }
         int initialVisits = root.getVisits();
         if (SHOW_THREAD_INFO) logger.info(String.format("STARTING ROOT VISITS: %d", initialVisits));
 
@@ -351,7 +356,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if(best == null) return null;
             int[] actionVec = null;
             if (action == NextAction.PRIORITY) {
-                actionVec = getActionVec(root, name.equals("PlayerA"));
+                actionVec = getActionVec(root, true); //TODO: this is assuming only 1 RL agent per match
             }
             else if(action == NextAction.CHOOSE_TARGET) {
                 actionVec = getTargetActionVec(root, game);
@@ -359,7 +364,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             else if(action == NextAction.CHOOSE_USE) {
                 actionVec = getUseActionVec(root);
             }
-            if(actionVec != null) encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, getName().equals("PlayerA"));
+            if(actionVec != null) encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, true);
             return best;
             //root.emancipate();
         } else {
