@@ -35,6 +35,7 @@ public class MCTSPlayer extends ComputerPlayer {
     public PlayerScript actionScript = new PlayerScript();
     //additional text for state encoder that describes the decision the player is currently making
     public String decisionText;
+    public boolean isRandomTransition;
 
 
 
@@ -42,7 +43,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
 
     public enum NextAction {
-        PRIORITY, SELECT_ATTACKERS, SELECT_BLOCKERS, CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE
+        PRIORITY, CHOOSE_MODE, BLANK, CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE
     }
 
     public MCTSPlayer(UUID id) {
@@ -59,79 +60,6 @@ public class MCTSPlayer extends ComputerPlayer {
         return new MCTSPlayer(this);
     }
 
-
-    public List<List<UUID>> getAttacks(Game game) {
-        List<List<UUID>> engagements = new ArrayList<>();
-        List<Permanent> attackersList = super.getAvailableAttackers(game);
-        //use binary digits to calculate powerset of attackers
-        int powerElements = (int) Math.pow(2, attackersList.size());
-        StringBuilder binary = new StringBuilder();
-        for (int i = powerElements - 1; i >= 0; i--) {
-            binary.setLength(0);
-            binary.append(Integer.toBinaryString(i));
-            while (binary.length() < attackersList.size()) {
-                binary.insert(0, '0');
-            }
-            List<UUID> engagement = new ArrayList<>();
-            for (int j = 0; j < attackersList.size(); j++) {
-                if (binary.charAt(j) == '1') {
-                    engagement.add(attackersList.get(j).getId());
-                }
-            }
-            engagements.add(engagement);
-        }
-        return engagements;
-    }
-
-    public List<List<List<UUID>>> getBlocks(Game game) {
-        List<List<List<UUID>>> engagements = new ArrayList<>();
-        int numGroups = game.getCombat().getGroups().size();
-        if (numGroups == 0) {
-            return engagements;
-        }
-
-        //add a node with no blockers
-        List<List<UUID>> engagement = new ArrayList<>();
-        for (int i = 0; i < numGroups; i++) {
-            engagement.add(new ArrayList<UUID>());
-        }
-        engagements.add(engagement);
-
-        List<Permanent> blockers = getAvailableBlockers(game);
-        addBlocker(game, engagement, blockers, engagements);
-
-        return engagements;
-    }
-
-    private List<List<UUID>> copyEngagement(List<List<UUID>> engagement) {
-        List<List<UUID>> newEngagement = new ArrayList<>();
-        for (List<UUID> group : engagement) {
-            newEngagement.add(new ArrayList<>(group));
-        }
-        return newEngagement;
-    }
-
-    protected void addBlocker(Game game, List<List<UUID>> engagement, List<Permanent> blockers, List<List<List<UUID>>> engagements) {
-        if (blockers.isEmpty())
-            return;
-        int numGroups = game.getCombat().getGroups().size();
-        //try to block each attacker with each potential blocker
-        Permanent blocker = blockers.get(0);
-//        if (logger.isDebugEnabled())
-//            logger.debug("simulating -- block:" + blocker);
-        List<Permanent> remaining = remove(blockers, blocker);
-        for (int i = 0; i < numGroups; i++) {
-            if (game.getCombat().getGroups().get(i).canBlock(blocker, game)) {
-                List<List<UUID>> newEngagement = copyEngagement(engagement);
-                newEngagement.get(i).add(blocker.getId());
-                engagements.add(newEngagement);
-//                    logger.debug("simulating -- found redundant block combination");
-                addBlocker(game, newEngagement, remaining, engagements);  // and recurse minus the used blocker
-            }
-        }
-        addBlocker(game, engagement, remaining, engagements);
-    }
-
     public NextAction getNextAction() {
         return nextAction;
     }
@@ -145,7 +73,11 @@ public class MCTSPlayer extends ComputerPlayer {
         // simulated player can be created from any player type
         super.restore(player.getRealPlayer());
     }
-
+    @Override
+    public int drawCards(int num, Ability source, Game game) {
+        isRandomTransition = true;
+        return drawCards(num, source, game, null);
+    }
     @Override
     public boolean priority(Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
@@ -155,7 +87,7 @@ public class MCTSPlayer extends ComputerPlayer {
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
             boolean success = activateAbility(ability, game);
             if(!success && !lastToAct) {//if decision costs need to be resolved let them simulate out
-                logger.debug(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
+                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
                 scriptFailed = true;
                 game.pause();
                 lastToAct = true;
@@ -177,63 +109,15 @@ public class MCTSPlayer extends ComputerPlayer {
         nextAction = NextAction.PRIORITY;
         return false;
     }
-    @Deprecated
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
-        if(ComputerPlayerMCTS.SIMULATE_ATTACKERS_ONE_AT_A_TIME) {
-            selectAttackersOneAtATime(game, attackingPlayerId);
-            return;
-        }
-        if(!actionScript.combatSequence.isEmpty()) {
-            Combat combat = actionScript.combatSequence.pollFirst().copy();
-            UUID opponentId = game.getCombat().getDefenders().iterator().next();
-            for (UUID attackerId : combat.getAttackers()) {
-                if(game.getPermanent(attackerId) == null) continue;
-                this.declareAttacker(attackerId, opponentId, game, false);
-            }
-            getPlayerHistory().combatSequence.add(game.getCombat().copy());
-            return;
-        }
-        decisionText = "select attackers";
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.SELECT_ATTACKERS;
+        selectAttackersOneAtATime(game, attackingPlayerId);
     }
-    @Deprecated
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
-        if(ComputerPlayerMCTS.SIMULATE_BLOCKERS_ONE_AT_A_TIME) {
-            selectBlockersOneAtATime(source, game, defendingPlayerId);
-            return;
-        }
-        if(!actionScript.combatSequence.isEmpty()) {
-            Combat simulatedCombat = actionScript.combatSequence.pollFirst().copy();
-            List<CombatGroup> currentGroups = game.getCombat().getGroups();
-            for (int i = 0; i < currentGroups.size(); i++) {
-                if (i < simulatedCombat.getGroups().size()) {
-                    CombatGroup currentGroup = currentGroups.get(i);
-                    CombatGroup simulatedGroup = simulatedCombat.getGroups().get(i);
-                    if(currentGroup.getAttackers().isEmpty()) {
-                        logger.info("Attacker not found - skipping");
-                        continue;
-                    }
-                    for (UUID blockerId : simulatedGroup.getBlockers()) {
-                        // blockers can be added automaticly by requirement effects, so we must add only missing blockers
-                        if (!currentGroup.getBlockers().contains(blockerId)) {
-                            this.declareBlocker(this.getId(), blockerId, currentGroup.getAttackers().get(0), game);
-                        }
-                    }
-                }
-            }
-            getPlayerHistory().combatSequence.add(game.getCombat().copy());
-            return;
-        }
-        decisionText = "select blockers";
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.SELECT_BLOCKERS;
+        selectBlockersOneAtATime(source, game, defendingPlayerId);
     }
 
     @Override
@@ -353,8 +237,37 @@ public class MCTSPlayer extends ComputerPlayer {
         return false; //defaults to try to avoid infinite use issues from poorly implemented abilities
     }
     @Override
+    public Mode chooseMode(Modes modes, Ability source, Game game) {
+        if(game.isPaused() || game.checkIfGameIsOver()) {
+            return super.chooseModeHelper(modes, source, game);
+        }
+
+        modeOptions = modes.getAvailableModes(source, game).stream()
+                .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toSet());
+        if(modeOptions.isEmpty()) {
+            logger.debug("no mode options - fizzle");
+            return null; //fizzle
+        }
+        if(modeOptions.size() == 1) {
+            return modeOptions.iterator().next();
+        }
+        if (!actionScript.modeSequence.isEmpty()) {
+            Mode chosenMode = actionScript.modeSequence.pollFirst();
+            getPlayerHistory().modeSequence.add(chosenMode);
+            if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried mode: %s ", chosenMode));
+            return chosenMode;
+        }
+        decisionText = "choose mode for " + source.toString();
+        game.pause();
+        lastToAct = true;
+        nextAction = NextAction.CHOOSE_MODE;
+        return super.chooseModeHelper(modes, source, game);
+    }
+    @Override
     public void illegalGameState(Game game) {
         scriptFailed = true;
+        lastToAct = true;
         game.pause();
     }
 }

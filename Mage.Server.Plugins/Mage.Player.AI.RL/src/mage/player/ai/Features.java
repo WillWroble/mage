@@ -142,7 +142,7 @@ public class Features implements Serializable {
         occurrences.put(name, n);
         String key = (name+"#"+n);
         long hash = hash64(key, seed);
-        addIndex(indexFor(hash), key);
+        addIndex(hash, key);
     }
 
     public void addNumericFeature(String name, int num) {
@@ -172,11 +172,12 @@ public class Features implements Serializable {
             categoryMap.get(n).stateRefresh();
         }
     }
-    private void addIndex(int idx, String key) {
+    private void addIndex(long h, String key) {
+        int idx = indexFor(h);
         encoder.featureVector.add(idx);
         if (encoder.seenFeatures != null) {
-            if (!encoder.seenFeatures.contains(idx)) {
-                encoder.seenFeatures.add(idx);
+            if (!encoder.seenFeatures.contains((int) h)) {
+                encoder.seenFeatures.add((int) h);
                 if (Features.printNewFeatures) logger.info("new feature, " + key + " in " + featureName + ", at index: " + idx);
             } else {
                 if (Features.printOldFeatures) logger.info("seen feature, " + key  + " in " + featureName + ", at index: " + idx);

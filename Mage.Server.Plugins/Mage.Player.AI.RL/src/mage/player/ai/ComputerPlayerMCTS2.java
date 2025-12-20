@@ -1,14 +1,13 @@
 package mage.player.ai;
 
 
+import com.j256.ormlite.stmt.query.In;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.effects.Effect;
 import mage.abilities.effects.common.CreateTokenEffect;
 import mage.cards.Card;
 import mage.cards.decks.Deck;
-import mage.cards.decks.DeckCardLists;
-import mage.cards.decks.importer.DeckImporter;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
@@ -16,11 +15,9 @@ import mage.game.GameException;
 import mage.game.permanent.token.Token;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.player.ai.score.GameStateEvaluator2;
-import mage.players.Library;
 import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
-import org.roaringbitmap.RoaringBitmap;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -38,12 +35,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
-    private transient StateEncoder encoder = null;
+    private transient StateEncoder stateEncoder = null;
     public static final int[] PASS_ACTION = {0,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-    public static boolean SHOW_THREAD_INFO = false;
+    public static boolean SHOW_THREAD_INFO = true;
     /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
     is enabled by default if no network is found*/
-    public static boolean OFFLINE_MODE = false;
+    public boolean offlineMode = false;
     protected static String MODEL_URL = "http://127.0.0.1:50052";
     public transient RemoteModelEvaluator nn;
 
@@ -60,19 +57,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
     public ComputerPlayerMCTS2(final ComputerPlayerMCTS2 player) {
         super(player); nn = player.nn;
-        encoder = player.encoder;
+        stateEncoder = player.stateEncoder;
     }
-    public void createAllActionsFromDeck(Deck deck, Map<String, Integer> actionMap) throws GameException {
-        logger.warn("createAllActionsFromDeck; deck size: " + deck.getCards().size());
-        logger.debug("Done!");
+    public static void createAllActionsFromDeck(Deck deck, Map<String, Integer> actionMap) throws GameException {
+        logger.info("createAllActionsFromDeck; deck size: " + deck.getCards().size());
         if (deck.getMaindeckCards().size() < 40) {
             throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
         }
-        //null (wildcard/unknown) is always 0
-        actionMap.put("null", 0);
-        //pass is always 1
-        actionMap.put("Pass", 1);
-        int index = 2;
+        //pass is always 0
+        actionMap.put("Pass", 0);
+        int index = 1;
         List<Card> sortedCards = new ArrayList<>(deck.getCards());
         sortedCards.sort(Comparator.comparing(Card::getName));
         for(Card card : sortedCards) {
@@ -83,30 +77,28 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     String name = aa.toString();
                     if (!actionMap.containsKey(name)) {
                         actionMap.put(name, index++);
-                        logger.warn("mapping " + name + " to " + (index - 1));
+                        logger.info("mapping " + name + " to " + (index - 1));
                     }
                 }
             }
         }
     }
-    public void createAllTargetsFromDecks(Deck deckA, Deck deckB, Game game) throws GameException {
+    public static void createAllTargetsFromDecks(Deck deckA, Deck deckB, Map<String, Integer> targetMap, String nameA, String nameB) throws GameException {
         Deck[] decks = new Deck[] {deckA, deckB};
-        //null (wildcard/unknown) is always 0
-        ActionEncoder.targetMap.put("null", 0);
-        ActionEncoder.targetMap.put(getName(), 1);
-        ActionEncoder.targetMap.put(game.getPlayer(game.getOpponents(playerId).iterator().next()).getName(), 2);
+        //null (no targets) is always 0
+        targetMap.put("null", 0);
+        targetMap.put(nameA, 1);
+        targetMap.put(nameB, 2);
         int index = 3;
-        logger.debug("Loading decks...");
         for(Deck deck : decks) {
-            logger.debug("Done!");
             if (deck.getMaindeckCards().size() < 40) {
                 throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
             }
             List<Card> sortedCards = new ArrayList<>(deck.getCards());
             sortedCards.sort(Comparator.comparing(Card::getName));
             for (Card card : sortedCards) {
-                if(!ActionEncoder.targetMap.containsKey(card.getName())) {
-                    ActionEncoder.targetMap.put(card.getName(), index++);
+                if(!targetMap.containsKey(card.getName())) {
+                    targetMap.put(card.getName(), index++);
                     logger.info("mapping " + card.getName() + " to " + (index - 1));
                 }
                 //check for tokens
@@ -122,8 +114,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                             sortedTokens.sort(Comparator.comparing(Token::getName));
                             for (Token token : sortedTokens) {
                                 String name = token.getName();
-                                if (!ActionEncoder.targetMap.containsKey(token.getName())) {
-                                    ActionEncoder.targetMap.put(name, index++);
+                                if (!targetMap.containsKey(token.getName())) {
+                                    targetMap.put(name, index++);
                                     logger.info("mapping " + name + " to " + (index - 1));
                                 }
                             }
@@ -133,31 +125,32 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             }
         }
     }
-    public void RLInit(Game game) {
+    public void actionsInit(Game game) {
         Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+        actionEncoder = new ActionEncoder();
         //make action maps
         try {
-            ActionEncoder.playerActionMap.clear();
-            ActionEncoder.opponentActionMap.clear();
-            ActionEncoder.targetMap.clear();
-            createAllActionsFromDeck(getMatchPlayer().getDeck(), ActionEncoder.playerActionMap);
-            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), ActionEncoder.opponentActionMap);
-            createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck(), game);
+            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
+            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
+            createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck(), actionEncoder.targetMap, getName(), opponent.getName());
         } catch (GameException e) {
             throw new RuntimeException(e);
         }
+    }
+    public void RLInit(Game game) {
+        Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
         //make encoder
-        encoder = new StateEncoder();
-        encoder.setAgent(getId());
-        encoder.setOpponent(opponent.getId());
-        encoder.seenFeatures = null;
+        stateEncoder = new StateEncoder();
+        stateEncoder.setAgent(getId());
+        stateEncoder.setOpponent(opponent.getId());
+        stateEncoder.seenFeatures = null;
         //find model endpoint
         try {
             nn = new RemoteModelEvaluator(MODEL_URL);
         } catch (Exception e) {
             e.printStackTrace();
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
-            ComputerPlayerMCTS2.OFFLINE_MODE = true;
+            offlineMode = true;
         }
     }
 
@@ -177,10 +170,10 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     protected double evaluateState(MCTSNode node, Game game) {
         MCTSPlayer myPlayer = (MCTSPlayer)game.getPlayer(node.playerId);
 
-        Set<Integer> featureSet = encoder.processState(game, node.playerId, myPlayer.getNextAction(), myPlayer.decisionText);
+        Set<Integer> featureSet = stateEncoder.processState(game, node.playerId, myPlayer.getNextAction(), myPlayer.decisionText);
         node.stateVector = featureSet;
 
-        if(OFFLINE_MODE) {
+        if(offlineMode) {
             node.policy = null;
             int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
             node.networkScore = Math.tanh(heuristicScore * 1.0 / 20000);
@@ -195,37 +188,41 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
 
         RemoteModelEvaluator.InferenceResult out = nn.infer(nnIndices);
-        logger.warn("INFER");
-        switch (myPlayer.getNextAction()) {
-            case PRIORITY:
-                if(node.playerId.equals(playerId)) {
-                    node.policy = out.policy_player;
-                } else {
-                    if(!ROUND_ROBIN_MODE) {
-                        node.policy = out.policy_opponent;
+        //logger.warn("INFER");
+        if(!noPolicy) {
+            switch (myPlayer.getNextAction()) {
+                case PRIORITY:
+                    if (node.playerId.equals(playerId)) {
+                        node.policy = out.policy_player;
+                    } else {
+                        if (!roundRobinMode) {
+                            node.policy = out.policy_opponent;
+                        }
                     }
-                }
-                break;
-            case CHOOSE_TARGET:
-                if(!ROUND_ROBIN_MODE ||
-                    myPlayer.chooseTargetOptions.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId))) {
-                    node.policy = out.policy_target;
-                }
-                break;
-            case CHOOSE_USE:
-                node.policy = out.policy_binary;
-                break;
-            default:
-                node.policy = null;
+                    break;
+                case CHOOSE_TARGET:
+                    if(noPolicyTarget) break;
+                    if (!roundRobinMode ||
+                            myPlayer.chooseTargetOptions.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId))) {
+                        node.policy = out.policy_target;
+                    }
+                    break;
+                case CHOOSE_USE:
+                    if(noPolicyUse) break;
+                    node.policy = out.policy_binary;
+                    break;
+                default:
+                    node.policy = null;
 
+            }
         }
         node.networkScore = out.value;
 
         return node.networkScore;
     }
 
-    public void setEncoder(StateEncoder enc) {
-        encoder = enc;
+    public void setStateEncoder(StateEncoder enc) {
+        stateEncoder = enc;
     }
     @Override
     public boolean priority(Game game) {
@@ -240,26 +237,31 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      */
     @Override
     protected void applyMCTS(final Game game, final NextAction action) {
-        if(encoder == null) {
+        if(stateEncoder == null) {
             RLInit(game);
         }
+        if(actionEncoder == null) {
+            actionsInit(game);
+        }
+        root.resetVirtual();
         int initialVisits = root.getVisits();
+        int childVisits = getChildVisitsFromRoot().stream().mapToInt(Integer::intValue).sum();
         if (SHOW_THREAD_INFO) logger.info(String.format("STARTING ROOT VISITS: %d", initialVisits));
 
 
         double totalThinkTimeThisMove = 0;
 
         // Apply dirichlet noise once at the start of the search for this turn
-        if(!NO_NOISE) root.dirichletSeed = RandomUtil.nextInt();
-
+        if(!noNoise) root.dirichletSeed = RandomUtil.nextInt();
 
         long startTime = System.nanoTime();
         long endTime = startTime + (BASE_THREAD_TIMEOUT * 1_000_000_000L);
         int simCount = 0;
 
+
         // --- Run simulations for one cycle (e.g., 1 second) ---
         while (System.nanoTime() < endTime) {
-            if(simCount + initialVisits >= maxVisits) {
+            if(simCount + childVisits >= maxVisits) {
                 logger.info("required visits reached, ending search");
                 break;
             }
@@ -268,10 +270,22 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 break;
             }
             MCTSNode current = root;
+            boolean hitDepthLimit = false;
 
             // selection
             while (!current.isLeaf()) {
+                if((current.rootState.getTurnNum() - root.rootState.getTurnNum() >= MAX_GAME_DEPTH) &&
+                        current.rootState.getTurnPhaseType().equals(root.rootState.getTurnPhaseType())) {
+                    hitDepthLimit = true;
+                    break;
+
+                }
                 current = current.select(this.playerId);
+            }
+            if(hitDepthLimit) {
+                current.backpropagate(current.getMeanScore(), true);
+                //simCount++;
+                continue;
             }
             //temporary reference to a game that represents this nodes state
             Game tempGame = null;
@@ -294,7 +308,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 logger.debug("found terminal node in tree");
             }
             // backprop
-            current.backpropagate(result);
+            current.backpropagate(result, false);
             simCount++;
         }
         totalSimulations += simCount;
@@ -321,8 +335,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Arrays.fill(out, 0);
         for (MCTSNode child : node.children) {
             if (child.getAction() != null) {
-                int idx = ActionEncoder.getActionIndex(child.getAction(), isPlayer);
-                int v = child.visits;//un normalized counts
+                int idx = actionEncoder.getActionIndex(child.getAction(), isPlayer);
+                int v = child.getVisits();//un normalized counts
                 out[idx%128] += v;
             }
         }
@@ -332,8 +346,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int[] out = new int[128];
         Arrays.fill(out, 0);
         for (MCTSNode child : node.children) {
-            int idx = ActionEncoder.getTargetIndex(game.getEntityName(child.chooseTargetAction).toString());
-            int v = child.visits;
+            int idx = actionEncoder.getTargetIndex(game.getEntityName(child.chooseTargetAction));
+            int v = child.getVisits();
             out[idx%128] += v;
         }
         return out;
@@ -343,7 +357,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Arrays.fill(out, 0);
         for (MCTSNode child : node.children) {
             int idx = child.useAction ? 1 : 0;
-            int v = child.visits;
+            int v = child.getVisits();
             out[idx] += v;
         }
         return out;
@@ -356,7 +370,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if(best == null) return null;
             int[] actionVec = null;
             if (action == NextAction.PRIORITY) {
-                actionVec = getActionVec(root, true); //TODO: this is assuming only 1 RL agent per match
+                actionVec = getActionVec(root, true);
             }
             else if(action == NextAction.CHOOSE_TARGET) {
                 actionVec = getTargetActionVec(root, game);
@@ -364,7 +378,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             else if(action == NextAction.CHOOSE_USE) {
                 actionVec = getUseActionVec(root);
             }
-            if(actionVec != null) encoder.addLabeledState(root.stateVector, actionVec, root.getScoreRatio(), action, true);
+            if(actionVec != null) stateEncoder.addLabeledState(root.stateVector, actionVec, root.getMeanScore(), action, true);
             return best;
             //root.emancipate();
         } else {
@@ -379,6 +393,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if (root == null || root.children.isEmpty()) {
             return new ArrayList<>();
         }
-        return root.children.stream().map(child -> child.visits).collect(Collectors.toList());
+        return root.children.stream().map(MCTSNode::getVisits).collect(Collectors.toList());
     }
 }

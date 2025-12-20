@@ -689,11 +689,12 @@ public class Combat implements Serializable, Copyable<Combat> {
             int aiTries = 0;
             while (true) {
                 aiTries++;
-                if(aiTries > 1 && game.isSimulation()) {
-                    controller.illegalGameState(game);
+                if(aiTries > 1 && game.isSimulation()) {//TODO: properly implement this
+                    //controller.illegalGameState(game);
+                    //break;
                 }
 
-                if (false && controller.isComputer() && aiTries > 20) {
+                if (controller.isComputer() && aiTries > 20) {
                     // TODO: AI must use real attacker/blocker configuration with all possible combination
                     //  (current human like logic will fail sometime, e.g. with menace and big/low creatures)
                     // real game: send warning

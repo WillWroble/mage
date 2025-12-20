@@ -3,21 +3,22 @@ package mage.player.ai;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.mana.ManaAbility;
-import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.GameImpl;
+import mage.game.GameException;
 import mage.game.events.GameEvent;
 import mage.players.Player;
 import mage.target.Target;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import static mage.player.ai.ComputerPlayerMCTS2.createAllActionsFromDeck;
+import static mage.player.ai.ComputerPlayerMCTS2.createAllTargetsFromDecks;
 
 /**
  * minimax player that logs priority decisions (as one hot vectors) and state values (as minimax derived score of root normalized to -1,1)
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 public class ComputerPlayer8 extends ComputerPlayer7{
     private static final Logger log = LoggerFactory.getLogger(ComputerPlayer8.class);
     private transient StateEncoder encoder;
+    private transient ActionEncoder actionEncoder = null;
 
     public ComputerPlayer8(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
@@ -36,6 +38,19 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     }
     public StateEncoder getEncoder() {return encoder;}
 
+    public void actionsInit(Game game) {
+        Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+        actionEncoder = new ActionEncoder();
+        //make action maps
+        try {
+            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
+            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
+            createAllTargetsFromDecks(opponent.getMatchPlayer().getDeck(), getMatchPlayer().getDeck(), actionEncoder.targetMap, opponent.getName(), getName());
+        } catch (GameException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     @Override
     public boolean priority(Game game) {
         game.resumeTimer(getTurnControlledBy());
@@ -44,6 +59,9 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         return result;
     }
     private boolean priorityPlay(Game game) {
+        if(actionEncoder == null) {
+            actionsInit(game);
+        }
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
 
@@ -130,7 +148,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     }
     int [] getActionVec(Ability a) {
         int[] out = new int[128];
-        out[ActionEncoder.getActionIndex(a, name.equals("PlayerA"))] = 1;
+        out[actionEncoder.getActionIndex(a, false)] = 1;
         return out;
     }
     @Override
@@ -153,8 +171,8 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         log.info("found matching root with {} visits", root.visits);
                         root.emancipate();
                         int[] visits = mcts2.getActionVec(root, false);
-                        visits[ActionEncoder.getActionIndex(ability, false)] += 100; //add 100 virtual visits of the actual action to the MCTS distribution
-                        encoder.addLabeledState(root.stateVector, visits, root.getScoreRatio(), MCTSPlayer.NextAction.PRIORITY, false);
+                        visits[actionEncoder.getActionIndex(ability, false)] += 100; //add 100 virtual visits of the actual action to the MCTS distribution
+                        encoder.addLabeledState(root.stateVector, visits, root.getMeanScore(), MCTSPlayer.NextAction.PRIORITY, name.equals("PlayerA"));
                         //update root for the mcts player too
                         mcts2.root = root;
                     }

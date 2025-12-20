@@ -10,8 +10,7 @@ public class SimulateMinimaxvsMinimax extends ParallelDataGenerator {
 
     @Before
     public void setup() {
-        DISCOUNT_FACTOR = 0.95; //less states means higher discount
-        VALUE_LAMBDA = 0.5; //consider lower lambda for heuristic minimax scores
+        VALUE_LAMBDA = 0.95; //consider higher lambda for heuristic minimax scores
     }
     @Test
     public void test_single_game() {
@@ -23,13 +22,13 @@ public class SimulateMinimaxvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void createTestDataSet() {
-        DATA_OUT_FILE = "testing.hdf5";
+        DATA_OUT_FILE_A = "testing.hdf5";
         NUM_GAMES_TO_SIMULATE = 100;
         super.generateData();
     }
     @Test
     public void createTrainDataSet() {
-        DATA_OUT_FILE = "training.hdf5";
+        DATA_OUT_FILE_A = "training.hdf5";
         NUM_GAMES_TO_SIMULATE = 1000;
         super.generateData();
     }

@@ -1,0 +1,5 @@
+WR with UWTempo vs simplegreen: 0.325 in 40 games
+WR with UWTempo vs simplegreen: 0.35175879396984927 in 199 games
+WR with UWTempo vs MTGA_MonoW: 0.33 in 200 games
+WR with UWTempo vs simplegreen: 0.185 in 200 games
+WR with UWTempo vs simplegreen: 0.065 in 200 games

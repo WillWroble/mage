@@ -1010,8 +1010,14 @@ public class HumanPlayer extends PlayerImpl {
     // choose one or multiple target cards
     @Override
     public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        boolean out = chooseTargetHelper(outcome, cards, target, source, game);
-        getPlayerHistory().targetSequence.addAll(target.getTargets());
+        boolean out;
+        UUID abilityControllerId = target.getAffectedAbilityControllerId(this.getId());
+        if(target.possibleTargets(abilityControllerId, source, game, cards).size() > 1) {
+            out = chooseTargetHelper(outcome, cards, target, source, game);
+            getPlayerHistory().targetSequence.addAll(target.getTargets());
+        } else {
+            out = chooseTargetHelper(outcome, cards, target, source, game);
+        }
         return out;
     }
 
@@ -2465,9 +2471,14 @@ public class HumanPlayer extends PlayerImpl {
         // default ability (example: on disconnect or cancel)
         return card.getSpellAbility();
     }
-
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
+        Mode out = chooseModeHelper(modes, source, game);
+        if(modes.size() > 1 && out != null) getPlayerHistory().modeSequence.add(out);
+        return out;
+    }
+
+    public Mode chooseModeHelper(Modes modes, Ability source, Game game) {
         // choose mode to activate
         if (!canCallFeedback(game)) {
             return null;
