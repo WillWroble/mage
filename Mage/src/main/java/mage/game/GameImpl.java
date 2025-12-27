@@ -107,6 +107,7 @@ public abstract class GameImpl implements Game {
     private transient Object customData; // temporary data, used in AI simulations
     private transient Player losingPlayer; // temporary data, used in AI simulations
 
+    public boolean randomTransition = false;
     protected boolean simulation = false; // for inner simulations (game without user messages)
     protected boolean aiGame = false; // for inner simulations (ai game, debug only)
     protected boolean checkPlayableState = false; // for inner playable calculations (game without user dialogs)
@@ -497,19 +498,27 @@ public abstract class GameImpl implements Game {
     }
     @Override
     public String getEntityName(UUID entityId) {
-        MageObject obj = getObject(entityId);
-        if(obj == null) {
-            Player player = getPlayer(entityId);
-            if(player == null) {
-                return "null";
+        MageObject obj = null;
+        try {
+            obj = getObject(entityId);
+            if (obj == null) {
+                Player player = getPlayer(entityId);
+                if (player == null) {
+                    return "null";
+                }
+                return player.getName();
             }
-            return player.getName();
+        } catch (Exception e) {
+            logger.warn("couldn't get entity name for entity " + entityId);
         }
         if(obj instanceof StackObject) {
             MageObject out = getObject(((StackObject) obj).getSourceId());
             if(out == null) {
                 return "null";
             }
+        }
+        if(obj == null) {
+            return "null";
         }
         return obj.getName();
     }

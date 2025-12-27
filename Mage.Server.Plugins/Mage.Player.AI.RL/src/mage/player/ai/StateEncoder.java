@@ -23,6 +23,7 @@ import mage.game.stack.SpellStack;
 import mage.game.stack.StackObject;
 import mage.players.ManaPool;
 import mage.players.Player;
+import mage.target.Target;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.apache.log4j.Logger;
@@ -45,12 +46,10 @@ public class StateEncoder {
 
     public List<LabeledState>  labeledStates = new ArrayList<>();
 
-    public Set<Integer> ignoreList;
 
     public StateEncoder() {
         features = new Features();
         features.setEncoder(this);
-        ignoreList = new HashSet<>();
     }
     public void setAgent(UUID me) {
         myPlayerID = me;
@@ -223,6 +222,11 @@ public class StateEncoder {
         f.addNumericFeature("StackPosition", stackPosition, false);
         if(so.getControllerId().equals(myPlayerID)) f.addFeature("isController");
         Ability sa = so.getStackAbility();
+        for (Target target : sa.getTargets()) {
+            for (UUID id : target.getTargets()) {
+                f.addFeature(game.getEntityName(id));
+            }
+        }
         if(sa instanceof TriggeredAbility) {
             processTriggeredAbility((TriggeredAbility) sa, game, f);
         } else {
@@ -249,8 +253,8 @@ public class StateEncoder {
     }
     private void processExileZone(ExileZone exileZone, Game game, Features f) {
         for (Card c : exileZone.getCards(game)) {
-            Features graveCardFeatures = f.getSubFeatures(c.getName());
-            processCardInZone(c, Zone.EXILED, game, graveCardFeatures);
+            Features exileCardFeatures = f.getSubFeatures(c.getName());
+            processCardInZone(c, Zone.EXILED, game, exileCardFeatures);
         }
     }
     private void processExile(Exile exile, Game game, Features f) {
@@ -269,11 +273,14 @@ public class StateEncoder {
         f.addNumericFeature("ColorlessMana", mp.getColorless());
         //TODO: deal with conditional mana
     }
-    private void processOpponentState(Game game, UUID activePlayerID) {
-        //switch for perspective reasons
+    public void flipPerspective() {
         UUID temp = myPlayerID;
         myPlayerID = opponentID;
         opponentID = temp;
+    }
+    private void processOpponentState(Game game, UUID activePlayerID) {
+        //switch for perspective reasons
+        flipPerspective();
 
         Player myPlayer = game.getPlayer(myPlayerID);
         //game metadata
@@ -306,8 +313,7 @@ public class StateEncoder {
         Features exileFeatures = features.getSubFeatures("Exile");
         processExile(game.getExile(), game, exileFeatures);
         //switch back
-        opponentID = myPlayerID;
-        myPlayerID = temp;
+        flipPerspective();
 
     }
 

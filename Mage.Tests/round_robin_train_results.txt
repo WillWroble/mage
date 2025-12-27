@@ -156,5 +156,166 @@ WR with UWTempo vs MTGA_MonoR: 0.645 in 200 games
 WR with UWTempo vs MTGA_MonoU: 0.65 in 200 games
 WR with UWTempo vs MTGA_MonoW: 0.6 in 200 games
 
+WR with GBLegends vs MTGA_MonoB: 0.375 in 8 games
+WR with GBLegends vs MTGA_MonoG: 0.375 in 8 games
+WR with GBLegends vs MTGA_MonoR: 0.875 in 8 games
+WR with GBLegends vs MTGA_MonoU: 0.25 in 8 games
+WR with GBLegends vs MTGA_MonoW: 1.0 in 8 games
+WR with UWTempo vs MTGA_MonoB: 0.5 in 8 games
+WR with UWTempo vs MTGA_MonoG: 0.75 in 8 games
+WR with UWTempo vs MTGA_MonoR: 0.625 in 8 games
+gen1 with discounted backprop
+WR with UWTempo vs MTGA_MonoB: 0.63 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.675 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.635 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.555 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.52 in 200 games
+(again)
+WR with UWTempo vs MTGA_MonoB: 0.665 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.7 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.57 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.535 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.595 in 200 games
 
-WR with GBLegends vs MTGA_MonoB: 0.48704663212435234 in 193 games
+gen0
+WR with MTGA_MonoU vs MTGA_MonoB: 0.43 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.385 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.565 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.465 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.37 in 200 games
+gen0 (fixed lambda)
+WR with MTGA_MonoU vs MTGA_MonoB: 0.51 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.45 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.565 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.44 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.46 in 200 games
+gen1
+WR with MTGA_MonoU vs MTGA_MonoB: 0.495 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.43 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.545 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.37 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.45 in 200 games
+gen2
+WR with MTGA_MonoU vs MTGA_MonoB: 0.54 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.43 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.62 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.41 in 200 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.51 in 200 games
+gen3
+WR with MTGA_MonoU vs MTGA_MonoB: 0.505 in 200 games
+TEST DISCONTINUED FOR DECKS BEING TOO EASY
+gen0
+WR with Standard-MonoU vs Standard-MonoB: 0.255 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.175 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.25 in 200 games
+WR with Standard-MonoU vs Standard-MonoU: 0.625 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.335 in 200 games
+gen1
+WR with Standard-MonoU vs Standard-MonoB: 0.315 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.165 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.3383838383838384 in 198 games
+WR with Standard-MonoU vs Standard-MonoU: 0.645 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.39 in 200 games
+gen2
+WR with Standard-MonoU vs Standard-MonoB: 0.315 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.28 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.39195979899497485 in 199 games
+WR with Standard-MonoU vs Standard-MonoU: 0.635 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.39 in 200 games
+gen3
+WR with Standard-MonoU vs Standard-MonoB: 0.375 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.285 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.35175879396984927 in 199 games
+WR with Standard-MonoU vs Standard-MonoU: 0.67 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.415 in 200 games
+gen4
+WR with Standard-MonoU vs Standard-MonoB: 0.345 in 200 games
+gen4 -with policy
+WR with Standard-MonoU vs Standard-MonoB: 0.39 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.265 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.45454545454545453 in 198 games
+WR with Standard-MonoU vs Standard-MonoU: 0.73 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.445 in 200 games
+gen5 -with policy
+WR with Standard-MonoU vs Standard-MonoB: 0.42 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.285 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.41708542713567837 in 199 games
+WR with Standard-MonoU vs Standard-MonoU: 0.845 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.48 in 200 games
+gen6 -with policy
+WR with Standard-MonoU vs Standard-MonoB: 0.4 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.32 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.405 in 200 games
+WR with Standard-MonoU vs Standard-MonoU: 0.82 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.465 in 200 games
+gen7 -with policy
+WR with Standard-MonoU vs Standard-MonoB: 0.46 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.27 in 200 games
+
+
+gen17 (back to UW test with new value labeling scheme) -no policy
+WR with UWTempo vs MTGA_MonoB: 0.62 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.63 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.61 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.5 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.445 in 200 games
+gen18b - no policy
+WR with UWTempo vs MTGA_MonoB: 0.455 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.59 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.46 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.435 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.35 in 200 games
+gen19b - no policy
+WR with UWTempo vs MTGA_MonoB: 0.505 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.49 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.405 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.385 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.495 in 200 games
+WR with UWTempo vs MTGA_MonoB: 0.35 in 20 games
+WR with UWTempo vs MTGA_MonoG: 0.4 in 20 games
+WR with UWTempo vs MTGA_MonoR: 0.55 in 20 games
+WR with UWTempo vs MTGA_MonoU: 0.5 in 20 games
+WR with UWTempo vs MTGA_MonoW: 0.45 in 20 games
+gen20b  - no policy
+WR with UWTempo vs MTGA_MonoB: 0.595 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.565 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.525 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.45 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.535 in 200 games
+gen21b - no policy
+WR with UWTempo vs MTGA_MonoB: 0.6180904522613065 in 199 games
+WR with UWTempo vs MTGA_MonoG: 0.56 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.555 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.515 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.465 in 200 games
+gen22b - with policy now
+WR with UWTempo vs MTGA_MonoB: 0.655 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.66 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.59 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.565 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.605 in 200 games
+gen23b
+WR with UWTempo vs MTGA_MonoB: 0.74 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.72 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.625 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.59 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.62 in 200 games
+24b
+WR with UWTempo vs MTGA_MonoB: 0.67 in 200 games
+WR with UWTempo vs MTGA_MonoG: 0.665 in 200 games
+WR with UWTempo vs MTGA_MonoR: 0.655 in 200 games
+WR with UWTempo vs MTGA_MonoU: 0.635 in 200 games
+WR with UWTempo vs MTGA_MonoW: 0.56 in 200 games
+back to Standard-MonoU test
+gen7 - with policy
+WR with Standard-MonoU vs Standard-MonoB: 0.4 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.36 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.47 in 200 games
+WR with Standard-MonoU vs Standard-MonoU: 0.815 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.54 in 200 games
+gen8 - no policy
+WR with Standard-MonoU vs Standard-MonoB: 0.44 in 200 games
+WR with Standard-MonoU vs Standard-MonoG: 0.34 in 200 games
+WR with Standard-MonoU vs Standard-MonoR: 0.5577889447236181 in 199 games
+WR with Standard-MonoU vs Standard-MonoU: 0.835 in 200 games
+WR with Standard-MonoU vs Standard-MonoW: 0.46 in 200 games

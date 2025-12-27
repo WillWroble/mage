@@ -203,3 +203,122 @@ WR with UWTempo vs MTGA_MonoG: 0.65 in 40 games
 WR with UWTempo vs MTGA_MonoR: 0.5 in 40 games
 WR with UWTempo vs MTGA_MonoU: 0.725 in 40 games
 WR with UWTempo vs MTGA_MonoW: 0.7 in 40 games
+WR with UWTempo vs MTGA_MonoB: 0.725 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.725 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.625 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.6 in 40 games
+WR with UWTempo vs MTGA_MonoW: 0.45 in 40 games
+with max search depth (1 turn)
+WR with UWTempo vs MTGA_MonoB: 0.6 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.775 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.625 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.575 in 40 games
+WR with UWTempo vs MTGA_MonoW: 0.55 in 40 games
+without max search depth
+WR with UWTempo vs MTGA_MonoB: 0.7 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.75 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.6 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.675 in 40 games
+WR with UWTempo vs MTGA_MonoW: 0.5 in 40 games
+
+WR with UWTempo vs MTGA_MonoB: 0.675 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.575 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.65 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.5 in 40 games
+WR with UWTempo vs MTGA_MonoB: 0.575 in 40 games
+WR with UWTempo vs MTGA_MonoG: 0.4 in 40 games
+WR with UWTempo vs MTGA_MonoR: 0.325 in 40 games
+WR with UWTempo vs MTGA_MonoU: 0.35 in 40 games
+
+offline mode
+WR with EsperTempo vs MTGA_MonoB: 0.625 in 40 games
+WR with EsperTempo vs MTGA_MonoG: 0.575 in 40 games
+
+WR with EsperTempo vs MTGA_MonoB: 0.6923076923076923 in 39 games
+WR with EsperTempo vs MTGA_MonoG: 0.55 in 40 games
+WR with EsperTempo vs MTGA_MonoR: 0.675 in 40 games
+WR with EsperTempo vs MTGA_MonoU: 0.7 in 40 games
+WR with EsperTempo vs MTGA_MonoW: 0.475 in 40 games
+
+with UW model
+WR with EsperTempo vs MTGA_MonoB: 0.55 in 40 games
+WR with EsperTempo vs MTGA_MonoG: 0.6 in 40 games
+WR with EsperTempo vs MTGA_MonoR: 0.6 in 40 games
+WR with EsperTempo vs MTGA_MonoU: 0.5 in 40 games
+WR with EsperTempo vs MTGA_MonoW: 0.6 in 40 games
+
+
+WR with EsperTempo vs MTGA_MonoB: 0.625 in 40 games
+WR with EsperTempo vs MTGA_MonoG: 0.625 in 40 games
+WR with EsperTempo vs MTGA_MonoR: 0.675 in 40 games
+WR with EsperTempo vs MTGA_MonoU: 0.55 in 40 games
+WR with EsperTempo vs MTGA_MonoW: 0.6 in 40 games
+WR with EsperTempo vs MTGA_MonoB: 0.575 in 40 games
+WR with EsperTempo vs MTGA_MonoG: 0.55 in 40 games
+WR with EsperTempo vs MTGA_MonoR: 0.65 in 40 games
+WR with EsperTempo vs MTGA_MonoU: 0.275 in 40 games
+back to offline
+WR with EsperTempo vs MTGA_MonoB: 0.575 in 40 games
+WR with EsperTempo vs MTGA_MonoG: 0.675 in 40 games
+WR with EsperTempo vs MTGA_MonoR: 0.725 in 40 games
+WR with EsperTempo vs MTGA_MonoU: 0.65 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoB: 0.375 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.4 in 40 games
+MTGA U gen0
+WR with MTGA_MonoU vs MTGA_MonoB: 0.525 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.4 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.6666666666666666 in 39 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.425 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.475 in 40 games
+
+WR with MTGA_MonoU vs MTGA_MonoB: 0.525 in 40 games
+
+WR with MTGA_MonoU vs MTGA_MonoB: 0.5 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.45 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.6 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.5 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.325 in 40 games
+
+WR with MTGA_MonoU vs MTGA_MonoB: 0.5 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.475 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.625 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.425 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.6 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoB: 0.575 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoG: 0.425 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoR: 0.6 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoU: 0.325 in 40 games
+WR with MTGA_MonoU vs MTGA_MonoW: 0.575 in 40 games
+WR with MTGA_MonoU vs Standard-MonoB: 0.2 in 40 games
+WR with MTGA_MonoU vs Standard-MonoG: 0.1 in 40 games
+WR with MTGA_MonoU vs Standard-MonoR: 0.15 in 40 games
+WR with MTGA_MonoU vs Standard-MonoU: 0.375 in 40 games
+WR with MTGA_MonoU vs Standard-MonoW: 0.225 in 40 games
+
+WR with Standard-MonoU vs Standard-MonoB: 0.3 in 40 games
+WR with Standard-MonoU vs Standard-MonoG: 0.2 in 40 games
+WR with Standard-MonoU vs Standard-MonoR: 0.25 in 40 games
+WR with Standard-MonoU vs Standard-MonoU: 0.6410256410256411 in 39 games
+WR with Standard-MonoU vs Standard-MonoW: 0.45 in 40 games
+
+WR with Standard-MonoU vs Standard-MonoB: 0.225 in 40 games
+WR with Standard-MonoU vs Standard-MonoG: 0.25 in 40 games
+WR with Standard-MonoU vs Standard-MonoR: 0.275 in 40 games
+WR with Standard-MonoU vs Standard-MonoU: 0.65 in 40 games
+WR with Standard-MonoU vs Standard-MonoW: 0.375 in 40 games
+WR with Standard-MonoU vs Standard-MonoB: 0.325 in 40 games
+WR with Standard-MonoU vs Standard-MonoG: 0.25 in 40 games
+WR with Standard-MonoU vs Standard-MonoR: 0.4 in 40 games
+WR with Standard-MonoU vs Standard-MonoU: 0.675 in 40 games
+WR with Standard-MonoU vs Standard-MonoW: 0.375 in 40 games
+WR with Standard-MonoU vs Standard-MonoB: 0.4 in 40 games
+WR with Standard-MonoU vs Standard-MonoG: 0.225 in 40 games
+WR with Standard-MonoU vs Standard-MonoR: 0.35 in 40 games
+WR with Standard-MonoU vs Standard-MonoU: 0.675 in 40 games
+WR with Standard-MonoU vs Standard-MonoW: 0.5 in 40 games
+WR with Standard-MonoU vs Standard-MonoB: 0.35 in 40 games
+WR with Standard-MonoU vs Standard-MonoB: 0.45 in 40 games
+WR with Standard-MonoU vs Standard-MonoG: 0.275 in 40 games
+WR with Standard-MonoU vs Standard-MonoR: 0.475 in 40 games
+WR with Standard-MonoU vs Standard-MonoU: 0.8 in 40 games
+WR with Standard-MonoU vs Standard-MonoW: 0.45 in 40 games

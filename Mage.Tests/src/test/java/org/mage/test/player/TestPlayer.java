@@ -222,7 +222,9 @@ public class TestPlayer implements Player {
         }
         modes.add(mode);
     }
-
+    public void illegalGameState(Game game) {
+        computerPlayer.illegalGameState(game);
+    }
     public void addTarget(String target) {
         // prepare face down
         // how-to fix: if it's a face down object then use getTestCommand instead toString

@@ -3,6 +3,8 @@ package mage.player.ai;
 import mage.MageObject;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
+import mage.abilities.Mode;
+import mage.abilities.Modes;
 import mage.abilities.common.PassAbility;
 import mage.cards.Card;
 import mage.cards.Cards;
@@ -34,31 +36,28 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     public static final int BASE_THREAD_TIMEOUT = 4;//seconds
     public static final int MAX_TREE_VISITS = 300;//per thread
-    //these aren't used for RL, see ComputerPlayerMCTS2
-    protected static final int THINK_MIN_RATIO = 100; //was originally 40
-    protected static final int THINK_MAX_RATIO = 140; //was 80
-    protected static final double THINK_TIME_MULTIPLIER = 1.0;
-    //these flags should be set in ParallelDataGenerator.java
-    public static boolean NO_NOISE = false;
-    public static boolean NO_POLICY = false;
-    public static boolean NO_POLICY_TARGET_HEAD = false;
+    //how many game turns ahead MCTS can look ahead
+    public static final int MAX_GAME_DEPTH = 999;
+    public transient ActionEncoder actionEncoder = null;
+    //these flags should be set through fields in ParallelDataGenerator.java
+    public boolean noNoise = true;
+    public boolean noPolicy = false;
+    public boolean noPolicyTarget = true;
+    public boolean noPolicyUse = false;
     //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)
-    public static boolean SIMULATE_ATTACKERS_ONE_AT_A_TIME = true;
-    public static boolean SIMULATE_BLOCKERS_ONE_AT_A_TIME = true;
     //dirichlet noise is applied once to the priors of the root node; this represents how much of those priors should be noise
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
-    //how spiky the dirichlet noise will be
+    //how confident to be in network policy priors (lower = less confident)
     public static double POLICY_PRIOR_TEMP = 1.5;
-    public static boolean ROUND_ROBIN_MODE = false;
+    public boolean roundRobinMode = false;
     //exploration constant
-    public static double C_PUCT = 1.0;
+    public static double C_PUCT = 1;
     //adjust based on available RAM and threads running
-    public static int MAX_TREE_NODES = 10000;
+    public static int MAX_TREE_NODES = 100000;
 
     public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
 
     public transient MCTSNode root;
-    protected int maxThinkTime;
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
     public int poolSize = 2;
     protected transient ExecutorService threadPoolSimulations = null;
@@ -67,7 +66,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
         human = false;
-        maxThinkTime = (int) (skill * THINK_TIME_MULTIPLIER);
         //poolSize = 64;//Runtime.getRuntime().availableProcessors();
     }
 
@@ -108,9 +106,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             pass(game);
             return false;
         }
-        if(game.getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS)) {
-            logger.info("DECLARE_BLOCKERS CPMCTS");
-        }
         game.setLastPriority(playerId);
         Ability ability = null;
         MCTSNode best = getNextAction(game, NextAction.PRIORITY);
@@ -120,7 +115,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         while (!success) {
             if(best != null && best.getAction() != null) {
                 ability = best.getAction().copy();
-                success = activateAbility((ActivatedAbility) ability, game);
+                boolean madeItToPriority = root.containsPriorityNode();
+                madeItToPriority = true;
+                success = activateAbility((ActivatedAbility) ability, game) && madeItToPriority;
+
             }
             if (ability == null) {
                 logger.fatal("null ability");
@@ -149,12 +147,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         logLife(game);
         printBattlefieldScore(game, playerId);
         if(root.getAction().getTargets().isEmpty()) {
-            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getScoreRatio());
+            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getMeanScore());
         } else {
             if(game.getEntityName(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntityName(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntityName(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
             } else if (game.getPlayer(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getScoreRatio());
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
             } else {
                 logger.fatal("no target found");
             }
@@ -182,7 +180,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(nextAction);//can remove this
-            root = new MCTSNode(playerId, sim, nextAction);
+            root = new MCTSNode(this, sim, nextAction);
             root.prefixScript = new PlayerScript(getPlayerHistory());
             root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
             logger.info("prefix at root: " + root.prefixScript.toString());
@@ -193,56 +191,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
-        if(ComputerPlayerMCTS.SIMULATE_ATTACKERS_ONE_AT_A_TIME) {
-            selectAttackersOneAtATime(game, attackingPlayerId);
-            return;
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(game.getTurn().getValue(game.getTurnNum())).append(" player ").append(name).append(" attacking with: ");
-        getNextAction(game, NextAction.SELECT_ATTACKERS);
-        Combat combat = root.getCombat();
-        UUID opponentId = game.getCombat().getDefenders().iterator().next();
-        for (UUID attackerId : combat.getAttackers()) {
-            if(game.getPermanent(attackerId) == null) continue;
-            this.declareAttacker(attackerId, opponentId, game, false);
-            sb.append(game.getPermanent(attackerId).getName()).append(',');
-        }
-        getPlayerHistory().combatSequence.add(game.getCombat().copy());
-        logger.info(sb.toString());
+        selectAttackersOneAtATime(game, attackingPlayerId);
     }
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
-        if(ComputerPlayerMCTS.SIMULATE_BLOCKERS_ONE_AT_A_TIME) {
-            selectBlockersOneAtATime(source, game, defendingPlayerId);
-            return;
-        }
-        StringBuilder sb = new StringBuilder();
-        sb.append(game.getTurn().getValue(game.getTurnNum())).append(" player ").append(name).append(" blocking: ");
-        getNextAction(game, NextAction.SELECT_BLOCKERS);
-        Combat simulatedCombat = root.getCombat();
-        List<CombatGroup> currentGroups = game.getCombat().getGroups();
-        for (int i = 0; i < currentGroups.size(); i++) {
-            if (i < simulatedCombat.getGroups().size()) {
-                CombatGroup currentGroup = currentGroups.get(i);
-                CombatGroup simulatedGroup = simulatedCombat.getGroups().get(i);
-                if(currentGroup.getAttackers().isEmpty()) {
-                    logger.info("Attacker not found - skipping");
-                    continue;
-                }
-                sb.append(game.getPermanent(currentGroup.getAttackers().get(0)).getName()).append(" with: ");
-                for (UUID blockerId : simulatedGroup.getBlockers()) {
-                    // blockers can be added automaticly by requirement effects, so we must add only missing blockers
-                    if (!currentGroup.getBlockers().contains(blockerId)) {
-                        this.declareBlocker(this.getId(), blockerId, currentGroup.getAttackers().get(0), game);
-                        sb.append(game.getPermanent(blockerId).getName()).append(',');
-                    }
-                }
-                sb.append('|');
-            }
-        }
-        getPlayerHistory().combatSequence.add(game.getCombat().copy());
-        logger.info(sb.toString());
+        selectBlockersOneAtATime(source, game, defendingPlayerId);
     }
     @Override
     protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
@@ -329,6 +283,28 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
         return true;
     }
+    public Mode chooseMode(Modes modes, Ability source, Game game) {
+        modeOptions = modes.getAvailableModes(source, game).stream()
+                .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toSet());
+        if(modeOptions.isEmpty()) {
+            logger.info("choice is empty, spell fizzled");
+            return null;
+        }
+        if(modeOptions.size() == 1) {
+            return modeOptions.iterator().next();
+        }
+        logger.info("base choose mode " + modes.toString());
+        root = getNextAction(game, NextAction.CHOOSE_MODE);
+        if(root == null) {
+            return null;
+        }
+        Mode chosenMode = root.modeAction;
+        logger.info(String.format("Choosing mode %s", chosenMode));
+        getPlayerHistory().modeSequence.add(chosenMode);
+
+        return chosenMode;
+    }
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         logger.info("base choose use " + message);
@@ -351,49 +327,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     protected long totalSimulations = 0;
 
     protected void applyMCTS(final Game game, final NextAction action) {
-        //TODO: implement. right now only
+        //TODO: implement. right now only RL version supported
 
     }
-
-    //try to ensure that there are at least THINK_MIN_RATIO simulations per node at all times
-    protected int calculateThinkTime(Game game, NextAction action) {
-        int thinkTime;
-        int nodeSizeRatio = 0;
-        if (root.getNumChildren() > 0)
-            nodeSizeRatio = root.getVisits() / root.getNumChildren();
-//        logger.info("Ratio: " + nodeSizeRatio);
-        PhaseStep curStep = game.getTurnStepType();
-        if (action == NextAction.SELECT_ATTACKERS || action == NextAction.SELECT_BLOCKERS) {
-            if (nodeSizeRatio < THINK_MIN_RATIO) {
-                thinkTime = maxThinkTime*5;
-            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
-                thinkTime = 0;
-                //thinkTime = maxThinkTime*3/2;
-            } else {
-                thinkTime = maxThinkTime*5 / 2;
-            }
-        } else if (game.isActivePlayer(playerId) && (curStep == PhaseStep.PRECOMBAT_MAIN || curStep == PhaseStep.POSTCOMBAT_MAIN) && game.getStack().isEmpty()) {
-            if (nodeSizeRatio < THINK_MIN_RATIO) {
-                thinkTime = 3*maxThinkTime;
-            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
-                thinkTime = 0;
-            } else {
-                thinkTime = maxThinkTime/2;
-            }
-            //thinkTime = maxThinkTime;
-        } else {
-            if (nodeSizeRatio < THINK_MIN_RATIO) {
-                thinkTime = 2*maxThinkTime;
-            } else if (nodeSizeRatio >= THINK_MAX_RATIO) {
-                thinkTime = 0;
-                thinkTime = maxThinkTime/4;
-            } else {
-                thinkTime = maxThinkTime/2;
-            }
-        }
-        return thinkTime;
-    }
-
     /**
      * Copies game and replaces all players in copy with mcts players
      * Shuffles each players library so that there is no knowledge of its order

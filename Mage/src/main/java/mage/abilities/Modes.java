@@ -361,7 +361,7 @@ public class Modes extends LinkedHashMap<UUID, Mode> implements Copyable<Modes> 
             // choose random
             if (this.isRandom) {
                 // TODO: research rules of Cult of Skaro after WHO release (is it random from all modes or from available/valid)
-                this.addSelectedMode(availableModes.get(RandomUtil.nextInt(availableModes.size())).getId());
+                this.addSelectedMode(availableModes.get(game.getLocalRandom().nextInt(availableModes.size())).getId());
                 return isSelectedValid(source, game);
             }
 
@@ -468,8 +468,10 @@ public class Modes extends LinkedHashMap<UUID, Mode> implements Copyable<Modes> 
 
         if (selectedModes.contains(modeId) && mayChooseSameModeMoreThanOnce) {
             Mode duplicateMode = mode.copy();
+            //duplicateMode.setRandomId();
             UUID originalId = modeId;
-            duplicateMode.setRandomId();
+            int ordinal = 1 + getSelectedStats(originalId);
+            duplicateMode.id = UUID.nameUUIDFromBytes((originalId.toString() + ":" + ordinal).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             modeId = duplicateMode.getId();
             selectedDuplicateModes.put(modeId, duplicateMode);
             selectedDuplicateToOriginalModeRefs.put(duplicateMode.getId(), originalId);

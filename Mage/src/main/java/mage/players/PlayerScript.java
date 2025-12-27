@@ -1,13 +1,14 @@
 package mage.players;
 
 import mage.abilities.Ability;
+import mage.abilities.Mode;
 import mage.game.combat.Combat;
 
 import java.util.*;
 
 
 /**
- * represents a sequence of game actions for a player. These include priority abilities, combat decisions, targeting decisions, and other discrete choices (choose color, choose type, etc).
+ * represents a sequence of game actions for a player. These include priority abilities, mode decisions, targeting decisions, and other discrete choices (choose color, choose type, etc).
  */
 public class PlayerScript {
     //for targeting decisions
@@ -18,28 +19,27 @@ public class PlayerScript {
     public ArrayDeque<Boolean> useSequence;
     //for priority abilities
     public ArrayDeque<Ability> prioritySequence;
-    //for combat decisions
-    public ArrayDeque<Combat> combatSequence;
-
+    //for mode decisions
+    public ArrayDeque<Mode> modeSequence;
 
 
     public PlayerScript() {
         prioritySequence = new ArrayDeque<>();
-        combatSequence = new ArrayDeque<>();
         useSequence = new ArrayDeque<>();
         targetSequence = new ArrayDeque<>();
         choiceSequence = new ArrayDeque<>();
+        modeSequence =  new ArrayDeque<>();
 
     }
-    public PlayerScript(List<Ability> prio, List<Combat> com, List<UUID> target, List<String> choice, List<Boolean> use) {
+    public PlayerScript(List<Ability> prio, List<Mode> mode, List<UUID> target, List<String> choice, List<Boolean> use) {
         prioritySequence = new ArrayDeque<>(prio);
         for(Ability a : prio) {//need to copy ability for certain edge cases unfortunately
             this.prioritySequence.add(a.copy());
         }
-        combatSequence = new ArrayDeque<>(com);
         useSequence = new ArrayDeque<>(use);
         targetSequence = new ArrayDeque<>(target);
         choiceSequence = new ArrayDeque<>(choice);
+        modeSequence = new ArrayDeque<>(mode);
     }
 
     public PlayerScript(PlayerScript playerScript) {
@@ -48,18 +48,18 @@ public class PlayerScript {
         for(Ability a : playerScript.prioritySequence) {//need to copy ability for certain edge cases unfortunately
             this.prioritySequence.add(a.copy());
         }
-        combatSequence = new  ArrayDeque<>(playerScript.combatSequence);
         useSequence = new ArrayDeque<>(playerScript.useSequence);
         targetSequence = new ArrayDeque<>(playerScript.targetSequence);
         choiceSequence = new ArrayDeque<>(playerScript.choiceSequence);
+        modeSequence = new ArrayDeque<>(playerScript.modeSequence);
     }
 
     public PlayerScript append(PlayerScript playerScript) {
         this.targetSequence.addAll(playerScript.targetSequence);
         this.choiceSequence.addAll(playerScript.choiceSequence);
         this.useSequence.addAll(playerScript.useSequence);
+        this.modeSequence.addAll(playerScript.modeSequence);
         //this.prioritySequence.addAll(playerScript.prioritySequence);
-        this.combatSequence.addAll(playerScript.combatSequence);
         for(Ability a : playerScript.prioritySequence) {//need to copy ability for certain edge cases unfortunately
             this.prioritySequence.add(a.copy());
         }
@@ -70,7 +70,7 @@ public class PlayerScript {
         this.choiceSequence.clear();
         this.useSequence.clear();
         this.prioritySequence.clear();
-        this.combatSequence.clear();
+        this.modeSequence.clear();
     }
     @Override
     public boolean equals(Object o) {
@@ -81,11 +81,10 @@ public class PlayerScript {
         return dequeEquals(targetSequence, that.targetSequence, Objects::equals)
                 && dequeEquals(choiceSequence,  that.choiceSequence,  Objects::equals)
                 && dequeEquals(useSequence, that.useSequence, Objects::equals)
+                && dequeEquals(modeSequence, that.modeSequence, Objects::equals)
                 // Use a stable key for Ability/Combat instead of reference equality
                 && dequeEquals(prioritySequence, that.prioritySequence,
-                (a,b) -> Objects.equals(abilityKey(a), abilityKey(b)))
-                && dequeEquals(combatSequence,   that.combatSequence,
-                (a,b) -> Objects.equals(combatKey(a), combatKey(b)));
+                (a,b) -> Objects.equals(abilityKey(a), abilityKey(b)));
 
     }
 
@@ -115,9 +114,9 @@ public class PlayerScript {
         int h = 1;
         h = 31*h + hashDeque(targetSequence, Objects::hashCode);
         h = 31*h + hashDeque(choiceSequence,  Objects::hashCode);
+        h = 31*h + hashDeque(modeSequence, Objects::hashCode);
         h = 31*h + hashDeque(useSequence,  Objects::hashCode);
         h = 31*h + hashDeque(prioritySequence, ab -> Objects.hash(abilityKey(ab)));
-        h = 31*h + hashDeque(combatSequence,   cb -> Objects.hash(combatKey(cb)));
         return h;
     }
 
@@ -132,7 +131,8 @@ public class PlayerScript {
         return "PlayerScript{targets=" + targetSequence
                 + ", choices=" + choiceSequence
                 + ", uses=" + useSequence
+                + ", modes=" + modeSequence
                 + ", priority=" + prioritySequence
-                + ", combat=" + combatSequence + "}";
+                 + "}";
     }
 }

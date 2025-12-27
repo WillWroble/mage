@@ -933,10 +933,10 @@ public abstract class AbilityImpl implements Ability {
         }
         costsTagMap.put(tag, value);
     }
-
     @Override
     public Effects getEffects() {
-        return getModes().getMode().getEffects();
+        Mode mode = getModes().getMode();
+        return mode == null ? new Effects() : mode.getEffects();
     }
 
     @Override
