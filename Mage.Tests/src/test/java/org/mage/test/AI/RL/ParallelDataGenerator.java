@@ -53,7 +53,7 @@ public class ParallelDataGenerator {
     // ============================ DATA GENERATION SETTINGS ============================
     protected static int NUM_GAMES_TO_SIMULATE = 100;
     protected static int MAX_GAME_TURNS = 50;
-    protected static int MAX_CONCURRENT_GAMES = 8;
+    protected static int MAX_CONCURRENT_GAMES = 4;
     // =============================== AI SETTINGS ===============================
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
@@ -243,7 +243,7 @@ public class ParallelDataGenerator {
         }
         try {
             remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
-            //if(this instanceof SimulateRLvsRL) remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
+            if(this instanceof SimulateRLvsRL) remoteModelEvaluatorB  = new RemoteModelEvaluator(MODEL_URL_B);
         } catch (Exception e) {
             e.printStackTrace();
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
