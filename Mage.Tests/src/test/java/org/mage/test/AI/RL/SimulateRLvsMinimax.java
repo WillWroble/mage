@@ -3,6 +3,7 @@ package org.mage.test.AI.RL;
 import mage.constants.RangeOfInfluence;
 import mage.player.ai.ComputerPlayer8;
 import mage.player.ai.ComputerPlayerMCTS2;
+import mage.player.ai.Features;
 import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
@@ -10,7 +11,7 @@ import org.junit.Test;
 public class SimulateRLvsMinimax extends ParallelDataGenerator {
     @Before
     public void setup() {
-        VALUE_LAMBDA = 0.95; //default for MCTS root scores
+        VALUE_LAMBDA = 0.9; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
         DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
         DONT_USE_POLICY_TARGET = true; //if you want to use other policies but not targeting decisions
@@ -55,12 +56,13 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobin() {
-        DECK_A = "Standard-MonoU";
+        DECK_A = "Standard-MonoB";
         //DECK_A = "UWTempo";
 
         isRoundRobin = true;
+        Features.useFeatureMap = true;
         NUM_GAMES_TO_SIMULATE = 200;
-        String [] deckPool = {"Standard-MonoB", "Standard-MonoG", "Standard-MonoR", "Standard-MonoU", "Standard-MonoW"};
+        String [] deckPool = {/*"Standard-MonoB",*/ "Standard-MonoG", "Standard-MonoR", "Standard-MonoU", "Standard-MonoW"};
         //String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         for (String deckName :  deckPool) {
             DATA_OUT_FILE_A = "training/"+deckName+"_training.hdf5";

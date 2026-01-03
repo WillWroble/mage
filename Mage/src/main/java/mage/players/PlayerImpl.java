@@ -4276,7 +4276,7 @@ public abstract class PlayerImpl implements Player, Serializable {
 
     @Override
     public List<ActivatedAbility> getPlayable(Game game, boolean hidden) {
-        return getPlayable(game, hidden, Zone.ALL, true);
+        return getPlayable(game, hidden, Zone.ALL, false);
     }
 
     /**

@@ -36,8 +36,9 @@ import java.util.*;
  */
 public class StateEncoder {
     public static volatile ImmutableRoaringBitmap globalIgnore;
+    public FeatureMap featureMap = new FeatureMap();
     protected static Logger logger = Logger.getLogger(StateEncoder.class);
-    public volatile RoaringBitmap seenFeatures;
+    public volatile RoaringBitmap seenIndices;
     public static boolean perfectInfo = true;
     private final Features features;
     public Set<Integer> featureVector = new HashSet<>();
@@ -342,7 +343,9 @@ public class StateEncoder {
         }
 
         //game metadata
-        if(game.getPhase() != null) features.addFeature(game.getTurnStepType().toString()); //phases
+        if(game.getPhase() != null) {
+            features.addFeature(game.getTurnStepType().toString()); //phases
+        }
         if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
         if(decisionPlayerId.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());

@@ -35,6 +35,7 @@ public class Features implements Serializable {
     public Features parent;
     public static boolean printOldFeatures = false;
     public static boolean printNewFeatures = false;
+    public static boolean useFeatureMap = false;
     //root constructor
     public Features() {
         subFeatures = new HashMap<>();
@@ -175,9 +176,18 @@ public class Features implements Serializable {
     private void addIndex(long h, String key) {
         int idx = indexFor(h);
         encoder.featureVector.add(idx);
-        if (encoder.seenFeatures != null) {
-            if (!encoder.seenFeatures.contains((int) h)) {
-                encoder.seenFeatures.add((int) h);
+        if(useFeatureMap) {
+            int nameSpace;
+            if(parent != null) {
+                nameSpace = indexFor(hash64(featureName, parent.seed));
+            } else {
+                nameSpace = -1;
+            }
+            encoder.featureMap.addFeature(key, nameSpace, idx);
+        }
+        if (encoder.seenIndices != null) {
+            if (!encoder.seenIndices.contains((int) h)) {
+                encoder.seenIndices.add((int) h);
                 if (Features.printNewFeatures) logger.info("new feature, " + key + " in " + featureName + ", at index: " + idx);
             } else {
                 if (Features.printOldFeatures) logger.info("seen feature, " + key  + " in " + featureName + ", at index: " + idx);

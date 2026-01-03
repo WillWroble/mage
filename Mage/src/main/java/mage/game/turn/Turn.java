@@ -379,6 +379,10 @@ public class Turn implements Serializable {
 
     public String getValue(int turnNum) {
         StringBuilder sb = threadLocalBuilder.get();
+        if(currentPhase == null) {
+            sb.append("[pre-game]");
+            return sb.toString();
+        }
         sb.append('[').append(turnNum)
                 .append(':').append(currentPhase.getType())
                 .append(':').append(currentPhase.getStep().getType())

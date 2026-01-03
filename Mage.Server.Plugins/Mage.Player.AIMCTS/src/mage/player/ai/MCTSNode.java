@@ -216,6 +216,7 @@ public class MCTSNode {
         }
 
         boolean isTarget = playerId.equals(targetPlayerId);
+        boolean allChildrenVisited = true;
         double sign = isTarget ? +1.0 : -1.0;
 
         MCTSNode best    = null;
@@ -224,6 +225,7 @@ public class MCTSNode {
         double sqrtN = Math.sqrt(getVisits());
 
         for (MCTSNode child : children) {
+            if(child.getVisits() == 0) allChildrenVisited = false;
             // value term: 0 if unvisited, else average reward
             double q = (child.getVisits() > 0)
                     ? (child.getMeanScore())
@@ -243,6 +245,10 @@ public class MCTSNode {
         // best should never be null once visits>0 on the root
         if(best == null) {
             logger.error("no best child. best val is: " + bestVal);
+        }
+        //free game object from memory
+        if(allChildrenVisited) {
+            rootState = null;
         }
         return best;
     }
@@ -414,27 +420,32 @@ public class MCTSNode {
             return children.get(0);
         }
         StringBuilder sb = new StringBuilder();
-        sb.append(baseGame.getTurnStepType().toString()).append(baseGame.getStack().toString()).append(" actions: ");
+        if(baseGame.getTurnStepType() == null) {
+            sb.append("pre-game");
+        } else {
+            sb.append(baseGame.getTurnStepType().toString());
+        }
+        sb.append(baseGame.getStack().toString()).append(" actions: ");
         for (MCTSNode node: children) {
-            if(node.action != null) {
-                if(node.chooseTargetAction != null) {
-                    if(baseGame.getEntityName(node.chooseTargetAction) != null) {
-                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntityName(node.chooseTargetAction).toString(), node.getMeanScore(), node.getVisits()));
-                    } else if(baseGame.getPlayer(node.chooseTargetAction) != null){
-                        sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction).toString(), node.getMeanScore(), node.getVisits()));
-                    } else {
-                        logger.error("target not found");
-                    }
-                } else if(node.choiceAction != null) {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", node.choiceAction, node.getMeanScore(), node.getVisits()));
-                } else if(node.useAction != null) {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", node.useAction, node.getMeanScore(), node.getVisits()));
-                } else if(node.modeAction != null) {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", node.modeAction, node.getMeanScore(), node.getVisits()));
+
+            if(node.chooseTargetAction != null) {
+                if(baseGame.getEntityName(node.chooseTargetAction) != null) {
+                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntityName(node.chooseTargetAction).toString(), node.getMeanScore(), node.getVisits()));
+                } else if(baseGame.getPlayer(node.chooseTargetAction) != null){
+                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction).toString(), node.getMeanScore(), node.getVisits()));
                 } else {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", node.action, node.getMeanScore(), node.getVisits()));
+                    logger.error("target not found");
                 }
+            } else if(node.choiceAction != null) {
+                sb.append(String.format("[%s score: %.3f count: %d] ", node.choiceAction, node.getMeanScore(), node.getVisits()));
+            } else if(node.useAction != null) {
+                sb.append(String.format("[%s score: %.3f count: %d] ", node.useAction, node.getMeanScore(), node.getVisits()));
+            } else if(node.modeAction != null) {
+                sb.append(String.format("[%s score: %.3f count: %d] ", node.modeAction, node.getMeanScore(), node.getVisits()));
+            } else if(node.action != null){
+                sb.append(String.format("[%s score: %.3f count: %d] ", node.action, node.getMeanScore(), node.getVisits()));
             }
+
         }
         if(!children.isEmpty()) {
             logger.info(sb.toString());
@@ -817,7 +828,13 @@ public class MCTSNode {
         MCTSPlayer opponentPlayer =  (MCTSPlayer) rootGame.getPlayer(nonTargetPlayer);
         opponentPlayer.actionScript = opponentScript;
         //will run until next decision (see MCTSPlayer)
-        rootGame.resume();
+        if(rootGame.getPhase() == null) {
+            rootGame.getOptions().skipInitShuffling = true;
+            rootGame.getState().resume();
+            rootGame.start(rootState.getChoosingPlayerId());
+        } else {
+            rootGame.resume();
+        }
         finalizeState(rootGame);
         return rootGame;
     }

@@ -1,7 +1,6 @@
 package mage.player.ai;
 
 
-import com.j256.ormlite.stmt.query.In;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.effects.Effect;
@@ -143,7 +142,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         stateEncoder = new StateEncoder();
         stateEncoder.setAgent(getId());
         stateEncoder.setOpponent(opponent.getId());
-        stateEncoder.seenFeatures = null;
+        stateEncoder.seenIndices = null;
         //find model endpoint
         try {
             nn = new RemoteModelEvaluator(MODEL_URL);
@@ -274,12 +273,15 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
             // selection
             while (!current.isLeaf()) {
+                //TODO:make work without rootState access
+                /*
                 if((current.rootState.getTurnNum() - root.rootState.getTurnNum() >= MAX_GAME_DEPTH) &&
                         current.rootState.getTurnPhaseType().equals(root.rootState.getTurnPhaseType())) {
                     hitDepthLimit = true;
                     break;
 
                 }
+                 */
                 current = current.select(this.playerId);
             }
             if(hitDepthLimit) {

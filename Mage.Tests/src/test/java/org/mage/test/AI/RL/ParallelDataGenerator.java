@@ -45,7 +45,7 @@ public class ParallelDataGenerator {
     // ============================ DATA GENERATION SETTINGS ============================
     protected static int NUM_GAMES_TO_SIMULATE = 100;
     protected static int MAX_GAME_TURNS = 50;
-    protected static int MAX_CONCURRENT_GAMES = 8;
+    protected static int MAX_CONCURRENT_GAMES = 4;
     // =============================== AI SETTINGS ===============================
     protected static boolean DONT_USE_NOISE = true;
     protected static boolean DONT_USE_POLICY = false;
@@ -56,7 +56,8 @@ public class ParallelDataGenerator {
     /**MCTS settings in ComputerPlayerMCTS.java*/
     // =============================== MATCH SETTINGS ===============================
     protected static boolean ALWAYS_GO_FIRST = false;
-    protected static boolean ALLOW_MULLIGANS = false; //TODO: implement mulligans
+    protected static boolean ALLOW_MULLIGANS_A = true;
+    protected static boolean ALLOW_MULLIGANS_B = false;
     protected static String DECK_A = "UWTempo";
     protected static String DECK_B = "MTGA_MonoR";
     protected static String MODEL_URL_A = "http://127.0.0.1:50052";
@@ -65,11 +66,13 @@ public class ParallelDataGenerator {
     protected static String DECK_A_PATH = "decks/" + DECK_A + ".dck";
     protected static String DECK_B_PATH = "decks/" + DECK_B + ".dck";
     protected static String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";
-    protected static String SEEN_FEATURES_PATH = "seenFeatures.roar";
+    protected static String SEEN_INDICES_PATH = "seenIndices.roar";
+    protected static String SEEN_FEATURES_PATH = "seenFeatures.ser";
     protected static String DATA_OUT_FILE_A = "trainingA.hdf5";
     protected static String DATA_OUT_FILE_B = "trainingB.hdf5";
     // ================================== GLOBAL FIELDS ==================================
-    private RoaringBitmap seenFeatures = new RoaringBitmap();
+    private RoaringBitmap seenIndices = new RoaringBitmap();
+    private FeatureMap seenFeatures = new FeatureMap();
     private int initialRawSize;
     public final AtomicInteger gameCount = new AtomicInteger(0);
     public final AtomicInteger winCount = new AtomicInteger(0);
@@ -121,23 +124,32 @@ public class ParallelDataGenerator {
         } catch (IOException e) {
             logger.warn("external ignore list not found");
         }
-        try (FileChannel ch = FileChannel.open(Paths.get(SEEN_FEATURES_PATH), READ)) {
+        try (FileChannel ch = FileChannel.open(Paths.get(SEEN_INDICES_PATH), READ)) {
             MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
             ImmutableRoaringBitmap imm = new ImmutableRoaringBitmap(mbb);
-            seenFeatures = imm.toRoaringBitmap();
-            logger.info("global seen features list size: " + seenFeatures.getCardinality());
+            seenIndices = imm.toRoaringBitmap();
+            logger.info("global seen features list size: " + seenIndices.getCardinality());
         } catch (IOException e) {
-            logger.warn("external seen feature list not found");
+            logger.warn("external seen index list not found");
         }
         try {
             remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
         } catch (Exception e) {
-            e.printStackTrace();
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
             remoteModelEvaluatorA = null;
             VALUE_LAMBDA = 0.95;
         }
-        initialRawSize = seenFeatures.getCardinality();
+        initialRawSize = seenIndices.getCardinality();
+    }
+    @Test
+    public void print_known_feature_map() {
+        try {
+            FeatureMap fm = FeatureMap.loadFromFile(SEEN_FEATURES_PATH);
+            fm.printFeatureTable();
+        } catch (IOException | ClassNotFoundException e) {
+            logger.warn("couldn't load feature table");
+            e.printStackTrace();
+        }
     }
     @Test
     public void test_single_game() {
@@ -198,13 +210,14 @@ public class ParallelDataGenerator {
             writer.join();
         } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
 
-        saveRoaring(seenFeatures, SEEN_FEATURES_PATH);
+        saveRoaring(seenIndices, SEEN_INDICES_PATH);
+        saveFeatureMap(seenFeatures, SEEN_FEATURES_PATH);
 
         logger.info("Processing " + fwA.batchStates + " states.");
         logger.info("Initial feature count: " + initialRawSize);
         logger.info("Final unique feature count from dataset: " + fwA.batchFeatures.size());
-        logger.info("Global unique feature count: " + seenFeatures.getCardinality());
-        logger.info("Features added: " + (seenFeatures.getCardinality() - initialRawSize));
+        logger.info("Global unique feature count: " + seenIndices.getCardinality());
+        logger.info("Features added: " + (seenIndices.getCardinality() - initialRawSize));
     }
 
     @NotNull
@@ -308,8 +321,8 @@ public class ParallelDataGenerator {
             Player playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
             Player playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
 
-            threadEncoderA.seenFeatures = seenFeatures.clone();
-            threadEncoderB.seenFeatures = seenFeatures.clone();
+            threadEncoderA.seenIndices = seenIndices.clone();
+            threadEncoderB.seenIndices = seenIndices.clone();
 
 
             configurePlayer(playerA, threadEncoderA, threadEncoderB);
@@ -349,8 +362,9 @@ public class ParallelDataGenerator {
             }
             boolean playerAWon = playerA.hasWon();
             //merge to the final features
-            synchronized (seenFeatures) {
-                seenFeatures.or(threadEncoderA.seenFeatures);
+            synchronized (seenIndices) {
+                seenIndices.or(threadEncoderA.seenIndices);
+                seenFeatures.merge(threadEncoderA.featureMap);
             }
             if(playerA.hasWon()) winCount.incrementAndGet();
             logger.info("Game #" + gameCount.incrementAndGet() + " completed successfully");
@@ -376,13 +390,17 @@ public class ParallelDataGenerator {
                 mcts2.noPolicyUse = DONT_USE_POLICY_USE;
                 mcts2.noNoise = DONT_USE_NOISE;
                 mcts2.roundRobinMode = isRoundRobin;
+                mcts2.allowMulligans = ALLOW_MULLIGANS_A;
                 if(remoteModelEvaluatorA == null) mcts2.offlineMode = true;
             } else {
                 mcts2.nn = remoteModelEvaluatorB;
+                mcts2.allowMulligans = ALLOW_MULLIGANS_B;
                 if(remoteModelEvaluatorB == null) mcts2.offlineMode = true;
             }
         } else if (player.getRealPlayer() instanceof ComputerPlayer8) {
-            ((ComputerPlayer8) player.getRealPlayer()).setEncoder(opponentEncoder);
+            ComputerPlayer8 cp8 = (ComputerPlayer8) player.getRealPlayer();
+            cp8.setEncoder(opponentEncoder);
+            cp8.allowMulligans = ALLOW_MULLIGANS_B;
         } else  {
             logger.warn("unexpected player type" + player.getRealPlayer().getClass().getName());
         }
@@ -398,6 +416,21 @@ public class ParallelDataGenerator {
         return encoder.labeledStates;
 
     }
+    void saveFeatureMap(FeatureMap fm, String filePath) {
+        FeatureMap baseMap = new FeatureMap();
+        try {
+            baseMap = FeatureMap.loadFromFile(filePath);
+        } catch (IOException | ClassNotFoundException e) {
+            logger.warn("couldn't load feature map");
+        }
+        try {
+            baseMap.merge(fm);
+            baseMap.saveToFile(filePath);
+        } catch (IOException e) {
+            logger.warn("couldn't save feature map");
+        }
+    }
+
     void saveRoaring(RoaringBitmap rb, String filePath) {
         try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filePath))) {
             rb.serialize(out);
