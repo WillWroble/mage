@@ -237,6 +237,14 @@ public class MCTSPlayer extends ComputerPlayer {
         return false; //defaults to try to avoid infinite use issues from poorly implemented abilities
     }
     @Override
+    public boolean chooseMulligan(Game game) {
+        if(getHand().size() < 6 || getName().equals("PlayerB")) {
+            getPlayerHistory().useSequence.add(false);
+            return false;
+        }
+        return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
+    }
+    @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) {
             return super.chooseModeHelper(modes, source, game);

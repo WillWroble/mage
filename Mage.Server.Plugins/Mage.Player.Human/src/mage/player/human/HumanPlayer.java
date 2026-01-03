@@ -381,9 +381,13 @@ public class HumanPlayer extends PlayerImpl {
     private boolean canCallFeedback(Game game) {
         return !gameInCheckPlayableState(game) && !game.isSimulation();
     }
-
     @Override
     public boolean chooseMulligan(Game game) {
+        boolean out = chooseMulliganHelper(game);
+        getPlayerHistory().useSequence.add(out);
+        return out;
+    }
+    public boolean chooseMulliganHelper(Game game) {
         if (!canCallFeedback(game)) {
             return false;
         }
@@ -778,9 +782,19 @@ public class HumanPlayer extends PlayerImpl {
 
         return target.isChosen(game) && target.getTargets().size() > 0;
     }
-
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+        boolean out;
+        UUID abilityControllerId = target.getAffectedAbilityControllerId(this.getId());
+        if(target.possibleTargets(abilityControllerId, source, game).size() > 1) {
+            out = chooseTargetHelper(outcome, target, source, game);
+            getPlayerHistory().targetSequence.addAll(target.getTargets());
+        } else {
+            out = chooseTargetHelper(outcome, target, source, game);
+        }
+        return out;
+    }
+    public boolean chooseTargetHelper(Outcome outcome, Target target, Ability source, Game game) {
         if (!canCallFeedback(game)) {
             return false;
         }

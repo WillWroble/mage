@@ -1163,6 +1163,7 @@ public abstract class GameImpl implements Game {
 
     @Override
     public void start(UUID choosingPlayerId) {
+        //state.resume();
         startTime = new Date();
         DataCollectorServices.getInstance().onGameStart(this);
         if (state.getPlayers().values().iterator().hasNext()) {
@@ -1403,6 +1404,10 @@ public abstract class GameImpl implements Game {
                 player.shuffleLibrary(null, this);
             }
         }
+        //first anchor for MCTS happens after intial draws
+        if(!isSimulation()) {
+            setLastPriority(choosingPlayerId);
+        }
 
         //20091005 - 103.2
         Player choosingPlayer = null;
@@ -1463,6 +1468,8 @@ public abstract class GameImpl implements Game {
                 mulligan.drawHand(startingHandSize, player, this);
             }
         }
+
+
 
         //20091005 - 103.4
         mulligan.executeMulliganPhase(this, startingHandSize);

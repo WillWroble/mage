@@ -205,7 +205,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             target.add(this.getId(), game);
             return true;
         }
-        if(game.getPhase() == null || game.isSimulation()) {//TODO: implement pre-game decisions properly
+        if(game.isSimulation()) {
             return super.makeChoice(outcome, target, source, game, fromCards);
         }
 
@@ -308,7 +308,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
         logger.info("base choose use " + message);
-        if(game.getPhase() == null || game.isSimulation()) {//TODO: implement pre-game decisions properly
+        if(game.isSimulation()) {
             return true;
         }
         root = getNextAction(game, NextAction.CHOOSE_USE);
@@ -322,6 +322,14 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         logger.info("use " + message + ": " + chosen);
         getPlayerHistory().useSequence.add(chosen);
         return chosen;
+    }
+    @Override
+    public boolean chooseMulligan(Game game) {
+        if(getHand().size() < 6) {//TODO: make this toggleable
+            return false;
+        }
+        logger.info(getHand().getCards(game).toString());
+        return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
     }
     protected double totalThinkTime = 0;
     protected long totalSimulations = 0;

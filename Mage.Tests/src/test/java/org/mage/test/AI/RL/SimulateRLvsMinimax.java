@@ -3,6 +3,7 @@ package org.mage.test.AI.RL;
 import mage.constants.RangeOfInfluence;
 import mage.player.ai.ComputerPlayer8;
 import mage.player.ai.ComputerPlayerMCTS2;
+import mage.player.ai.Features;
 import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
@@ -59,6 +60,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         //DECK_A = "UWTempo";
 
         isRoundRobin = true;
+        Features.useFeatureMap = true;
         NUM_GAMES_TO_SIMULATE = 200;
         String [] deckPool = {"Standard-MonoB", "Standard-MonoG", "Standard-MonoR", "Standard-MonoU", "Standard-MonoW"};
         //String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};

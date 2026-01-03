@@ -59,6 +59,8 @@ public class ComputerPlayer extends PlayerImpl {
     public Set<Mode> modeOptions = new HashSet<>();
     //for priorities
     public List<Ability> playables = new ArrayList<>();
+    //allow mulligans for test mode
+    public boolean allowMulligans = false;
 
     private static final Logger logger = Logger.getLogger(ComputerPlayer.class);
 
@@ -116,19 +118,23 @@ public class ComputerPlayer extends PlayerImpl {
         choiceOptions = new HashSet<>(player.choiceOptions);
         playables = new  ArrayList<>(player.playables);
         modeOptions = new HashSet<>(player.modeOptions);
+        allowMulligans = player.allowMulligans;
     }
 
     @Override
     public boolean chooseMulligan(Game game) {
         if (hand.size() < 6
-                || isTestMode() // ignore mulligan in tests
+                || (isTestMode() && !allowMulligans) // ignore mulligan in tests
                 || game.getClass().getName().contains("Momir") // ignore mulligan in Momir games
         ) {
+            getPlayerHistory().useSequence.add(false);
             return false;
         }
         Set<Card> lands = hand.getCards(new FilterLandCard(), game);
-        return lands.size() < 2
+        boolean out = lands.size() < 2
                 || lands.size() > hand.size() - 2;
+        getPlayerHistory().useSequence.add(out);
+        return out;
     }
 
     @Override
@@ -1485,6 +1491,7 @@ public class ComputerPlayer extends PlayerImpl {
             choiceOptions = new HashSet<>(cPlayer.choiceOptions);
             playables = new ArrayList<>(cPlayer.playables);
             modeOptions = new HashSet<>(cPlayer.modeOptions);
+            allowMulligans = cPlayer.allowMulligans;
         }
         this.human = false;
     }
