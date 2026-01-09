@@ -127,13 +127,13 @@ public class ComputerPlayer extends PlayerImpl {
                 || (isTestMode() && !allowMulligans) // ignore mulligan in tests
                 || game.getClass().getName().contains("Momir") // ignore mulligan in Momir games
         ) {
-            getPlayerHistory().useSequence.add(false);
+            //getPlayerHistory().useSequence.add(false);
             return false;
         }
         Set<Card> lands = hand.getCards(new FilterLandCard(), game);
         boolean out = lands.size() < 2
                 || lands.size() > hand.size() - 2;
-        getPlayerHistory().useSequence.add(out);
+        //getPlayerHistory().useSequence.add(out);
         return out;
     }
 

@@ -248,7 +248,7 @@ public class MCTSNode {
         }
         //free game object from memory
         if(allChildrenVisited) {
-            rootState = null;
+            //rootState = null;
         }
         return best;
     }

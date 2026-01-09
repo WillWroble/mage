@@ -24,6 +24,7 @@ import mage.game.stack.StackObject;
 import mage.players.ManaPool;
 import mage.players.Player;
 import mage.target.Target;
+import mage.watchers.Watcher;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.apache.log4j.Logger;
@@ -92,6 +93,10 @@ public class StateEncoder {
             for(Effect e : m.getEffects()) {
                 f.parent.addFeature(e.getText(m));//only add feature for abstraction (isn't dynamic)
             }
+        }
+        //process watchers
+        for (Watcher w : a.getWatchers()) {
+            if(w.conditionMet()) f.addFeature(w.getKey(), false);
         }
     }
     private void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
@@ -183,18 +188,19 @@ public class StateEncoder {
 
         //process as card
         processCard(c, game, f);
-        //process abilities in gy
+        Abilities<Ability> allAbilities = c.getAbilities(game);
         //static abilities
-        for (StaticAbility sa : c.getAbilities(game).getStaticAbilities(z)) {
-            f.addFeature(sa.getRule());
+        for (StaticAbility sa : allAbilities.getStaticAbilities(z)) {
+            Features saFeatures = f.getSubFeatures(sa.getRule());
+            processAbility(sa, game, saFeatures);
         }
         //activated abilities
-        for(ActivatedAbility aa : c.getAbilities(game).getActivatedAbilities(z)) {
+        for(ActivatedAbility aa : allAbilities.getActivatedAbilities(z)) {
             Features aaFeatures = f.getSubFeatures(aa.getRule());
             processActivatedAbility(aa, game, aaFeatures);
         }
         //triggered abilities
-        for(TriggeredAbility ta : c.getAbilities(game).getTriggeredAbilities(z)) {
+        for(TriggeredAbility ta : allAbilities.getTriggeredAbilities(z)) {
             Features taFeatures = f.getSubFeatures(ta.getRule());
             processTriggeredAbility(ta, game, taFeatures);
 
@@ -350,6 +356,9 @@ public class StateEncoder {
         if(decisionPlayerId.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
         features.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand");
+
+
+
 
         //stack
         Features stackFeatures = features.getSubFeatures("Stack", false);

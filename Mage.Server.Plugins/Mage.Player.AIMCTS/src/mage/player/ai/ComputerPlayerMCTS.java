@@ -325,7 +325,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean chooseMulligan(Game game) {
-        if(getHand().size() < 6) {//TODO: make this toggleable
+        if(getHand().size() < 6 || !allowMulligans) {//TODO: make this toggleable
             return false;
         }
         logger.info(getHand().getCards(game).toString());
@@ -353,7 +353,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         Game mcts = game.createSimulationForAI();
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
             Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
-            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId());
+            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId());
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             //dont shuffle here
