@@ -768,3 +768,5 @@ WR with (A)UWTempo vs Standard-MonoR: 0.3065326633165829 in 199 games
 WR with (A)UWTempo vs Standard-MonoR: 0.2727272727272727 in 198 games
 WR with (A)UWTempo vs Standard-MonoU: 0.33 in 200 games
 WR with (A)UWTempo vs Standard-MonoU: 0.28 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.28 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.27 in 200 games

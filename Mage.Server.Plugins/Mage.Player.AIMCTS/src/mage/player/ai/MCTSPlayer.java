@@ -221,7 +221,7 @@ public class MCTSPlayer extends ComputerPlayer {
             logger.debug("no choice options - fizzle");
             return false; //fizzle
         }
-        decisionText = choice.toString();
+        decisionText = choice.getMessage();
         game.pause();
         lastToAct = true;
         nextAction = NextAction.MAKE_CHOICE;
