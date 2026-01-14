@@ -356,7 +356,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         Game mcts = game.createSimulationForAI();
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
             Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
-            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId());
+            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId());
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             //dont shuffle here

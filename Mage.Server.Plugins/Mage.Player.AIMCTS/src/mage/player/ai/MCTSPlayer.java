@@ -36,6 +36,7 @@ public class MCTSPlayer extends ComputerPlayer {
     //additional text for state encoder that describes the decision the player is currently making
     public String decisionText;
     public boolean isRandomTransition;
+    public UUID targetPlayer;
 
 
 
@@ -49,10 +50,16 @@ public class MCTSPlayer extends ComputerPlayer {
     public MCTSPlayer(UUID id) {
         super(id);
     }
+    public MCTSPlayer(UUID id, UUID target) {
+        super(id);
+        this.targetPlayer = target;
+    }
+
 
     public MCTSPlayer(final MCTSPlayer player) {
         super(player);
         this.nextAction = player.nextAction;
+        this.targetPlayer = player.targetPlayer;
     }
 
     @Override
@@ -240,8 +247,7 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseMulligan(Game game) {
-        if(getHand().size() < 6 || getName().equals("PlayerB") || !allowMulligans) {
-            //getPlayerHistory().useSequence.add(false);
+        if(getHand().size() < 6 || !playerId.equals(targetPlayer) || !allowMulligans) {//TODO: this is safe mulligan, needs complete freedom eventually
             return false;
         }
         return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
