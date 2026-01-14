@@ -412,4 +412,23 @@ WR with Standard-MonoB vs Standard-MonoG: 0.6770833333333334 in 192 games
 WR with Standard-MonoB vs Standard-MonoR: 0.7626262626262627 in 198 games
 WR with Standard-MonoB vs Standard-MonoU: 0.885 in 200 games
 WR with Standard-MonoB vs Standard-MonoW: 0.77 in 200 games
+gen12
 WR with Standard-MonoB vs Standard-MonoB: 0.6632653061224489 in 196 games
+WR with Standard-MonoB vs Standard-MonoG: 0.6243386243386243 in 189 games
+WR with Standard-MonoB vs Standard-MonoR: 0.7929292929292929 in 198 games
+WR with Standard-MonoB vs Standard-MonoU: 0.94 in 200 games
+WR with Standard-MonoB vs Standard-MonoW: 0.803030303030303 in 198 games
+gen13
+WR with Standard-MonoB vs Standard-MonoB: 0.6224489795918368 in 196 games
+WR with Standard-MonoB vs Standard-MonoG: 0.645 in 200 games
+WR with Standard-MonoB vs Standard-MonoR: 0.7424242424242424 in 198 games
+WR with Standard-MonoB vs Standard-MonoB: 0.67 in 200 games
+WR with Standard-MonoB vs Standard-MonoG: 0.6717171717171717 in 198 games
+WR with Standard-MonoB vs Standard-MonoR: 0.751269035532995 in 197 games
+WR with Standard-MonoB vs Standard-MonoU: 0.9 in 200 games
+WR with Standard-MonoB vs Standard-MonoW: 0.766497461928934 in 197 games
+WR with Standard-MonoB vs Standard-MonoB: 0.73 in 200 games
+WR with Standard-MonoB vs Standard-MonoG: 0.6363636363636364 in 198 games
+WR with Standard-MonoB vs Standard-MonoR: 0.7889447236180904 in 199 games
+WR with Standard-MonoB vs Standard-MonoU: 0.945 in 200 games
+WR with Standard-MonoB vs Standard-MonoW: 0.75 in 200 games
