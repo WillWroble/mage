@@ -3,6 +3,7 @@ package mage.abilities;
 import mage.abilities.costs.Cost;
 import mage.abilities.effects.Effect;
 import mage.abilities.effects.Effects;
+import mage.game.Game;
 import mage.target.Target;
 import mage.target.Targets;
 
@@ -48,6 +49,9 @@ public class Mode implements Serializable {
 
     public UUID setRandomId() {
         return this.id = UUID.randomUUID();
+    }
+    public UUID setRandomId(Game game) {
+        return this.id = new UUID(game.getLocalRandom().nextLong(), game.getLocalRandom().nextLong());
     }
 
     public Mode copy() {

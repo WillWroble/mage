@@ -232,7 +232,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
         if (n == 1) {
             //if only one possible just choose it and leave
-            target.addTarget(possible.iterator().next(), source, game);
+            UUID id = possible.iterator().next();
+            target.addTarget(id, source, game);
+            getPlayerHistory().targetSequence.add(id);
             return true;
         }
 
@@ -284,9 +286,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         return true;
     }
     public Mode chooseMode(Modes modes, Ability source, Game game) {
-        modeOptions = modes.getAvailableModes(source, game).stream()
+        List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
-                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toSet());
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        modeOptionsSize = modeOptions.size();
         if(modeOptions.isEmpty()) {
             logger.info("choice is empty, spell fizzled");
             return null;
@@ -299,11 +302,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(root == null) {
             return null;
         }
-        Mode chosenMode = root.modeAction;
+        int chosenMode = root.modeAction;
         logger.info(String.format("Choosing mode %s", chosenMode));
         getPlayerHistory().modeSequence.add(chosenMode);
 
-        return chosenMode;
+        return modeOptions.get(chosenMode);
     }
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
@@ -325,7 +328,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean chooseMulligan(Game game) {
-        if(getHand().size() < 6) {//TODO: make this toggleable
+        if(getHand().size() < 6 || !allowMulligans) {//TODO: make this toggleable
             return false;
         }
         logger.info(getHand().getCards(game).toString());

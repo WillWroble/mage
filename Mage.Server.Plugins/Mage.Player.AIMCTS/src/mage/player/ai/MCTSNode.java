@@ -3,7 +3,6 @@ package mage.player.ai;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import mage.abilities.Mode;
 import mage.constants.Zone;
 import mage.abilities.Ability;
 import mage.cards.Card;
@@ -44,7 +43,7 @@ public class MCTSNode {
 
     //action fields - how the node represents the state - only one is not null at a time
     public Ability action;
-    public Mode modeAction;
+    public Integer modeAction;
     public UUID chooseTargetAction;
     public String choiceAction;
     public Boolean useAction;
@@ -188,7 +187,7 @@ public class MCTSNode {
             mp.actionScript.clear();
             mp.chooseTargetOptions.clear();
             mp.choiceOptions.clear();
-            mp.modeOptions.clear();
+            mp.modeOptionsSize = 0;
             mp.playables.clear();
             mp.decisionText = "";
             mp.autoPassed=0;
@@ -248,7 +247,7 @@ public class MCTSNode {
         }
         //free game object from memory
         if(allChildrenVisited) {
-            rootState = null;
+            //rootState = null;
         }
         return best;
     }
@@ -277,11 +276,10 @@ public class MCTSNode {
                 children.add(node);
             }
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_MODE) {
-            Set<Mode> choiceOptions = player.modeOptions;
-            for (Mode mode : choiceOptions) {
-                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + mode.toString());
+            for (int mode = 0; mode < player.modeOptionsSize; mode++) {
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + mode);
                 MCTSNode node = new MCTSNode(this, action);
-                node.modeAction = mode.copy();
+                node.modeAction = mode;
                 children.add(node);
             }
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {

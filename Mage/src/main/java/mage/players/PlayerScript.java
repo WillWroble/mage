@@ -20,7 +20,7 @@ public class PlayerScript {
     //for priority abilities
     public ArrayDeque<Ability> prioritySequence;
     //for mode decisions
-    public ArrayDeque<Mode> modeSequence;
+    public ArrayDeque<Integer> modeSequence;
 
 
     public PlayerScript() {
@@ -31,7 +31,7 @@ public class PlayerScript {
         modeSequence =  new ArrayDeque<>();
 
     }
-    public PlayerScript(List<Ability> prio, List<Mode> mode, List<UUID> target, List<String> choice, List<Boolean> use) {
+    public PlayerScript(List<Ability> prio, List<Integer> mode, List<UUID> target, List<String> choice, List<Boolean> use) {
         prioritySequence = new ArrayDeque<>(prio);
         for(Ability a : prio) {//need to copy ability for certain edge cases unfortunately
             this.prioritySequence.add(a.copy());

@@ -51,12 +51,14 @@ import java.util.stream.Collectors;
  * @author BetaSteward_at_googlemail.com, JayDi85
  */
 public class ComputerPlayer extends PlayerImpl {
+    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
+
     //for targeting microdecisions
     public Set<UUID> chooseTargetOptions = new HashSet<>();
     //for discrete choices
     public Set<String> choiceOptions = new HashSet<>();
     //for modes
-    public Set<Mode> modeOptions = new HashSet<>();
+    public int modeOptionsSize;
     //for priorities
     public List<Ability> playables = new ArrayList<>();
     //allow mulligans for test mode
@@ -117,7 +119,7 @@ public class ComputerPlayer extends PlayerImpl {
         chooseTargetOptions = new HashSet<>(player.chooseTargetOptions);
         choiceOptions = new HashSet<>(player.choiceOptions);
         playables = new  ArrayList<>(player.playables);
-        modeOptions = new HashSet<>(player.modeOptions);
+        modeOptionsSize = player.modeOptionsSize;
         allowMulligans = player.allowMulligans;
     }
 
@@ -127,13 +129,13 @@ public class ComputerPlayer extends PlayerImpl {
                 || (isTestMode() && !allowMulligans) // ignore mulligan in tests
                 || game.getClass().getName().contains("Momir") // ignore mulligan in Momir games
         ) {
-            getPlayerHistory().useSequence.add(false);
+            //getPlayerHistory().useSequence.add(false);
             return false;
         }
         Set<Card> lands = hand.getCards(new FilterLandCard(), game);
         boolean out = lands.size() < 2
                 || lands.size() > hand.size() - 2;
-        getPlayerHistory().useSequence.add(out);
+        //getPlayerHistory().useSequence.add(out);
         return out;
     }
 
@@ -201,6 +203,10 @@ public class ComputerPlayer extends PlayerImpl {
      */
     protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
         UUID abilityControllerId = target.getAffectedAbilityControllerId(getId());
+        // nothing to choose, e.g. X=0
+        if (target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) {
+            return false;
+        }
         Set<UUID> possible = target.possibleTargets(abilityControllerId, source, game, fromCards).stream().filter(id -> !target.contains(id)).collect(Collectors.toSet());
         logger.info("possible targets: " + possible.size());
         // nothing to choose, e.g. no valid targets
@@ -211,11 +217,16 @@ public class ComputerPlayer extends PlayerImpl {
         n += target.isChosen(game) ? 1 : 0;
         if (n == 1) {
             //if only one possible just choose it and leave
+            UUID id = possible.iterator().next();
             target.addTarget(possible.iterator().next(), source, game);
+            getPlayerHistory().targetSequence.add(id);
             return true;
         }
         boolean out = makeChoiceHelper(outcome, target, source, game, fromCards);
-        if(out) getPlayerHistory().targetSequence.addAll(target.getTargets());
+        if(out) {
+            getPlayerHistory().targetSequence.addAll(target.getTargets());
+            getPlayerHistory().targetSequence.add(STOP_CHOOSING);
+        }
 
         return out;
     }
@@ -886,7 +897,7 @@ public class ComputerPlayer extends PlayerImpl {
             return chooseHelper(outcome, choice, game);
         }
         boolean out = chooseHelper(outcome, choice, game);
-        getPlayerHistory().choiceSequence.add(choice.getChoice());
+        if(choice.getChoice() != null) getPlayerHistory().choiceSequence.add(choice.getChoice());
         return out;
     }
 
@@ -1029,14 +1040,15 @@ public class ComputerPlayer extends PlayerImpl {
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
         logger.warn("chooseMode");
-        Set<Mode> options = modes.getAvailableModes(source, game).stream()
+        List<Mode> options = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
-                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toSet());
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
         if(options.size() == 1) {
             return options.iterator().next();
         }
         Mode out = chooseModeHelper(modes, source, game);
-        if(out != null) getPlayerHistory().modeSequence.add(out);
+        int outIdx = options.indexOf(out);
+        getPlayerHistory().modeSequence.add(outIdx);
         return out;
     }
     public Mode chooseModeHelper(Modes modes, Ability source, Game game) {
@@ -1490,7 +1502,7 @@ public class ComputerPlayer extends PlayerImpl {
             chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
             choiceOptions = new HashSet<>(cPlayer.choiceOptions);
             playables = new ArrayList<>(cPlayer.playables);
-            modeOptions = new HashSet<>(cPlayer.modeOptions);
+            modeOptionsSize = cPlayer.modeOptionsSize;
             allowMulligans = cPlayer.allowMulligans;
         }
         this.human = false;

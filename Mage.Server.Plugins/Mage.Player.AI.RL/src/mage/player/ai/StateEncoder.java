@@ -167,6 +167,7 @@ public class StateEncoder {
         if(p.isCreature(game)) {
             if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
             if(p.canBlockAny(game)) f.addFeature("CanBlock");
+            //if(p.hasSummoningSickness()) f.addFeature("SummoningSickness");
             if(p.isAttacking()) {
                 f.addFeature("Attacking");
                 for(UUID blockerId : game.getCombat().findGroup(p.getId()).getBlockers()) {

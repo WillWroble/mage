@@ -2488,7 +2488,11 @@ public class HumanPlayer extends PlayerImpl {
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
         Mode out = chooseModeHelper(modes, source, game);
-        if(modes.size() > 1 && out != null) getPlayerHistory().modeSequence.add(out);
+        List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
+                .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        int outIdx = modeOptions.indexOf(out);
+        if(modes.size() > 1 && out != null) getPlayerHistory().modeSequence.add(outIdx);
         return out;
     }
 

@@ -155,12 +155,7 @@ public class MCTSPlayer extends ComputerPlayer {
             possible.add(ComputerPlayerMCTS.STOP_CHOOSING);//finish choosing early flag
         }
 
-        if(possible.size()==1) {
-            //if only one possible just choose it and leave
-            UUID id = possible.iterator().next();
-            target.addTarget(id, source, game); //id can never be STOP_CHOOSING here
-            return true;
-        }
+
 
         if (!actionScript.targetSequence.isEmpty()) {
             UUID choice = actionScript.targetSequence.pollFirst();
@@ -172,6 +167,13 @@ public class MCTSPlayer extends ComputerPlayer {
                 makeChoice(outcome, target, source, game, fromCards);
             }
             return target.isChosen(game) && !target.getTargets().isEmpty();
+        }
+        if(possible.size()==1) {
+            //if only one possible just choose it and leave
+            UUID id = possible.iterator().next();
+            target.addTarget(id, source, game); //id can never be STOP_CHOOSING here
+            getPlayerHistory().targetSequence.add(id);
+            return true;
         }
         StringBuilder sb = new StringBuilder();
         chooseTargetOptions = possible;
@@ -238,8 +240,8 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseMulligan(Game game) {
-        if(getHand().size() < 6 || getName().equals("PlayerB")) {
-            getPlayerHistory().useSequence.add(false);
+        if(getHand().size() < 6 || getName().equals("PlayerB") || !allowMulligans) {
+            //getPlayerHistory().useSequence.add(false);
             return false;
         }
         return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
@@ -249,10 +251,10 @@ public class MCTSPlayer extends ComputerPlayer {
         if(game.isPaused() || game.checkIfGameIsOver()) {
             return super.chooseModeHelper(modes, source, game);
         }
-
-        modeOptions = modes.getAvailableModes(source, game).stream()
+        List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
-                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toSet());
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        modeOptionsSize = modeOptions.size();
         if(modeOptions.isEmpty()) {
             logger.debug("no mode options - fizzle");
             return null; //fizzle
@@ -261,10 +263,10 @@ public class MCTSPlayer extends ComputerPlayer {
             return modeOptions.iterator().next();
         }
         if (!actionScript.modeSequence.isEmpty()) {
-            Mode chosenMode = actionScript.modeSequence.pollFirst();
+            int chosenMode = actionScript.modeSequence.pollFirst();
             getPlayerHistory().modeSequence.add(chosenMode);
             if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried mode: %s ", chosenMode));
-            return chosenMode;
+            return modeOptions.get(chosenMode);
         }
         decisionText = "choose mode for " + source.toString();
         game.pause();
