@@ -124,7 +124,7 @@ public class StateEncoder {
 
         if(c.isPermanent()) f.addCategory("Permanent");
         //add types
-        for (CardType ct : c.getCardType()) {
+        for (CardType ct : c.getCardType(game)) {
             f.addCategory(ct.name());
         }
         //add color
@@ -169,6 +169,10 @@ public class StateEncoder {
             processPermBattlefield(attachment, game, attachmentFeatures);
 
         }
+        if(p.isFlipped()) f.addFeature("flipped");
+        if(p.isDisguised()) f.addFeature("harnessed");
+        if(p.isLeftDoorUnlocked()) f.addFeature("Room-LeftDoor");
+        if(p.isRightDoorUnlocked()) f.addFeature("Room-RightDoor");
         if(p.isCreature(game)) {
             if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
             if(p.canBlockAny(game)) f.addFeature("CanBlock");
@@ -390,6 +394,7 @@ public class StateEncoder {
         }
         Features exileFeatures = features.getSubFeatures("Exile");
         processExile(game.getExile(), game, exileFeatures);
+
 
         //lastly do opponent
         processOpponentState(game, decisionPlayerId);
