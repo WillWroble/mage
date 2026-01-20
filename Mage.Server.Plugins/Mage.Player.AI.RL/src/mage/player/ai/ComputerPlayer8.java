@@ -42,13 +42,13 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
         actionEncoder = new ActionEncoder();
         //make action maps
-        try {
-            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
-            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
-            createAllTargetsFromDecks(opponent.getMatchPlayer().getDeck(), getMatchPlayer().getDeck(), actionEncoder.targetMap, opponent.getName(), getName());
-        } catch (GameException e) {
-            throw new RuntimeException(e);
-        }
+//        try {
+//            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
+//            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
+//            createAllTargetsFromDecks(opponent.getMatchPlayer().getDeck(), getMatchPlayer().getDeck(), actionEncoder.targetMap, opponent.getName(), getName());
+//        } catch (GameException e) {
+//            throw new RuntimeException(e);
+//        }
     }
 
     @Override
@@ -65,7 +65,9 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
 
-        List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
+        List<ActivatedAbility> playableAbilities = getPlayable(game, true);
+        //List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
+
         if(playableAbilities.isEmpty() && !game.isCheckPoint()) {//just pass when only option
             pass(game);
             return false;
@@ -200,6 +202,9 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                     }
                 }
                 this.activateAbility((ActivatedAbility) ability, game);
+                if(ability instanceof ManaAbility) {//automatically add manual mana activations
+                    getPlayerHistory().prioritySequence.add(ability.copy());
+                }
                 if (ability.isUsesStack()) {
                     usedStack = true;
                 }

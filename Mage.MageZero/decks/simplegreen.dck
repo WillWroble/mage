@@ -1,0 +1,13 @@
+NAME:simplegreen
+4 [LCI:178] Cenote Scout
+24 [SNC:280] Forest
+4 [ONE:167] Evolving Adaptive
+4 [MKM:160] Flourishing Bloom-Kin
+4 [LCI:208] Pugnacious Hammerskull
+4 [DMU:161] Elfhame Wurm
+4 [LCI:191] Hulking Raptor
+4 [DFT:165] Hazard of the Dunes
+4 [ONE:170] Ichorspit Basilisk
+4 [J21:580] Grizzly Bears
+LAYOUT MAIN:(1,1)(NONE,false,50)|([LCI:178],[LCI:178],[LCI:178],[LCI:178],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[SNC:280],[ONE:167],[ONE:167],[ONE:167],[ONE:167],[MKM:160],[MKM:160],[MKM:160],[MKM:160],[LCI:208],[LCI:208],[LCI:208],[LCI:208],[DMU:161],[DMU:161],[DMU:161],[DMU:161],[LCI:191],[LCI:191],[LCI:191],[LCI:191],[DFT:165],[DFT:165],[DFT:165],[DFT:165],[ONE:170],[ONE:170],[ONE:170],[ONE:170],[J21:580],[J21:580],[J21:580],[J21:580])
+LAYOUT SIDEBOARD:(0,0)(NONE,false,50)|

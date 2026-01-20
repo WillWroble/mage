@@ -2,6 +2,7 @@ package mage.player.ai;
 
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
+import mage.abilities.mana.ManaAbility;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
@@ -93,11 +94,12 @@ public class MCTSPlayer extends ComputerPlayer {
             //game.firePriorityEvent(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
             boolean success = activateAbility(ability, game);
+            if(ability instanceof ManaAbility) {//automatically add manual mana activations
+                getPlayerHistory().prioritySequence.add(ability.copy());
+            }
             if(!success && !lastToAct) {//if decision costs need to be resolved let them simulate out
-                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString() + "STATE: " + game.getState().getValue(true, game));
-                scriptFailed = true;
-                game.pause();
-                lastToAct = true;
+                logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString());
+                illegalGameState(game);
                 return false;
                 //do something here to alert the main process (parent resume call) but handle gracefully
             }
@@ -211,12 +213,19 @@ public class MCTSPlayer extends ComputerPlayer {
         if (PRINT_CHOOSE_DIALOGUES) logger.debug("CALLING MAKE CHOICE: " + choice.toString());
         if (!actionScript.choiceSequence.isEmpty()) {
             String chosen = actionScript.choiceSequence.pollFirst();
-            choice.setChoice(chosen);
+            if(!choice.getChoices().isEmpty()) {
+                choice.setChoice(chosen);
+            } else {
+                choice.setChoiceByKey(chosen);
+            }
             getPlayerHistory().choiceSequence.add(chosen);
             if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried choice: %s ", chosen));
             return true;
         }
         choiceOptions = new HashSet<>(choice.getChoices());
+        if(choiceOptions.isEmpty()) {
+            choiceOptions = choice.getKeyChoices().keySet();
+        }
         if(choiceOptions.isEmpty()) {
             logger.debug("no choice options - fizzle");
             return false; //fizzle
@@ -238,6 +247,11 @@ public class MCTSPlayer extends ComputerPlayer {
             if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried use: %s ", chosen));
             return chosen;
         }
+        //don't simulate opponent's mulligan decisions - assume they keep 7
+        if(message.equals("Mulligan Hand?") && !playerId.equals(targetPlayer)) {
+            getPlayerHistory().useSequence.add(false);
+            return false;
+        }
         decisionText = message;
         //logger.info("decisionText: " + decisionText);
         game.pause();
@@ -247,7 +261,7 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean chooseMulligan(Game game) {
-        if(getHand().size() < 6 || !playerId.equals(targetPlayer) || !allowMulligans) {//TODO: this is safe mulligan, needs complete freedom eventually
+        if(getHand().size() < 6 || !allowMulligans) {//TODO: this is safe mulligan, needs complete freedom eventually
             return false;
         }
         return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
@@ -260,6 +274,7 @@ public class MCTSPlayer extends ComputerPlayer {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        if(modes.getMinModes() == 0) modeOptions.add(null);
         modeOptionsSize = modeOptions.size();
         if(modeOptions.isEmpty()) {
             logger.debug("no mode options - fizzle");

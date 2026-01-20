@@ -35,7 +35,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
     private transient StateEncoder stateEncoder = null;
-    public static final int[] PASS_ACTION = {0,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     public static boolean SHOW_THREAD_INFO = true;
     /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
     is enabled by default if no network is found*/
@@ -128,15 +127,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
         actionEncoder = new ActionEncoder();
         //make action maps
-        try {
-            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
-            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
-            createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck(), actionEncoder.targetMap, getName(), opponent.getName());
-        } catch (GameException e) {
-            throw new RuntimeException(e);
-        }
+//        try {
+//            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
+//            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
+//            createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck(), actionEncoder.targetMap, getName(), opponent.getName());
+//        } catch (GameException e) {
+//            throw new RuntimeException(e);
+//        }
     }
     public void RLInit(Game game) {
+        logger.info("RL init for " + getName() + " (MZ ver1.2)");
         Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
         //make encoder
         stateEncoder = new StateEncoder();
@@ -174,8 +174,16 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         if(offlineMode) {
             node.policy = null;
-            int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
-            node.networkScore = Math.tanh(heuristicScore * 1.0 / 20000);
+            if(myPlayer.getNextAction().equals(NextAction.PRIORITY)) {
+                int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+                node.networkScore = Math.tanh(heuristicScore * 1.0 / 50000);
+            } else {
+                if(node.getParent() != null) {
+                    node.networkScore = node.getParent().networkScore;
+                } else {
+                    node.networkScore = 0;
+                }
+            }
             return node.networkScore;
         }
 
@@ -188,33 +196,34 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         RemoteModelEvaluator.InferenceResult out = nn.infer(nnIndices);
         //logger.warn("INFER");
-        if(!noPolicy) {
-            switch (myPlayer.getNextAction()) {
-                case PRIORITY:
-                    if (node.playerId.equals(playerId)) {
-                        node.policy = out.policy_player;
-                    } else {
-                        if (!roundRobinMode) {
-                            node.policy = out.policy_opponent;
-                        }
-                    }
-                    break;
-                case CHOOSE_TARGET:
-                    if(noPolicyTarget) break;
-                    if (!roundRobinMode ||
-                            myPlayer.chooseTargetOptions.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId))) {
-                        node.policy = out.policy_target;
-                    }
-                    break;
-                case CHOOSE_USE:
-                    if(noPolicyUse) break;
-                    node.policy = out.policy_binary;
-                    break;
-                default:
-                    node.policy = null;
 
-            }
+        switch (myPlayer.getNextAction()) {
+            case PRIORITY:
+                if(noPolicyPriority) break;
+                if (node.playerId.equals(playerId)) {
+                    node.policy = out.policy_player;
+                } else {
+                    if (!noPolicyOpponent) {
+                        node.policy = out.policy_opponent;
+                    }
+                }
+                break;
+            case CHOOSE_TARGET:
+                if(noPolicyTarget) break;
+                if (!noPolicyOpponent ||
+                        myPlayer.chooseTargetOptions.stream().anyMatch(o -> game.getOwnerId(o) == null || game.getOwnerId(o).equals(playerId))) {
+                    node.policy = out.policy_target;
+                }
+                break;
+            case CHOOSE_USE:
+                if(noPolicyUse) break;
+                node.policy = out.policy_binary;
+                break;
+            default:
+                node.policy = null;
+
         }
+
         node.networkScore = out.value;
 
         return node.networkScore;
@@ -254,42 +263,37 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if(!noNoise) root.dirichletSeed = RandomUtil.nextInt();
 
         long startTime = System.nanoTime();
-        long endTime = startTime + (BASE_THREAD_TIMEOUT * 1_000_000_000L);
+        long endTime = (long) (startTime + (searchTimeout * 1_000_000_000L));
+        long maxEndTime = startTime + 60_000_000_000L;
         int simCount = 0;
 
 
-        // --- Run simulations for one cycle (e.g., 1 second) ---
-        while (System.nanoTime() < endTime) {
-            if(simCount + childVisits >= maxVisits) {
-                logger.info("required visits reached, ending search");
+        while (true) {
+            if(System.nanoTime() > maxEndTime) {
+                logger.error("force time out after one minute - couldn't find legal move");
                 break;
             }
-            if(root.size() >= MAX_TREE_NODES) {
-                logger.info("too many nodes in tree, ending search");
-                break;
+            if(root.containsPriorityNode()) { //can only exit search if the tree contains a priority node (meaning a future legal state)
+                if (System.nanoTime() > endTime) {
+                    logger.info("timed out, ending search");
+                    break;
+                }
+                if (simCount + childVisits >= searchBudget) {
+                    logger.info("required visits reached, ending search");
+                    break;
+                }
+                if (root.size() >= MAX_TREE_NODES) {
+                    logger.info("too many nodes in tree, ending search");
+                    break;
+                }
             }
             MCTSNode current = root;
-            boolean hitDepthLimit = false;
 
             // selection
             while (!current.isLeaf()) {
-                //TODO:make work without rootState access
-                /*
-                if((current.rootState.getTurnNum() - root.rootState.getTurnNum() >= MAX_GAME_DEPTH) &&
-                        current.rootState.getTurnPhaseType().equals(root.rootState.getTurnPhaseType())) {
-                    hitDepthLimit = true;
-                    break;
-
-                }
-                 */
                 current = current.select(this.playerId);
             }
-            if(hitDepthLimit) {
-                current.backpropagate(current.getMeanScore(), true);
-                //simCount++;
-                continue;
-            }
-            //temporary reference to a game that represents this nodes state
+            //temporary reference to a game that represents this node's state
             Game tempGame = null;
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
                 tempGame = current.getGame(); //can become terminal here

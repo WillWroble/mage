@@ -1,10 +1,12 @@
-package org.mage.test.AI.RL;
+package org.mage.magezero;
 
 import mage.cards.decks.Deck;
 import mage.cards.decks.DeckCardLists;
 import mage.cards.decks.importer.DeckImporter;
 import mage.cards.repository.CardInfo;
-import mage.constants.*;
+import mage.constants.MultiplayerAttackOption;
+import mage.constants.PhaseStep;
+import mage.constants.RangeOfInfluence;
 import mage.game.*;
 import mage.game.match.Match;
 import mage.game.match.MatchOptions;
@@ -14,12 +16,13 @@ import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
-import org.junit.Test;
-import org.mage.test.player.TestComputerPlayer8;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
-import java.io.*;
+import java.io.DataOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +34,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static java.lang.Math.abs;
 import static java.nio.file.StandardOpenOption.READ;
 
 
@@ -42,37 +44,13 @@ import static java.nio.file.StandardOpenOption.READ;
  */
 public class ParallelDataGenerator {
 
-    // ============================ DATA GENERATION SETTINGS ============================
-    protected static int NUM_GAMES_TO_SIMULATE = 100;
-    protected static int MAX_GAME_TURNS = 50;
-    protected static int MAX_CONCURRENT_GAMES = 2;
-    // =============================== AI SETTINGS ===============================
-    protected static boolean DONT_USE_NOISE = true;
-    protected static boolean DONT_USE_POLICY = false;
-    protected static boolean DONT_USE_POLICY_TARGET = true;
-    protected static boolean DONT_USE_POLICY_USE = false;
-    //higher means less bootstrapping
-    protected static double VALUE_LAMBDA = 0.95;
-    /**MCTS settings in ComputerPlayerMCTS.java*/
-    // =============================== MATCH SETTINGS ===============================
-    protected static boolean ALWAYS_GO_FIRST = false;
-    protected static boolean ALLOW_MULLIGANS_A = true;
-    protected static boolean ALLOW_MULLIGANS_B = false;
-    protected static String DECK_A = "UWTempo";
-    protected static String DECK_B = "MTGA_MonoR";
-    protected static String MODEL_URL_A = "http://127.0.0.1:50052";
-    protected static String MODEL_URL_B = "http://127.0.0.1:50053";
     // ================================== FILE PATHS ==================================
-    protected static String DECK_A_PATH = "decks/" + DECK_A + ".dck";
-    protected static String DECK_B_PATH = "decks/" + DECK_B + ".dck";
-    protected static String IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";
     protected static String SEEN_INDICES_PATH = "seenIndices.roar";
     protected static String SEEN_FEATURES_PATH = "seenFeatures.ser";
-    protected static String DATA_OUT_FILE_A = "trainingA.hdf5";
-    protected static String DATA_OUT_FILE_B = "trainingB.hdf5";
+    protected static String FEATURE_TABLE_OUT = "FeatureTable.txt";
     // ================================== GLOBAL FIELDS ==================================
     private RoaringBitmap seenIndices = new RoaringBitmap();
-    private FeatureMap seenFeatures = new FeatureMap();
+    private final FeatureMap seenFeatures = new FeatureMap();
     private int initialRawSize;
     public final AtomicInteger gameCount = new AtomicInteger(0);
     public final AtomicInteger winCount = new AtomicInteger(0);
@@ -80,10 +58,12 @@ public class ParallelDataGenerator {
     protected RemoteModelEvaluator remoteModelEvaluatorB = null;
     private final BlockingQueue<GameResult> LSQueue = new ArrayBlockingQueue<>(32);
     private final AtomicBoolean stop = new AtomicBoolean(false);
+    private String deckNameA;
+    private String deckNameB;
 
     protected static Map<String, DeckCardLists> loadedDecks = new HashMap<>(); // deck's cache
     protected static Map<String, CardInfo> loadedCardInfo = new HashMap<>(); // db card's cache
-    protected static boolean isRoundRobin = false;
+
 
 
     protected static Logger logger = Logger.getLogger(ParallelDataGenerator.class);
@@ -112,18 +92,6 @@ public class ParallelDataGenerator {
         winCount.set(0);
         gameCount.set(0);
 
-        //update file paths
-        DECK_A_PATH = "decks/" + DECK_A + ".dck";
-        DECK_B_PATH = "decks/" + DECK_B + ".dck";
-        IGNORE_PATH = "ignores/" + DECK_A + "/ignore3.roar";
-
-        try (FileChannel ch = FileChannel.open(Paths.get(IGNORE_PATH), READ)) {
-            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-            StateEncoder.globalIgnore = new ImmutableRoaringBitmap(mbb);
-            //logger.info("global ignore list: " + StateEncoder.globalIgnore);
-        } catch (IOException e) {
-            logger.warn("external ignore list not found");
-        }
         try (FileChannel ch = FileChannel.open(Paths.get(SEEN_INDICES_PATH), READ)) {
             MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
             ImmutableRoaringBitmap imm = new ImmutableRoaringBitmap(mbb);
@@ -132,26 +100,32 @@ public class ParallelDataGenerator {
         } catch (IOException e) {
             logger.warn("external seen index list not found");
         }
+        String modelUrlA = "http://" + Config.INSTANCE.server.host + ":" + Config.INSTANCE.server.port;
         try {
-            remoteModelEvaluatorA = new RemoteModelEvaluator(MODEL_URL_A);
+            remoteModelEvaluatorA = new RemoteModelEvaluator(modelUrlA);
         } catch (Exception e) {
-            logger.warn("Failed to establish connection to network model; falling back to offline mode");
+            logger.warn("Failed to establish connection to network model A; falling back to offline mode");
             remoteModelEvaluatorA = null;
-            VALUE_LAMBDA = 0.95;
+        }
+        String modelUrlB = "http://" + Config.INSTANCE.server.host + ":" + Config.INSTANCE.server.opponentPort;
+        try {
+            remoteModelEvaluatorB = new RemoteModelEvaluator(modelUrlB);
+        } catch (Exception e) {
+            logger.warn("Failed to establish connection to network model B; falling back to offline mode");
+            remoteModelEvaluatorB = null;
         }
         initialRawSize = seenIndices.getCardinality();
+        Features.useFeatureMap = Config.INSTANCE.logging.logFeatureHash;
     }
-    @Test
     public void print_known_feature_map() {
         try {
             FeatureMap fm = FeatureMap.loadFromFile(SEEN_FEATURES_PATH);
-            fm.printFeatureTable();
+            fm.printFeatureTable(FEATURE_TABLE_OUT);
         } catch (IOException | ClassNotFoundException e) {
             logger.warn("couldn't load feature table");
             e.printStackTrace();
         }
     }
-    @Test
     public void test_single_game() {
         test_single_game(System.nanoTime());
     }
@@ -177,7 +151,6 @@ public class ParallelDataGenerator {
 
 
     }
-    @Test
     public void generateData() {
 
 
@@ -187,9 +160,16 @@ public class ParallelDataGenerator {
         LabeledStateWriter fwA;
         LabeledStateWriter fwB;
         Thread writer;
+
+        deckNameA = extractDeckName(Config.INSTANCE.playerA.deckPath);
+        deckNameB = extractDeckName(Config.INSTANCE.playerB.deckPath);
+
+        String fileA = deckNameA + "_vs_" + deckNameB + ".hdf5";
+        String fileB = deckNameB + "_vs_" + deckNameA + ".hdf5";
+
         try {
-            fwA = new LabeledStateWriter(DATA_OUT_FILE_A);
-            fwB = new LabeledStateWriter(DATA_OUT_FILE_B);
+            fwA = new LabeledStateWriter(Config.INSTANCE.playerA.outputDir + "/" + fileA);
+            fwB = new LabeledStateWriter(Config.INSTANCE.playerB.outputDir + "/" + fileB);
             writer = getThread(fwA, fwB);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -202,7 +182,7 @@ public class ParallelDataGenerator {
         logger.info("=========================================");
 
 
-        runSimulations(NUM_GAMES_TO_SIMULATE);
+        runSimulations(Config.INSTANCE.training.games);
 
         //end writer thread
         stop.set(true);
@@ -218,6 +198,13 @@ public class ParallelDataGenerator {
         logger.info("Final unique feature count from dataset: " + fwA.batchFeatures.size());
         logger.info("Global unique feature count: " + seenIndices.getCardinality());
         logger.info("Features added: " + (seenIndices.getCardinality() - initialRawSize));
+
+        if(Config.INSTANCE.logging.writeFinalWR) {
+            writeResults("trainingWinRates.txt", "WR with " + deckNameA + " vs " +
+                    deckNameB + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
+        }
+
+
     }
 
     @NotNull
@@ -248,7 +235,7 @@ public class ParallelDataGenerator {
 
     private void runSimulations(int numGames) {
         int availableCores = Runtime.getRuntime().availableProcessors();
-        int poolSize = MAX_CONCURRENT_GAMES;
+        int poolSize = Config.INSTANCE.training.threads;
         logger.info(String.format("Simulating %d games. Using thread pool of size %d on %d available cores.", numGames, poolSize, availableCores));
 
         ExecutorService executor = Executors.newFixedThreadPool(poolSize);
@@ -318,8 +305,8 @@ public class ParallelDataGenerator {
             MatchOptions matchOptions = new MatchOptions("test match", "test game type", false);
             Match localMatch = new TwoPlayerMatch(matchOptions);
             game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
-            Player playerA = createLocalPlayer(game, "PlayerA", DECK_A_PATH, localMatch);
-            Player playerB = createLocalPlayer(game, "PlayerB", DECK_B_PATH, localMatch);
+            Player playerA = createLocalPlayer(game, "PlayerA", Config.INSTANCE.playerA.deckPath, localMatch);
+            Player playerB = createLocalPlayer(game, "PlayerB", Config.INSTANCE.playerB.deckPath, localMatch);
 
             threadEncoderA.seenIndices = seenIndices.clone();
             threadEncoderB.seenIndices = seenIndices.clone();
@@ -336,14 +323,16 @@ public class ParallelDataGenerator {
             // way to configure and run a game simulation.
             GameOptions options = new GameOptions();
             options.testMode = true;
-            options.stopOnTurn = MAX_GAME_TURNS;
+            options.stopOnTurn = Config.INSTANCE.training.maxTurns;
             options.stopAtStep = PhaseStep.END_TURN;
             game.setGameOptions(options);
 
 
             // Start the game simulation. This is a blocking call that will run the game to completion.
-            if(ALWAYS_GO_FIRST) {
-                game.start(null);
+            if(Config.INSTANCE.goesFirst.equals("player_a")) {
+                game.setStartingPlayerId(playerA.getId());
+            } else if(Config.INSTANCE.goesFirst.equals("player_b")) {
+                game.setStartingPlayerId(playerB.getId());
             } else {
                 int dieRoll;
                 if(gameCount.get()==0) {
@@ -358,8 +347,8 @@ public class ParallelDataGenerator {
                     logger.info("Player B won the die roll");
                     game.setStartingPlayerId(playerB.getId());
                 }
-                game.start(null);
             }
+            game.start(null);
             boolean playerAWon = playerA.hasWon();
             //merge to the final features
             synchronized (seenIndices) {
@@ -369,8 +358,8 @@ public class ParallelDataGenerator {
             if(playerA.hasWon()) winCount.incrementAndGet();
             logger.info("Game #" + gameCount.incrementAndGet() + " completed successfully");
             logger.info("Current WR: " + winCount.get()*1.0/gameCount.get());
-            List<LabeledState> statesA = generateLabeledStatesForGame(threadEncoderA, playerAWon);
-            List<LabeledState> statesB = generateLabeledStatesForGame(threadEncoderB,!playerAWon);
+            List<LabeledState> statesA = generateLabeledStatesForGame(threadEncoderA, playerAWon, Config.INSTANCE.playerA.mcts.tdDiscount);
+            List<LabeledState> statesB = generateLabeledStatesForGame(threadEncoderB, !playerAWon, Config.INSTANCE.playerB.mcts.tdDiscount);
             return new GameResult(statesA, statesB, playerAWon);
         } catch (Exception e) {
             logger.error("Caught an internal AI/Game exception in a worker thread. Ignoring this game. Cause: " + e.getMessage());
@@ -385,36 +374,61 @@ public class ParallelDataGenerator {
             mcts2.setStateEncoder(encoder);
             if(player.getName().equals("PlayerA")) {
                 mcts2.nn = remoteModelEvaluatorA;
-                mcts2.noPolicy = DONT_USE_POLICY;
-                mcts2.noPolicyTarget = DONT_USE_POLICY_TARGET;
-                mcts2.noPolicyUse = DONT_USE_POLICY_USE;
-                mcts2.noNoise = DONT_USE_NOISE;
-                mcts2.roundRobinMode = isRoundRobin;
-                mcts2.allowMulligans = ALLOW_MULLIGANS_A;
+                mcts2.noPolicyPriority = !Config.INSTANCE.playerA.priors.priority;
+                mcts2.noPolicyTarget = !Config.INSTANCE.playerA.priors.target;
+                mcts2.noPolicyUse = !Config.INSTANCE.playerA.priors.binary;
+                mcts2.noPolicyOpponent = !Config.INSTANCE.playerA.priors.opponent;
+                mcts2.noNoise = !Config.INSTANCE.playerA.noise.enabled;
+                mcts2.allowMulligans = Config.INSTANCE.playerA.mulligans.enabled;
+                mcts2.searchBudget = Config.INSTANCE.playerA.mcts.searchBudget;
+                mcts2.searchTimeout = (double) Config.INSTANCE.playerA.mcts.timeoutMs /1000;
                 if(remoteModelEvaluatorA == null) mcts2.offlineMode = true;
             } else {
                 mcts2.nn = remoteModelEvaluatorB;
-                mcts2.allowMulligans = ALLOW_MULLIGANS_B;
+                mcts2.noPolicyPriority = !Config.INSTANCE.playerB.priors.priority;
+                mcts2.noPolicyTarget = !Config.INSTANCE.playerB.priors.target;
+                mcts2.noPolicyUse = !Config.INSTANCE.playerB.priors.binary;
+                mcts2.noPolicyOpponent = !Config.INSTANCE.playerB.priors.opponent;
+                mcts2.noNoise = !Config.INSTANCE.playerB.noise.enabled;
+                mcts2.allowMulligans = Config.INSTANCE.playerB.mulligans.enabled;
+                mcts2.searchBudget = Config.INSTANCE.playerB.mcts.searchBudget;
+                mcts2.searchTimeout = (double) Config.INSTANCE.playerB.mcts.timeoutMs /1000;
                 if(remoteModelEvaluatorB == null) mcts2.offlineMode = true;
             }
         } else if (player.getRealPlayer() instanceof ComputerPlayer8) {
             ComputerPlayer8 cp8 = (ComputerPlayer8) player.getRealPlayer();
             cp8.setEncoder(opponentEncoder);
-            cp8.allowMulligans = ALLOW_MULLIGANS_B;
+            if(player.getName().equals("PlayerA")) {
+                cp8.allowMulligans = Config.INSTANCE.playerA.mulligans.enabled;
+            } else {
+                cp8.allowMulligans = Config.INSTANCE.playerB.mulligans.enabled;
+            }
         } else  {
             logger.warn("unexpected player type" + player.getRealPlayer().getClass().getName());
         }
     }
-    private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin) {
+    private List<LabeledState> generateLabeledStatesForGame(StateEncoder encoder, boolean didPlayerAWin, double tdDiscount) {
         int N = encoder.labeledStates.size();
 
         double discountedFuture = didPlayerAWin ? 1.0 : -1.0;
         for (int i = N-1; i >= 0; i--) {
-            discountedFuture = (VALUE_LAMBDA * discountedFuture) + (encoder.labeledStates.get(i).stateScore*(1-VALUE_LAMBDA));
+            discountedFuture = (tdDiscount * discountedFuture) + (encoder.labeledStates.get(i).stateScore*(1- tdDiscount));
             encoder.labeledStates.get(i).resultLabel = discountedFuture;
         }
         return encoder.labeledStates;
 
+    }
+    private String extractDeckName(String deckPath) {
+        // Handle both forward and backslashes
+        int lastSlash = Math.max(deckPath.lastIndexOf('\\'), deckPath.lastIndexOf('/'));
+        String fileName = deckPath.substring(lastSlash + 1);
+
+        // Remove the .dck extension if present
+        if (fileName.toLowerCase().endsWith(".dck")) {
+            fileName = fileName.substring(0, fileName.length() - 4);
+        }
+
+        return fileName;
     }
     void saveFeatureMap(FeatureMap fm, String filePath) {
         FeatureMap baseMap = new FeatureMap();
@@ -428,6 +442,11 @@ public class ParallelDataGenerator {
             baseMap.saveToFile(filePath);
         } catch (IOException e) {
             logger.warn("couldn't save feature map");
+        }
+        try {
+            baseMap.printFeatureTable(FEATURE_TABLE_OUT);
+        } catch (IOException e) {
+            logger.warn("couldn't print feature table to text file");
         }
     }
 
@@ -451,22 +470,23 @@ public class ParallelDataGenerator {
                         .thenComparing(Map.Entry::getKey)) // tie-breaker: key asc
                 .forEach(e -> System.out.printf("%-" + maxKeyLen + "s  : %,d%n", e.getKey(), e.getValue()));
     }
-    protected Player createLocalPlayer(Game game, String name, String deckName, Match match) throws GameException {
+    protected Player createLocalPlayer(Game game, String name, String deckPath, Match match) throws GameException {
         Player player = createPlayer(name, game.getRangeOfInfluence());
         player.setTestMode(true);
 
 
         logger.debug("Loading deck...");
         DeckCardLists list;
-        if (loadedDecks.containsKey(deckName)) {
-            list = loadedDecks.get(deckName);
+        if (loadedDecks.containsKey(deckPath)) {
+            list = loadedDecks.get(deckPath);
         } else {
-            list = DeckImporter.importDeckFromFile(deckName, true);
-            loadedDecks.put(deckName, list);
+            list = DeckImporter.importDeckFromFile(deckPath, true);
+            loadedDecks.put(deckPath, list);
         }
         Deck deck = Deck.load(list, false, false, loadedCardInfo);
         logger.debug("Done!");
         if (deck.getMaindeckCards().size() < 40) {
+            logger.error(deckPath);
             throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
         }
 
@@ -494,15 +514,26 @@ public class ParallelDataGenerator {
     // This is the correct override to use for choosing our AI types.
     protected Player createPlayer(String name, RangeOfInfluence rangeOfInfluence) {
         if (name.equals("PlayerA")) {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, 6);
-            //Player testPlayer = new Player(t8);
-            //testPlayer.setAIPlayer(true);
-            return t8;
+            if(Config.INSTANCE.playerA.type.equals("minimax")) {
+                ComputerPlayer8 t8 = new ComputerPlayer8(name, RangeOfInfluence.ONE, 6);
+                return t8;
+            }
+            if(Config.INSTANCE.playerA.type.equals("mcts")) {
+                ComputerPlayerMCTS2 mcts2 = new ComputerPlayerMCTS2(name, RangeOfInfluence.ONE, 6);
+                return mcts2;
+            }
+
         } else {
-            TestComputerPlayer8 t8 = new TestComputerPlayer8(name, RangeOfInfluence.ONE, 6);
-            //Player testPlayer = new Player(t8);
-            //testPlayer.setAIPlayer(true);
-            return t8;
+            if(Config.INSTANCE.playerB.type.equals("minimax")) {
+                ComputerPlayer8 t8 = new ComputerPlayer8(name, RangeOfInfluence.ONE, 6);
+                return t8;
+            }
+            if(Config.INSTANCE.playerB.type.equals("mcts")) {
+                ComputerPlayerMCTS2 mcts2 = new ComputerPlayerMCTS2(name, RangeOfInfluence.ONE, 6);
+                return mcts2;
+            }
         }
+        logger.error("unsupported player type");
+        return null;
     }
 }

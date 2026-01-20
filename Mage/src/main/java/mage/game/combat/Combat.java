@@ -689,9 +689,10 @@ public class Combat implements Serializable, Copyable<Combat> {
             int aiTries = 0;
             while (true) {
                 aiTries++;
-                if(aiTries > 1 && game.isSimulation()) {//TODO: properly implement this
-                    //controller.illegalGameState(game);
-                    //break;
+                if(aiTries > 1 && game.isMCTSSimulation()) {//TODO: properly implement this
+                    controller.illegalGameState(game);
+                    logger.warn("illegal blocking combination");
+                    break;
                 }
 
                 if (controller.isComputer() && aiTries > 20) {

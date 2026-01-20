@@ -35,34 +35,33 @@ public class FeatureMap implements Serializable {
             }
         }
     }
-
-    /**
-     * Prints the full index table with one index per row, sorted from least to greatest.
-     * Each row lists the set of namespace-hash/name pairs for that index.
-     */
-    public void printFeatureTable() {
+    public void printFeatureTable(String filePath) throws IOException {
         // Get all indices and sort them
         List<Integer> sortedIndices = new ArrayList<>(map.keySet());
         Collections.sort(sortedIndices);
 
-        // Print each index and its associated features
-        for (Integer idx : sortedIndices) {
-            StringBuilder sb = new StringBuilder();
-            sb.append(idx).append(": ");
+        // Create a BufferedWriter to write to the file
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+            // Write each index and its associated features
+            for (Integer idx : sortedIndices) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(idx).append(": ");
 
-            Set<Pair<Long, String>> features = map.get(idx);
-            if (features != null && !features.isEmpty()) {
-                boolean first = true;
-                for (Pair<Long, String> pair : features) {
-                    if (!first) {
-                        sb.append(", ");
+                Set<Pair<Long, String>> features = map.get(idx);
+                if (features != null && !features.isEmpty()) {
+                    boolean first = true;
+                    for (Pair<Long, String> pair : features) {
+                        if (!first) {
+                            sb.append(", ");
+                        }
+                        sb.append("[").append(pair.getKey()).append("/").append(pair.getValue()).append("]");
+                        first = false;
                     }
-                    sb.append("[").append(pair.getKey()).append("/").append(pair.getValue()).append("]");
-                    first = false;
                 }
-            }
 
-            logger.info(sb.toString());
+                writer.write(sb.toString());
+                writer.newLine();
+            }
         }
     }
     //implement load/save from a file.

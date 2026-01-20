@@ -105,10 +105,10 @@ public class ExploreSourceEffect extends OneShotEffect {
                 controller.moveCards(card, Zone.HAND, source, game);
             } else {
                 addCounter(game, permanent, source);
-                if (controller.chooseUse(Outcome.Neutral, "Put " + card.getLogName() + " in your graveyard?", source, game)) {
+                if (controller.chooseUse(Outcome.Neutral, "Put " + card.getName() + " in your graveyard?", source, game)) {
                     controller.moveCards(card, Zone.GRAVEYARD, source, game);
                 } else {
-                    game.informPlayers(controller.getLogName() + " leaves " + card.getLogName() + " on top of their library.");
+                    game.informPlayers(controller.getLogName() + " leaves " + card.getName() + " on top of their library.");
                 }
             }
         } else {

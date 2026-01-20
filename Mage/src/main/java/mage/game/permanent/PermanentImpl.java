@@ -43,6 +43,7 @@ import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author BetaSteward_at_googlemail.com
@@ -283,6 +284,26 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         }
         return sb.toString();
     }
+    @Override
+    public String getValue(Game game, UUID targetPlayer) {
+        StringBuilder sb = threadLocalBuilder.get();
+        sb.append(controllerId.equals(targetPlayer)).append(getName()).append(tapped).append(damage);
+        sb.append(subtype).append(supertype).append(power.getValue()).append(toughness.getValue());
+        sb.append(abilities.getValue());
+        List<String> names =  new ArrayList<>();
+        for(UUID att : attachments) {
+            names.add(game.getEntityName(att));
+        }
+        names.sort(String::compareTo);
+        for(String attName : names) {
+            sb.append(attName);
+        }
+        for (Counter counter : getCounters(game).values().stream().sorted(Comparator.comparing(Counter::getName)).collect(Collectors.toList())) {
+            sb.append(counter.getName()).append(counter.getCount());
+        }
+        return sb.toString();
+    }
+
 
     @Override
     public void addInfo(String key, String value, Game game) {

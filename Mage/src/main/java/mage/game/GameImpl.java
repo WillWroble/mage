@@ -107,8 +107,8 @@ public abstract class GameImpl implements Game {
     private transient Object customData; // temporary data, used in AI simulations
     private transient Player losingPlayer; // temporary data, used in AI simulations
 
-    public boolean randomTransition = false;
     protected boolean simulation = false; // for inner simulations (game without user messages)
+    protected boolean mctsSimulation = false; // for mcts simulations
     protected boolean aiGame = false; // for inner simulations (ai game, debug only)
     protected boolean checkPlayableState = false; // for inner playable calculations (game without user dialogs)
 
@@ -199,6 +199,7 @@ public abstract class GameImpl implements Game {
         //this.losingPlayer = game.losingPlayer; // temporary data, no need on game copy
         this.aiGame = game.aiGame;
         this.simulation = game.simulation;
+        this.mctsSimulation = game.mctsSimulation;
         this.checkPlayableState = game.checkPlayableState;
 
         this.id = game.id;
@@ -310,16 +311,12 @@ public abstract class GameImpl implements Game {
             lastPriority = this.copy();
         }
     }
-    public boolean willLeadToDecision(StackObject stackObject) {
-        return decisionStackObjects.contains(stackObject);
-    }
 
     /**
      * determinse wether this state should be used as an anchor for MCTS Nodes
      * @return
      */
     public boolean isCheckPoint() {
-
         boolean isStarting = getTurnNum()==1 && getTurnStepType().equals(PhaseStep.UPKEEP);
         //forced checkpoint before combat decisions
         boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT);
@@ -332,6 +329,12 @@ public abstract class GameImpl implements Game {
     public boolean isSimulation() {
         return simulation;
     }
+
+    @Override
+    public boolean isMCTSSimulation() {return simulation && mctsSimulation; }
+
+    @Override
+    public void setMCTSSimulation(boolean b) {mctsSimulation = b;}
 
     @Override
     public Game createSimulationForAI() {

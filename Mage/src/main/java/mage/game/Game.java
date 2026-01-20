@@ -47,9 +47,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public interface Game extends MageItem, Serializable, Copyable<Game> {
-//    void setMacroState(Game game);
-//    void setMacroPlayerId(UUID id);
-//    void setLastAction(Ability ability);
+
     boolean isCheckPoint();
     Random getLocalRandom();
     void setLocalRandom(Random random);
@@ -300,6 +298,8 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     void loadGameStates(GameStates states);
 
     boolean isSimulation();
+    boolean isMCTSSimulation();
+    void setMCTSSimulation(boolean b);
 
     /**
      * Prepare game for any simulations like AI or effects calc

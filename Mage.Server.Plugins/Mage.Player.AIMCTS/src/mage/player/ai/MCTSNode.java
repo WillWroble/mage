@@ -163,19 +163,14 @@ public class MCTSNode {
     /**
      * recursively backtracks through the tree until reaching the root and then resets its game to the given state
      * @param state state to reset to
-     * @return freshly reset game object at root.
      */
-    public Game resetRootGame(GameState state) {
-        if(parent != null) {
-           return parent.resetRootGame(state);
-        }
+    public void resetRootGame(GameState state) {
+
         rootGame.setState(state);
         rootGame.getPlayerList().setCurrent(state.getPlayerByOrderId());
         // clear ephemeral caches / rebuild effects
         rootGame.resetLKI();
         rootGame.resetShortLivingLKI();
-        //rootGame.getState().clearLookedAt();
-        //rootGame.getState().clearRevealed();
         rootGame.applyEffects(); // rebuild layers/CEs
         //for sanity
         for (Player p : rootGame.getPlayers().values()) {
@@ -192,7 +187,6 @@ public class MCTSNode {
             mp.decisionText = "";
             mp.autoPassed=0;
         }
-        return rootGame;
     }
     public boolean containsPriorityNode() {
         boolean found = false;
@@ -244,10 +238,6 @@ public class MCTSNode {
         // best should never be null once visits>0 on the root
         if(best == null) {
             logger.error("no best child. best val is: " + bestVal);
-        }
-        //free game object from memory
-        if(allChildrenVisited) {
-            //rootState = null;
         }
         return best;
     }
@@ -428,9 +418,7 @@ public class MCTSNode {
 
             if(node.chooseTargetAction != null) {
                 if(baseGame.getEntityName(node.chooseTargetAction) != null) {
-                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntityName(node.chooseTargetAction).toString(), node.getMeanScore(), node.getVisits()));
-                } else if(baseGame.getPlayer(node.chooseTargetAction) != null){
-                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getPlayer(node.chooseTargetAction).toString(), node.getMeanScore(), node.getVisits()));
+                    sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntityName(node.chooseTargetAction), node.getMeanScore(), node.getVisits()));
                 } else {
                     logger.error("target not found");
                 }
@@ -442,6 +430,8 @@ public class MCTSNode {
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.modeAction, node.getMeanScore(), node.getVisits()));
             } else if(node.action != null){
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.action, node.getMeanScore(), node.getVisits()));
+            } else {
+                logger.error("no action in node");
             }
 
         }
@@ -457,7 +447,8 @@ public class MCTSNode {
             MCTSNode best = null;
             double bestCount = -1;
             for (MCTSNode node : children) {
-                if (node.getVisits() > bestCount) {
+                if (node.getVisits() > bestCount
+                        && (node.isTerminal() || node.nextAction.equals(MCTSPlayer.NextAction.PRIORITY) || node.containsPriorityNode())) {
                     best = node;
                     bestCount = node.getVisits();
                 }
@@ -465,7 +456,7 @@ public class MCTSNode {
             return best;
         }
 
-        //temp based sampling selection
+        //temp-based sampling selection
         List<Double> logProbs = new ArrayList<>();
         double maxLogProb = Double.NEGATIVE_INFINITY;
         for (MCTSNode node : children) {
@@ -607,7 +598,7 @@ public class MCTSNode {
             if(showCount < 10) {
                 logger.debug(current.prefixScript.toString() + " =should= " + prefixScript.toString());
                 logger.debug(current.opponentPrefixScript.toString() + " =should= " + opponentPrefixScript.toString());
-                logger.debug(current.fullStateValue + " =should= " + state);
+                logger.debug(current.fullStateValue + "\n =should= \n" + state);
                 logger.debug(current.nextAction.toString() + " =should= " + nextAction.toString());
                 showCount++;
             }
@@ -763,13 +754,15 @@ public class MCTSNode {
      */
     public GameState getActionSequence(PlayerScript myScript, PlayerScript opponentScript) {
 
-        if(rootState != null) {//go until latest checkpoint
+        if(rootState != null) {
             myScript.append(prefixScript);
             opponentScript.append(opponentPrefixScript);
             return rootState;
         }
 
-        GameState out = parent.getActionSequence(myScript, opponentScript);
+        GameState out = parent.rootState;
+        myScript.append(parent.prefixScript);
+        opponentScript.append(parent.opponentPrefixScript);
 
         if(parent.nextAction.equals(MCTSPlayer.NextAction.CHOOSE_TARGET)) {
             if(parent.playerId.equals(targetPlayer)) {
@@ -817,7 +810,7 @@ public class MCTSNode {
         PlayerScript myScript = new PlayerScript();
         PlayerScript opponentScript = new PlayerScript();
         GameState rootState = getActionSequence(myScript, opponentScript);
-        Game rootGame = resetRootGame(rootState.copy());
+        resetRootGame(rootState.copy());
         //set base player actions
         MCTSPlayer myPlayer = (MCTSPlayer) rootGame.getPlayer(targetPlayer);
         myPlayer.actionScript = myScript;

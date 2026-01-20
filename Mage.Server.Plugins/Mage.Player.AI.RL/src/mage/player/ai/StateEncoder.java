@@ -24,12 +24,14 @@ import mage.game.stack.StackObject;
 import mage.players.ManaPool;
 import mage.players.Player;
 import mage.target.Target;
+import mage.util.CardUtil;
 import mage.watchers.Watcher;
 import org.roaringbitmap.RoaringBitmap;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.apache.log4j.Logger;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Global sparse state encoder for deep learning.
@@ -102,11 +104,15 @@ public class StateEncoder {
     private void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
 
         processAbility(aa, game, f);
+        if(aa.isManaAbility()) f.addFeature("ManaAbility");
         //TODO: seems broken with new cards?
         try {
-            if (aa.canActivate(myPlayerID, game).canActivate()) f.addFeature("CanActivate"); //use aa.canActivate()
+            UUID controllerId = aa.getControllerId();
+            if (controllerId != null && aa.copy().canActivate(controllerId, game).canActivate()) {
+                f.addFeature("CanActivate");
+            }
         } catch (Exception e) {
-            logger.warn("failed activation check in encoder");
+            logger.warn("failed activation check in encoder: " + aa);
         }
     }
     private void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
@@ -122,10 +128,10 @@ public class StateEncoder {
 
         f.parent.addFeature("Card");//raw universal type of card added for counting purposes
 
-        if(c.isPermanent()) f.addCategory("Permanent");
+        if(c.isPermanent()) f.addFeature("Permanent");
         //add types
         for (CardType ct : c.getCardType(game)) {
-            f.addCategory(ct.name());
+            f.addFeature(ct.name());
         }
         //add color
         if(c.getColor(game).isRed()) f.addFeature("RedCard");
@@ -169,11 +175,20 @@ public class StateEncoder {
             processPermBattlefield(attachment, game, attachmentFeatures);
 
         }
+        //process special exile zone (oblivion ring effect)
+        UUID exileId = CardUtil.getExileZoneId(game, p.getId(), p.getZoneChangeCounter(game));
+        ExileZone exileZone = game.getExile().getExileZone(exileId);
+
+        if (exileZone != null) {
+            Features exileZoneFeatures = f.getSubFeatures(cleanString(exileZone.getName()), false);
+            processExileZone(exileZone, game, exileZoneFeatures);
+        }
         if(p.isFlipped()) f.addFeature("flipped");
         if(p.isDisguised()) f.addFeature("harnessed");
         if(p.isLeftDoorUnlocked()) f.addFeature("Room-LeftDoor");
         if(p.isRightDoorUnlocked()) f.addFeature("Room-RightDoor");
         if(p.isCreature(game)) {
+            if(p.hasSummoningSickness()) f.addFeature("SummoningSick");
             if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
             if(p.canBlockAny(game)) f.addFeature("CanBlock");
             //if(p.hasSummoningSickness()) f.addFeature("SummoningSickness");
@@ -212,7 +227,11 @@ public class StateEncoder {
         }
     }
     private void processBattlefield(Battlefield bf, Game game, Features f, UUID playerID) {
-        for (Permanent p : bf.getAllActivePermanents(playerID)) {
+        TreeMap<String, Permanent> sortedPerms = new TreeMap<>();
+        for(Permanent p : bf.getAllActivePermanents(playerID)) {
+            sortedPerms.put(p.getValue(game, myPlayerID), p);
+        }
+        for (Permanent p : sortedPerms.values()) {
             Features permFeatures = f.getSubFeatures(p.getName());
             processPermBattlefield(p, game, permFeatures);
         }
@@ -272,7 +291,7 @@ public class StateEncoder {
     private void processExile(Exile exile, Game game, Features f) {
 
         for (ExileZone ez : exile.getExileZones()) {
-            Features exileZoneFeatures = f.getSubFeatures(ez.getName());
+            Features exileZoneFeatures = f.getSubFeatures(cleanString(ez.getName()));
             processExileZone(ez, game, exileZoneFeatures);
         }
     }
@@ -410,5 +429,18 @@ public class StateEncoder {
     public void addLabeledState(Set<Integer> stateVector, int[] actionVector, double score, MCTSPlayer.NextAction actionType, boolean isPlayer) {
         LabeledState newState = new LabeledState(stateVector, actionVector, score, actionType, isPlayer);
         labeledStates.add(newState);
+    }
+
+
+    /**
+     * removes all instances of UUIDs for consistent hashing
+     * @param input nondeterministic string with UUIDs
+     * @return deterministic cleaned strings
+     */
+    public static String cleanString (String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+        return input.replaceAll(" \\[[0-9a-f]+]", "");
     }
 }
