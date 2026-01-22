@@ -359,7 +359,8 @@ public abstract class TargetImpl implements Target {
                         rememberZoneChangeCounter(id, game);
                         chosen = isChosen(game);
                         if (!skipEvent && shouldReportEvents) {
-                            game.addSimultaneousEvent(GameEvent.getEvent(GameEvent.EventType.TARGETED, id, source, source.getControllerId()));
+                            //game.addSimultaneousEvent(GameEvent.getEvent(GameEvent.EventType.TARGETED, id, source, source.getControllerId()));
+                            game.fireEvent(GameEvent.getEvent(GameEvent.EventType.TARGETED, id, source, source.getControllerId()));
                         }
                     }
                 } else {

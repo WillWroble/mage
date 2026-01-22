@@ -60,7 +60,7 @@ public class ComputerPlayer extends PlayerImpl {
     //for modes
     public int modeOptionsSize;
     //for priorities
-    public List<Ability> playables = new ArrayList<>();
+    public List<ActivatedAbility> playables = new ArrayList<>();
     //allow mulligans for test mode
     public boolean allowMulligans = false;
 
@@ -1043,6 +1043,7 @@ public class ComputerPlayer extends PlayerImpl {
         List<Mode> options = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        if(modes.getMinModes() == 0) options.add(null);
         if(options.size() == 1) {
             return options.iterator().next();
         }
@@ -1519,6 +1520,7 @@ public class ComputerPlayer extends PlayerImpl {
         return out;
     }
     //TODO: make this better
+    @Deprecated
     public List<Ability> getPlayableOptions(Game game) {
         List<Ability> all = new ArrayList<>();
         List<ActivatedAbility> playables = getPlayableAbilities(game);

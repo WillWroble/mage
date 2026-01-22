@@ -14,6 +14,7 @@ import mage.game.GameException;
 import mage.game.permanent.token.Token;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.player.ai.score.GameStateEvaluator2;
+import mage.player.ai.score.GameStateEvaluator3;
 import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
@@ -35,7 +36,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
     private transient StateEncoder stateEncoder = null;
-    public static final int[] PASS_ACTION = {0,1000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     public static boolean SHOW_THREAD_INFO = true;
     /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
     is enabled by default if no network is found*/
@@ -174,7 +174,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         if(offlineMode) {
             node.policy = null;
-            int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+            int heuristicScore = GameStateEvaluator3.evaluate(playerId, game).getTotalScore();
             node.networkScore = Math.tanh(heuristicScore * 1.0 / 20000);
             return node.networkScore;
         }

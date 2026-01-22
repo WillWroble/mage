@@ -15,7 +15,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
         DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
         DONT_USE_POLICY_TARGET = true; //if you want to use other policies but not targeting decisions
-        DONT_USE_POLICY_USE = false; //if you want to use other policies but not use decisions
+        DONT_USE_POLICY_USE = true; //if you want to use other policies but not use decisions
         DECK_A = "UWTempo";
         DECK_B = "simplegreen";
     }
@@ -34,8 +34,9 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     public void createTestDataSet() {
         DATA_OUT_FILE_A = "testing.hdf5";
         DECK_A = "UWTempo";
-        DECK_B = "simplegreen";
+        DECK_B = "Standard-MonoG";
         NUM_GAMES_TO_SIMULATE = 200;
+        ALLOW_MULLIGANS_A = false;
         //ALWAYS_GO_FIRST = true;
         super.generateData();
         writeResults("test_results.txt", "WR with " + DECK_A + " vs " +
@@ -56,7 +57,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobin() {
-        DECK_A = "UWTempo";
+        DECK_A = "Standard-MonoU";
         //DECK_A = "UWTempo";
 
         isRoundRobin = true;
@@ -67,7 +68,7 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
         //String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
         //String [] deckPool = {"simic-eldrazi"};
         for (String deckName :  deckPool) {
-            DATA_OUT_FILE_A = "training2/"+deckName+"_training.hdf5";
+            DATA_OUT_FILE_A = "training/"+deckName+"_training.hdf5";
             DECK_B = deckName;
             super.generateData();
             writeResults("round_robin_train_results.txt", "WR with (A)" + DECK_A + " vs " +

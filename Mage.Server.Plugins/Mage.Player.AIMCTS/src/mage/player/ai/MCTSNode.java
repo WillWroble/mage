@@ -3,6 +3,7 @@ package mage.player.ai;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import mage.abilities.ActivatedAbility;
 import mage.constants.Zone;
 import mage.abilities.Ability;
 import mage.cards.Card;
@@ -683,7 +684,7 @@ public class MCTSNode {
         }
         return num;
     }
-    private static final ConcurrentHashMap<String, List<Ability>> playablesCache = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, List<ActivatedAbility>> playablesCache = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<List<UUID>>> attacksCache = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, List<List<List<UUID>>>> blocksCache = new ConcurrentHashMap<>();
 
@@ -694,14 +695,14 @@ public class MCTSNode {
     private static long blocksHit = 0;
     private static long blocksMiss = 0;
 
-    protected static List<Ability> getPlayables(MCTSPlayer player, String state, Game game) {
+    protected static List<ActivatedAbility> getPlayables(MCTSPlayer player, String state, Game game) {
         if (playablesCache.containsKey(state)) {
             playablesHit++;
             return playablesCache.get(state);
         }
         else {
             playablesMiss++;
-            List<Ability> abilities = player.getPlayableOptions(game);
+            List<ActivatedAbility> abilities = player.getPlayableAbilities(game);
             playablesCache.put(state, abilities);
             return abilities;
         }

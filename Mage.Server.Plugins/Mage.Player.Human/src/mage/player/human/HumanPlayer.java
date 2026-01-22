@@ -2491,6 +2491,7 @@ public class HumanPlayer extends PlayerImpl {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        if(modes.getMinModes() == 0) modeOptions.add(null);
         int outIdx = modeOptions.indexOf(out);
         if(modes.size() > 1 && out != null) getPlayerHistory().modeSequence.add(outIdx);
         return out;

@@ -760,6 +760,7 @@ WR with (A)Standard-MonoU vs GBLegends: 0.9347826086956522 in 184 games
 WR with (A)Standard-MonoU vs UBArtifacts: 0.465 in 200 games
 WR with (A)Standard-MonoU vs GBLegends: 0.9293478260869565 in 184 games
 WR with (A)Standard-MonoU vs GBLegends: 0.915 in 200 games
+gen2 UWTempo vs Standard decks
 WR with (A)UWTempo vs Standard-MonoB: 0.29 in 200 games
 WR with (A)UWTempo vs Standard-MonoB: 0.295 in 200 games
 WR with (A)UWTempo vs Standard-MonoG: 0.185 in 200 games
@@ -770,3 +771,44 @@ WR with (A)UWTempo vs Standard-MonoU: 0.33 in 200 games
 WR with (A)UWTempo vs Standard-MonoU: 0.28 in 200 games
 WR with (A)UWTempo vs Standard-MonoW: 0.28 in 200 games
 WR with (A)UWTempo vs Standard-MonoW: 0.27 in 200 games
+gen3
+WR with (A)UWTempo vs Standard-MonoB: 0.39 in 200 games
+WR with (A)UWTempo vs Standard-MonoB: 0.43 in 200 games
+WR with (A)UWTempo vs Standard-MonoG: 0.27 in 200 games
+WR with (A)UWTempo vs Standard-MonoG: 0.285 in 200 games
+WR with (A)UWTempo vs Standard-MonoR: 0.44 in 200 games
+WR with (A)UWTempo vs Standard-MonoR: 0.4020100502512563 in 199 games
+WR with (A)UWTempo vs Standard-MonoU: 0.46 in 200 games
+WR with (A)UWTempo vs Standard-MonoU: 0.435 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.375 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.36 in 200 games
+gen4
+WR with (A)UWTempo vs Standard-MonoB: 0.43 in 200 games
+WR with (A)UWTempo vs Standard-MonoB: 0.47 in 200 games
+WR with (A)UWTempo vs Standard-MonoG: 0.305 in 200 games
+WR with (A)UWTempo vs Standard-MonoG: 0.295 in 200 games
+WR with (A)UWTempo vs Standard-MonoR: 0.4321608040201005 in 199 games
+WR with (A)UWTempo vs Standard-MonoR: 0.4623115577889447 in 199 games
+WR with (A)UWTempo vs Standard-MonoU: 0.42 in 200 games
+WR with (A)UWTempo vs Standard-MonoU: 0.455 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.465 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.365 in 200 games
+gen5
+WR with (A)UWTempo vs Standard-MonoB: 0.425 in 200 games
+WR with (A)UWTempo vs Standard-MonoB: 0.455 in 200 games
+WR with (A)UWTempo vs Standard-MonoG: 0.305 in 200 games
+WR with (A)UWTempo vs Standard-MonoG: 0.37 in 200 games
+WR with (A)UWTempo vs Standard-MonoR: 0.495 in 200 games
+WR with (A)UWTempo vs Standard-MonoR: 0.4723618090452261 in 199 games
+WR with (A)UWTempo vs Standard-MonoU: 0.485 in 200 games
+WR with (A)UWTempo vs Standard-MonoU: 0.485 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.425 in 200 games
+WR with (A)UWTempo vs Standard-MonoW: 0.41 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoB: 0.025 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoB: 0.06 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoG: 0.045 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoG: 0.065 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoR: 0.055 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoR: 0.05527638190954774 in 199 games
+WR with (A)Standard-MonoU vs Standard-MonoU: 0.185 in 200 games
+WR with (A)Standard-MonoU vs Standard-MonoU: 0.15 in 200 games

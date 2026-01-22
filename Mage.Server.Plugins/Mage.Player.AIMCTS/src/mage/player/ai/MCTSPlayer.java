@@ -104,7 +104,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
         }
-        playables = getPlayableOptions(game);
+        playables = getPlayableAbilities(game);
         if(playables.size() == 1 && !game.isCheckPoint()) {//forced checkpoint at start
             pass(game);
             return false;
@@ -260,6 +260,7 @@ public class MCTSPlayer extends ComputerPlayer {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        if(modes.getMinModes() == 0) modeOptions.add(null);
         modeOptionsSize = modeOptions.size();
         if(modeOptions.isEmpty()) {
             logger.debug("no mode options - fizzle");

@@ -100,7 +100,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
         //(some mana abilities have other effects)
-        List<Ability> playableAbilities = getPlayableOptions(game);
+        List<ActivatedAbility> playableAbilities = getPlayableAbilities(game);
         if(playableAbilities.size() < 2 && !game.isCheckPoint()) {
             logger.info("auto pass");
             pass(game);
@@ -289,6 +289,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        if(modes.getMinModes() == 0) modeOptions.add(null);
         modeOptionsSize = modeOptions.size();
         if(modeOptions.isEmpty()) {
             logger.info("choice is empty, spell fizzled");
