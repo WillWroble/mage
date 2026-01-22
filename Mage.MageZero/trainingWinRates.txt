@@ -5,3 +5,5 @@ WR with Standard-MonoW vs Standard-MonoG: 0.0 in 20 games
 WR with Standard-MonoW vs Standard-MonoG: 0.1 in 20 games
 WR with Standard-MonoW vs Standard-MonoG: 0.15 in 20 games
 WR with Standard-MonoW vs Standard-MonoG: 0.07 in 200 games
+WR with Standard-MonoW vs Standard-MonoG: 0.0 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.15 in 20 games

@@ -50,8 +50,8 @@ player_b:
     enabled: false
 
 training:
-  games: 200
-  threads: 2
+  games: 20
+  threads: 4
   max_turns: 50 #does nothing
 
 server:
