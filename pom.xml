@@ -242,6 +242,7 @@
         <module>Mage.Tests</module>
         <module>Mage.Verify</module>
         <module>Mage.Reports</module>
+        <module>Mage.MageZero</module>
     </modules>
 
     <repositories>

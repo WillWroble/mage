@@ -8,7 +8,7 @@ import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
 
-public class SimulateRLvsRL extends ParallelDataGenerator {
+public class SimulateRLvsRLTest extends ParallelDataGeneratorTest {
     //RL params for opponent agent
     protected static boolean DONT_USE_POLICY_B = true;
     protected static boolean DONT_USE_POLICY_TARGET_B = true;
@@ -17,7 +17,7 @@ public class SimulateRLvsRL extends ParallelDataGenerator {
 
     @Before
     public void setup() {
-        VALUE_LAMBDA = 0.95; //0.5 default for MCTS root scores
+        TD_DISCOUNT = 0.95; //0.5 default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
         DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
         MODEL_URL_A = "http://127.0.0.1:50052";
@@ -70,7 +70,7 @@ public class SimulateRLvsRL extends ParallelDataGenerator {
             ComputerPlayerMCTS2 mcts2  = (ComputerPlayerMCTS2) player.getRealPlayer();
             mcts2.nn = remoteModelEvaluatorB;
             mcts2.noNoise = DONT_USE_NOISE_B;
-            mcts2.noPolicy = DONT_USE_POLICY_B;
+            mcts2.noPolicyPriority = DONT_USE_POLICY_B;
             mcts2.noPolicyTarget = DONT_USE_POLICY_TARGET_B;
             mcts2.noPolicyUse = DONT_USE_POLICY_USE_B;
             if(remoteModelEvaluatorB == null) mcts2.offlineMode = true;

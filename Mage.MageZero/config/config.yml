@@ -1,0 +1,65 @@
+# default-config.yaml
+
+goes_first: random  # player_a, player_b, random
+
+player_a:
+  deckPath: decks/Standard-MonoW.dck
+  type: mcts
+  output_dir: data/playerA
+
+
+  priors:
+    priority: false
+    target: false
+    binary: false
+    opponent: false
+
+  noise:
+    enabled: false
+
+  mcts:
+    search_budget: 300
+    timeout_ms: 4000
+    c_puct: 1.0 #does nothing
+    td_discount: 0.95
+
+  mulligans:
+    enabled: false
+
+player_b:
+  deckPath: decks/Standard-MonoG.dck
+  type: minimax
+  output_dir: data/playerB
+
+  priors:
+    priority: false
+    target: false
+    binary: false
+    opponent: false
+
+  noise:
+    enabled: false
+
+  mcts:
+    search_budget: 300
+    timeout_ms: 4000
+    c_puct: 1.0 #does nothing
+    td_discount: 0.95
+
+  mulligans:
+    enabled: false
+
+training:
+  games: 200
+  threads: 2
+  max_turns: 50 #does nothing
+
+server:
+  host: localhost
+  port: 50052
+  opponent_port: 50053
+
+logging:
+  log_feature_hash: true
+  save_final_wr: true
+  show_wr: true #does nothing

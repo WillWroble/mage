@@ -228,6 +228,7 @@ public interface Permanent extends Card, Controllable {
     boolean entersBattlefield(Ability source, Game game, Zone fromZone, boolean fireEvent);
 
     String getValue(GameState state);
+    String getValue(Game game, UUID targetPlayer);
 
     /**
      * Add abilities to the permanent, can be used in effects

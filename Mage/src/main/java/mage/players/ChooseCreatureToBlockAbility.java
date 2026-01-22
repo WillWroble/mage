@@ -40,4 +40,9 @@ public class ChooseCreatureToBlockAbility extends AbilityImpl {
         return this.name;
     }
 
+    @Override
+    public String getRule() {
+        return this.name;
+    }
+
 }

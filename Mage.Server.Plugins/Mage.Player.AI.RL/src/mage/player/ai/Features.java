@@ -182,6 +182,9 @@ public class Features implements Serializable {
                 nameSpace = indexFor(hash64(featureName, parent.seed));
             } else {
                 nameSpace = -1;
+                if(!featureName.equals("root")) {
+                    key = (featureName + "::" + key);
+                }
             }
             encoder.featureMap.addFeature(key, nameSpace, idx);
         }

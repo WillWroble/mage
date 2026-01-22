@@ -135,7 +135,7 @@ public class ComputerPlayer extends PlayerImpl {
         Set<Card> lands = hand.getCards(new FilterLandCard(), game);
         boolean out = lands.size() < 2
                 || lands.size() > hand.size() - 2;
-        //getPlayerHistory().useSequence.add(out);
+        getPlayerHistory().useSequence.add(out);
         return out;
     }
 
@@ -225,7 +225,8 @@ public class ComputerPlayer extends PlayerImpl {
         boolean out = makeChoiceHelper(outcome, target, source, game, fromCards);
         if(out) {
             getPlayerHistory().targetSequence.addAll(target.getTargets());
-            getPlayerHistory().targetSequence.add(STOP_CHOOSING);
+            //if there are still more options that could be optionally chosen. add early stop flag to mirror MCTS logging.
+            if(!target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) getPlayerHistory().targetSequence.add(STOP_CHOOSING);
         }
 
         return out;
@@ -838,6 +839,15 @@ public class ComputerPlayer extends PlayerImpl {
     }
     public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
         //TODO: improve this
+        if (!choice.getChoices().isEmpty()) {
+            String chosen = choice.getChoices().stream().min(Comparator.naturalOrder()).orElse("");
+            choice.setChoice(chosen);
+            return true;
+        } else if (!choice.getKeyChoices().isEmpty()) {
+            String chosenKey = choice.getKeyChoices().keySet().stream().min(Comparator.naturalOrder()).orElse("");
+            choice.setChoiceByKey(chosenKey);
+            return true;
+        }
 
         // choose creature type
         // TODO: WTF?! Creature types dialog text can changes, need to replace that code
@@ -890,6 +900,7 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
+
         if (choice.getMessage() != null && (choice.getMessage().equalsIgnoreCase("Choose creature type") || choice.getMessage().equalsIgnoreCase("Choose a creature type"))) {
             return  chooseCreatureType(outcome, choice, game);
         }
@@ -1510,16 +1521,18 @@ public class ComputerPlayer extends PlayerImpl {
     }
     protected List<ActivatedAbility> getPlayableAbilities(Game game) {
         List<ActivatedAbility> playables = getPlayable(game, true);
-        List<ActivatedAbility> out = new ArrayList<>();
-        for (ActivatedAbility aa : playables) {
-            if (!aa.isManaAbility()) {
-                out.add(aa);
-            }
-        }
-        out.add(new PassAbility());
-        return out;
+        playables.add(new PassAbility());
+        return playables;
+//        List<ActivatedAbility> out = new ArrayList<>();
+//        for (ActivatedAbility aa : playables) {
+//            if (!aa.isManaAbility()) {
+//                out.add(aa);
+//            }
+//        }
+//        out.add(new PassAbility());
+//        return out;
     }
-    //TODO: make this better
+    //TODO: make this more efficient
     @Deprecated
     public List<Ability> getPlayableOptions(Game game) {
         List<Ability> all = new ArrayList<>();

@@ -65,6 +65,8 @@ import static mage.constants.PlayerAction.TRIGGER_AUTO_ORDER_RESET_ALL;
 public class HumanPlayer extends PlayerImpl {
 
     private static final boolean ALLOW_USERS_TO_PUT_NON_PLAYABLE_SPELLS_ON_STACK_WORKAROUND = false; // warning, see workaround's info on usage
+    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
+
 
     // TODO: all user feedback actions executed and waited in diff threads and can't catch exceptions, e.g. on wrong code usage
     //  must catch and log such errors
@@ -789,6 +791,7 @@ public class HumanPlayer extends PlayerImpl {
         if(target.possibleTargets(abilityControllerId, source, game).size() > 1) {
             out = chooseTargetHelper(outcome, target, source, game);
             getPlayerHistory().targetSequence.addAll(target.getTargets());
+            if(!target.isChoiceCompleted(abilityControllerId, source, game, null)) getPlayerHistory().targetSequence.add(STOP_CHOOSING);
         } else {
             out = chooseTargetHelper(outcome, target, source, game);
         }
@@ -1029,6 +1032,7 @@ public class HumanPlayer extends PlayerImpl {
         if(target.possibleTargets(abilityControllerId, source, game, cards).size() > 1) {
             out = chooseTargetHelper(outcome, cards, target, source, game);
             getPlayerHistory().targetSequence.addAll(target.getTargets());
+            if(!target.isChoiceCompleted(abilityControllerId, source, game, cards)) getPlayerHistory().targetSequence.add(STOP_CHOOSING);
         } else {
             out = chooseTargetHelper(outcome, cards, target, source, game);
         }
@@ -2487,13 +2491,13 @@ public class HumanPlayer extends PlayerImpl {
     }
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
-        Mode out = chooseModeHelper(modes, source, game);
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
         if(modes.getMinModes() == 0) modeOptions.add(null);
+        Mode out = chooseModeHelper(modes, source, game);
         int outIdx = modeOptions.indexOf(out);
-        if(modes.size() > 1 && out != null) getPlayerHistory().modeSequence.add(outIdx);
+        if(modes.size() > 1) getPlayerHistory().modeSequence.add(outIdx);
         return out;
     }
 

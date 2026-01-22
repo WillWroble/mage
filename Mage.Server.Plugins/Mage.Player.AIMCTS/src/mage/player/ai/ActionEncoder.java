@@ -29,7 +29,7 @@ public class ActionEncoder {
         if(map.containsKey(name)) {
             return map.get(name);
         } else {
-            logger.warn("unrecognized action: " + name);
+            //logger.warn("unrecognized action: " + name);
             int offset = abs(name.hashCode()) % (128-map.size());
             return map.size()+offset;
         }
@@ -38,7 +38,7 @@ public class ActionEncoder {
         if(targetMap.containsKey(name)) {
             return targetMap.get(name);
         } else {
-            logger.warn("unrecognized target: " + name);
+            //logger.warn("unrecognized target: " + name);
             int offset = abs(name.hashCode()) % (128-targetMap.size());
             return targetMap.size()+offset;
         }

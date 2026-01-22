@@ -3,19 +3,18 @@ package org.mage.test.AI.RL;
 import mage.constants.RangeOfInfluence;
 import mage.player.ai.ComputerPlayer8;
 import mage.player.ai.ComputerPlayerMCTS2;
-import mage.player.ai.Features;
 import mage.players.Player;
 import org.junit.Before;
 import org.junit.Test;
 
-public class SimulateRLvsMinimax extends ParallelDataGenerator {
+public class SimulateRLvsMinimaxTest extends ParallelDataGeneratorTest {
     @Before
     public void setup() {
-        VALUE_LAMBDA = 0.95; //below default for MCTS root scores
+        TD_DISCOUNT = 0.8; //default for MCTS root scores
         DONT_USE_NOISE = true; //keep on unless agent has really plateaued. this should be a last resort; try retraining policy before running this
-        DONT_USE_POLICY = true; //turn off after policy network has been trained on ~1000 games with this on
-        DONT_USE_POLICY_TARGET = true; //if you want to use other policies but not targeting decisions
-        DONT_USE_POLICY_USE = true; //if you want to use other policies but not use decisions
+        DONT_USE_POLICY = false; //turn off after policy network has been trained on ~1000 games with this on
+        DONT_USE_POLICY_TARGET = false; //if you want to use other policies but not targeting decisions
+        DONT_USE_POLICY_USE = false; //if you want to use other policies but not use decisions
         DECK_A = "UWTempo";
         DECK_B = "simplegreen";
     }
@@ -34,9 +33,8 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     public void createTestDataSet() {
         DATA_OUT_FILE_A = "testing.hdf5";
         DECK_A = "UWTempo";
-        DECK_B = "Standard-MonoG";
+        DECK_B = "simplegreen";
         NUM_GAMES_TO_SIMULATE = 200;
-        ALLOW_MULLIGANS_A = false;
         //ALWAYS_GO_FIRST = true;
         super.generateData();
         writeResults("test_results.txt", "WR with " + DECK_A + " vs " +
@@ -57,21 +55,19 @@ public class SimulateRLvsMinimax extends ParallelDataGenerator {
     }
     @Test
     public void roundRobin() {
-        DECK_A = "Standard-MonoU";
+        DECK_A = "Standard-MonoB";
         //DECK_A = "UWTempo";
 
         isRoundRobin = true;
-        Features.useFeatureMap = true;
+        //Features.useFeatureMap = true;
         NUM_GAMES_TO_SIMULATE = 200;
-        ALLOW_MULLIGANS_A = false;
         String [] deckPool = {"Standard-MonoB", "Standard-MonoG", "Standard-MonoR", "Standard-MonoU", "Standard-MonoW"};
         //String [] deckPool = {"MTGA_MonoB", "MTGA_MonoG", "MTGA_MonoR", "MTGA_MonoU", "MTGA_MonoW"};
-        //String [] deckPool = {"simic-eldrazi"};
         for (String deckName :  deckPool) {
             DATA_OUT_FILE_A = "training/"+deckName+"_training.hdf5";
             DECK_B = deckName;
             super.generateData();
-            writeResults("round_robin_train_results.txt", "WR with (A)" + DECK_A + " vs " +
+            writeResults("round_robin_train_results.txt", "WR with " + DECK_A + " vs " +
                     deckName + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
         }
     }

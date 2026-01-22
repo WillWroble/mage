@@ -6,11 +6,11 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mage.test.player.*;
 
-public class SimulateMinimaxvsMinimax extends ParallelDataGenerator {
+public class SimulateMinimaxvsMinimaxTest extends ParallelDataGeneratorTest {
 
     @Before
     public void setup() {
-        VALUE_LAMBDA = 0.95; //consider higher lambda for heuristic minimax scores
+        TD_DISCOUNT = 0.95; //consider higher lambda for heuristic minimax scores
     }
     @Test
     public void test_single_game() {
