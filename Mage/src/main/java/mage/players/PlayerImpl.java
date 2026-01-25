@@ -1647,7 +1647,7 @@ public abstract class PlayerImpl implements Player, Serializable {
             return true;
         }
         //needs to happen after pass since pass() logs ability separately
-        if(!(ability instanceof ManaAbility) && !game.isPaused() && !game.checkIfGameIsOver()) {
+        if(!(ability instanceof SpecialAction) && !game.isPaused() && !game.checkIfGameIsOver()) {
             playerHistory.prioritySequence.add(ability.copy());
         }
         Card card = game.getCard(ability.getSourceId());

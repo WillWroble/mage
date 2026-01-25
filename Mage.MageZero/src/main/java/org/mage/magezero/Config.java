@@ -50,9 +50,9 @@ public class Config {
     }
 
     public static class PlayerConfig {
-        public final String deckPath;
-        public final String type;
-        public final String outputDir;
+        public String deckPath;
+        public String type;
+        public String outputDir;
         public final PriorsConfig priors;
         public final NoiseConfig noise;
         public final MctsConfig mcts;
@@ -115,10 +115,10 @@ public class Config {
     }
 
     public static class TrainingConfig {
-        public final int games;
+        public int games;
         public final int gamesPerFile;
-        public final int maxTurns;
-        public final int threads;
+        public int maxTurns;
+        public int threads;
         public final boolean trainOpponentHead;
 
         public TrainingConfig(Map<String, Object> raw) {

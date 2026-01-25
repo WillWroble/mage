@@ -183,7 +183,7 @@ public class MCTSNode {
             mp.actionScript.clear();
             mp.chooseTargetOptions.clear();
             mp.choiceOptions.clear();
-            mp.modeOptionsSize = 0;
+            mp.numOptionsSize = 0;
             mp.playables.clear();
             mp.decisionText = "";
             mp.autoPassed=0;
@@ -266,8 +266,8 @@ public class MCTSNode {
                 node.choiceAction = choice;
                 children.add(node);
             }
-        } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_MODE) {
-            for (int mode = 0; mode < player.modeOptionsSize; mode++) {
+        } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_NUM) {
+            for (int mode = 0; mode < player.numOptionsSize; mode++) {
                 logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + mode);
                 MCTSNode node = new MCTSNode(this, action);
                 node.modeAction = mode;
@@ -314,7 +314,7 @@ public class MCTSNode {
             node.depth = depth + 1;
             node.prior = 1.0/children.size();
         }
-        if (policy != null && nextAction != MCTSPlayer.NextAction.MAKE_CHOICE && nextAction != MCTSPlayer.NextAction.CHOOSE_MODE) {
+        if (policy != null && nextAction != MCTSPlayer.NextAction.MAKE_CHOICE && nextAction != MCTSPlayer.NextAction.CHOOSE_NUM) {
 
             double priorTemperature = ComputerPlayerMCTS.POLICY_PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
 
@@ -414,7 +414,9 @@ public class MCTSNode {
         } else {
             sb.append(baseGame.getTurnStepType().toString());
         }
-        sb.append(baseGame.getStack().toString()).append(" actions: ");
+        sb.append(baseGame.getStack().toString());
+        sb.append("pool= ").append(baseGame.getPlayer(targetPlayer).getManaPool().getMana());
+        sb.append(" actions: ");
         for (MCTSNode node: children) {
 
             if(node.chooseTargetAction != null) {
@@ -783,11 +785,11 @@ public class MCTSNode {
             } else {
                 opponentScript.useSequence.add(useAction);
             }
-        } else if(parent.nextAction.equals(MCTSPlayer.NextAction.CHOOSE_MODE)) {
+        } else if(parent.nextAction.equals(MCTSPlayer.NextAction.CHOOSE_NUM)) {
             if (parent.playerId.equals(targetPlayer)) {
-                myScript.modeSequence.add(modeAction);
+                myScript.numSequence.add(modeAction);
             } else {
-                opponentScript.modeSequence.add(modeAction);
+                opponentScript.numSequence.add(modeAction);
             }
         } else if(parent.nextAction.equals(MCTSPlayer.NextAction.PRIORITY)) {
             if(parent.playerId.equals(targetPlayer)) {

@@ -1732,6 +1732,7 @@ public class HumanPlayer extends PlayerImpl {
 
             break;
         }
+        getPlayerHistory().numSequence.add(xValue - min);
 
         return xValue;
     }
@@ -2497,7 +2498,7 @@ public class HumanPlayer extends PlayerImpl {
         if(modes.getMinModes() == 0) modeOptions.add(null);
         Mode out = chooseModeHelper(modes, source, game);
         int outIdx = modeOptions.indexOf(out);
-        if(modes.size() > 1) getPlayerHistory().modeSequence.add(outIdx);
+        if(modes.size() > 1) getPlayerHistory().numSequence.add(outIdx);
         return out;
     }
 

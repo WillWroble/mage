@@ -3,7 +3,7 @@
 goes_first: player_a  # player_a, player_b, random
 
 player_a:
-  deckPath: decks/Standard-MonoU.dck
+  deckPath: decks/UWTempo.dck
   type: mcts
   output_dir: data/playerA
 
@@ -27,7 +27,7 @@ player_a:
     enabled: false
 
 player_b:
-  deckPath: decks/MTGA_MonoG.dck
+  deckPath: decks/Standard-MonoG.dck
   type: minimax
   output_dir: data/playerB
 

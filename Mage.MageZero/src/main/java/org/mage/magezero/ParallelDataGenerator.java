@@ -418,7 +418,7 @@ public class ParallelDataGenerator {
         return encoder.labeledStates;
 
     }
-    private String extractDeckName(String deckPath) {
+    public static String extractDeckName(String deckPath) {
         // Handle both forward and backslashes
         int lastSlash = Math.max(deckPath.lastIndexOf('\\'), deckPath.lastIndexOf('/'));
         String fileName = deckPath.substring(lastSlash + 1);

@@ -1,7 +1,6 @@
 package mage.players;
 
 import mage.abilities.Ability;
-import mage.abilities.Mode;
 import mage.game.combat.Combat;
 
 import java.util.*;
@@ -20,7 +19,7 @@ public class PlayerScript {
     //for priority abilities
     public ArrayDeque<Ability> prioritySequence;
     //for mode decisions
-    public ArrayDeque<Integer> modeSequence;
+    public ArrayDeque<Integer> numSequence;
 
 
     public PlayerScript() {
@@ -28,7 +27,7 @@ public class PlayerScript {
         useSequence = new ArrayDeque<>();
         targetSequence = new ArrayDeque<>();
         choiceSequence = new ArrayDeque<>();
-        modeSequence =  new ArrayDeque<>();
+        numSequence =  new ArrayDeque<>();
 
     }
     public PlayerScript(List<Ability> prio, List<Integer> mode, List<UUID> target, List<String> choice, List<Boolean> use) {
@@ -39,7 +38,7 @@ public class PlayerScript {
         useSequence = new ArrayDeque<>(use);
         targetSequence = new ArrayDeque<>(target);
         choiceSequence = new ArrayDeque<>(choice);
-        modeSequence = new ArrayDeque<>(mode);
+        numSequence = new ArrayDeque<>(mode);
     }
 
     public PlayerScript(PlayerScript playerScript) {
@@ -51,14 +50,14 @@ public class PlayerScript {
         useSequence = new ArrayDeque<>(playerScript.useSequence);
         targetSequence = new ArrayDeque<>(playerScript.targetSequence);
         choiceSequence = new ArrayDeque<>(playerScript.choiceSequence);
-        modeSequence = new ArrayDeque<>(playerScript.modeSequence);
+        numSequence = new ArrayDeque<>(playerScript.numSequence);
     }
 
     public PlayerScript append(PlayerScript playerScript) {
         this.targetSequence.addAll(playerScript.targetSequence);
         this.choiceSequence.addAll(playerScript.choiceSequence);
         this.useSequence.addAll(playerScript.useSequence);
-        this.modeSequence.addAll(playerScript.modeSequence);
+        this.numSequence.addAll(playerScript.numSequence);
         //this.prioritySequence.addAll(playerScript.prioritySequence);
         for(Ability a : playerScript.prioritySequence) {//need to copy ability for certain edge cases unfortunately
             this.prioritySequence.add(a.copy());
@@ -70,7 +69,7 @@ public class PlayerScript {
         this.choiceSequence.clear();
         this.useSequence.clear();
         this.prioritySequence.clear();
-        this.modeSequence.clear();
+        this.numSequence.clear();
     }
     @Override
     public boolean equals(Object o) {
@@ -81,7 +80,7 @@ public class PlayerScript {
         return dequeEquals(targetSequence, that.targetSequence, Objects::equals)
                 && dequeEquals(choiceSequence,  that.choiceSequence,  Objects::equals)
                 && dequeEquals(useSequence, that.useSequence, Objects::equals)
-                && dequeEquals(modeSequence, that.modeSequence, Objects::equals)
+                && dequeEquals(numSequence, that.numSequence, Objects::equals)
                 // Use a stable key for Ability/Combat instead of reference equality
                 && dequeEquals(prioritySequence, that.prioritySequence,
                 (a,b) -> Objects.equals(abilityKey(a), abilityKey(b)));
@@ -114,7 +113,7 @@ public class PlayerScript {
         int h = 1;
         h = 31*h + hashDeque(targetSequence, Objects::hashCode);
         h = 31*h + hashDeque(choiceSequence,  Objects::hashCode);
-        h = 31*h + hashDeque(modeSequence, Objects::hashCode);
+        h = 31*h + hashDeque(numSequence, Objects::hashCode);
         h = 31*h + hashDeque(useSequence,  Objects::hashCode);
         h = 31*h + hashDeque(prioritySequence, ab -> Objects.hash(abilityKey(ab)));
         return h;
@@ -131,7 +130,7 @@ public class PlayerScript {
         return "PlayerScript{targets=" + targetSequence
                 + ", choices=" + choiceSequence
                 + ", uses=" + useSequence
-                + ", modes=" + modeSequence
+                + ", modes=" + numSequence
                 + ", priority=" + prioritySequence
                  + "}";
     }

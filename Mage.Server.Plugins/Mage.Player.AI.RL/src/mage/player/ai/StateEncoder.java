@@ -19,11 +19,13 @@ import mage.game.Game;
 import mage.game.Graveyard;
 import mage.game.permanent.Battlefield;
 import mage.game.permanent.Permanent;
+import mage.game.permanent.PermanentCard;
 import mage.game.stack.SpellStack;
 import mage.game.stack.StackObject;
 import mage.players.ManaPool;
 import mage.players.Player;
 import mage.target.Target;
+import mage.target.Targets;
 import mage.util.CardUtil;
 import mage.watchers.Watcher;
 import org.roaringbitmap.RoaringBitmap;
@@ -31,7 +33,6 @@ import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.apache.log4j.Logger;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Global sparse state encoder for deep learning.
@@ -45,8 +46,8 @@ public class StateEncoder {
     public static boolean perfectInfo = true;
     private final Features features;
     public Set<Integer> featureVector = new HashSet<>();
-    private UUID opponentID;
-    private UUID myPlayerID;
+    private UUID opponentId;
+    private UUID myPlayerId;
 
     public List<LabeledState>  labeledStates = new ArrayList<>();
 
@@ -56,13 +57,12 @@ public class StateEncoder {
         features.setEncoder(this);
     }
     public void setAgent(UUID me) {
-        myPlayerID = me;
+        myPlayerId = me;
     }
     public void setOpponent(UUID op) {
-        opponentID = op;
+        opponentId = op;
     }
-    public Features getFeatures() {return features;}
-    public synchronized UUID getMyPlayerID() {return myPlayerID;}
+    public synchronized UUID getMyPlayerId() {return myPlayerId;}
 
 
     private void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
@@ -73,10 +73,10 @@ public class StateEncoder {
             f.addFeature(mc.getText());
         }
     }
-    private void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f, Boolean callParent) {
+    private void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f) {
 
         //if(c.c) f.addFeature("CanPay"); //use c.canPay()
-        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, callParent);
+        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, false);
         if(costs == null || costs.isEmpty()) return;
         for(Cost cc : costs) {
             f.addFeature(cc.getText());
@@ -89,7 +89,7 @@ public class StateEncoder {
         ManaCosts<ManaCost> mcs = a.getManaCostsToPay();
         if(!c.isEmpty() || !mcs.isEmpty()) {
             Features costFeature = f.getSubFeatures("AbilityCost");
-            processCosts(c, mcs, game, costFeature, false); //dont propagate mana cost up for abilities
+            processCosts(c, mcs, game, costFeature); //dont propagate mana cost up for abilities
         }
         for(Mode m : a.getModes().getAvailableModes(a, game)) {
             for(Effect e : m.getEffects()) {
@@ -124,11 +124,27 @@ public class StateEncoder {
         if(ta.getTriggerEvent() != null) f.addFeature(ta.getTriggerEvent().getType().name());
 
     }
+    //encodes only static features of card, see permanents for dynamic feature encoding
+    //since all features here are static, they are only encoded for abstraction so just add features directly to parent
     private void processCard(Card c, Game game, Features f) {
 
-        f.parent.addFeature("Card");//raw universal type of card added for counting purposes
 
-        if(c.isPermanent()) f.addFeature("Permanent");
+        //process counters (suspend is the only non-permanent dynamic feature I can think of)
+        Counters counters = c.getCounters(game);
+        for (String counterName : counters.keySet()) {
+            f.addNumericFeature(counterName, counters.get(counterName).getCount());
+        }
+
+        if(!f.passToParent) return;
+
+        f = f.parent;
+
+
+        f.addFeature("Card");//raw universal type of card added for counting purposes
+
+        if(c.isPermanent()) {
+            f.addFeature("Permanent");
+        }
         //add types
         for (CardType ct : c.getCardType(game)) {
             f.addFeature(ct.name());
@@ -146,34 +162,64 @@ public class StateEncoder {
         for (SubType st : c.getSubtype(game)) {
             if(!st.name().isEmpty()) f.addFeature(st.name());
         }
-
-        //removing static cost because this never changes, see getManaCostsToPay in abilities (maybe add back later for abstraction for the network)
-        //ManaCosts<ManaCost> mc = c.getManaCost();
-        //processManaCosts(mc, game, f, true);
+        ManaCosts<ManaCost> mc = c.getManaCost();
+        processManaCosts(mc, game, f, true);
 
 
-        //process counters
-        Counters counters = c.getCounters(game);
-        for (String counterName : counters.keySet()) {
-            f.addNumericFeature(counterName, counters.get(counterName).getCount());
-        }
 
     }
-    private void processPermBattlefield(Permanent p, Game game, Features f) {
 
-        processCardInZone(p, Zone.BATTLEFIELD, game, f);
+    private void processPermBattlefield(Permanent p, Game game, UUID playerId, Features f) {
+
+        if(p instanceof PermanentCard) processCardInZone(((PermanentCard) p).getCard(), Zone.BATTLEFIELD, game, f);
         //is tapped?
         if(p.isTapped()) f.addFeature("Tapped");
 
-        //process attachments
-        for (UUID id : p.getAttachments()) {
-            Permanent attachment = game.getPermanent(id);
-            if(attachment == null) continue;
-            //modify name to not count auras/equipment twice
-            //don't pass pooled attachment features up, or they will be counted twice
-            Features attachmentFeatures = f.getSubFeatures(attachment.getName(), false);
-            processPermBattlefield(attachment, game, attachmentFeatures);
+        //dynamic effects
+        for (CardType ct : p.getCardType(game)) {
+            f.addFeature(ct.name()+"_dynamic");
+        }
+        if(p.getColor(game).isRed()) f.addFeature("RedCard_dynamic");
+        if(p.getColor(game).isWhite()) f.addFeature("WhiteCard_dynamic");
+        if(p.getColor(game).isBlack()) f.addFeature("BlackCard_dynamic");
+        if(p.getColor(game).isGreen()) f.addFeature("GreenCard_dynamic");
+        if(p.getColor(game).isBlue()) f.addFeature("BlueCard_dynamic");
+        if(p.getColor(game).isColorless()) f.addFeature("ColorlessCard_dynamic");
+        if(p.getColor(game).isMulticolored()) f.addFeature("MultiColored_dynamic");
 
+
+
+        //process attachments
+        List<UUID> attachments = p.getAttachments();
+        if(attachments != null && !attachments.isEmpty()) {
+            Features attachedFeatures = f.getSubFeatures("attached", false);
+            for (UUID id : attachments) {
+                Permanent attachment = game.getPermanent(id);
+                if(attachment == null) continue;
+                //don't pass pooled attachment features up, or they will be counted twice
+                Features attachmentFeatures = attachedFeatures.getSubFeatures(attachment.getName());
+                processPermBattlefield(attachment, game, playerId, attachmentFeatures);
+
+            }
+        }
+        //process imprinted
+        List<UUID> imprinted = p.getImprinted();
+        if(imprinted != null && !imprinted.isEmpty()) {
+            Features imprintedFeatures = f.getSubFeatures("imprinted", false);
+            for (UUID id : imprinted) {
+                Card imprintedCard = game.getCard(id);
+                if(imprintedCard == null) continue;
+                //don't pass pooled attachment features up, or they will be counted twice
+                Features attachmentFeatures = imprintedFeatures.getSubFeatures(imprintedCard.getName());
+                processCard(imprintedCard, game, attachmentFeatures);
+
+            }
+        }
+        //paired
+        Card pairedCard = (Card) p.getPairedCard();
+        if(pairedCard != null) {
+            Features pairedFeatures = f.getSubFeatures("paired", false);
+            processCard(pairedCard, game, pairedFeatures);
         }
         //process special exile zone (oblivion ring effect)
         UUID exileId = CardUtil.getExileZoneId(game, p.getId(), p.getZoneChangeCounter(game));
@@ -183,13 +229,27 @@ public class StateEncoder {
             Features exileZoneFeatures = f.getSubFeatures(cleanString(exileZone.getName()), false);
             processExileZone(exileZone, game, exileZoneFeatures);
         }
+        //TODO soulbond, banding
+
+
+        //unique flags
         if(p.isFlipped()) f.addFeature("flipped");
-        if(p.isDisguised()) f.addFeature("harnessed");
+        if(p.isHarnessed()) f.addFeature("harnessed");
+        if(p.isSolved()) f.addFeature("solved");
+        if(p.isSuspected()) f.addFeature("suspected");
+        if(p.isRingBearer()) f.addFeature("RingBearer");
+        if(p.isRenowned()) f.addFeature("Renowned");
+        if(p.isMonstrous()) f.addFeature("Monstrous");
+        if(p.isCloaked()) f.addFeature("Cloaked");
+        if(p.isDisguised()) f.addFeature("disguised");
+        if(p.isMorphed()) f.addFeature("morphed");
         if(p.isLeftDoorUnlocked()) f.addFeature("Room-LeftDoor");
         if(p.isRightDoorUnlocked()) f.addFeature("Room-RightDoor");
+
+
         if(p.isCreature(game)) {
             if(p.hasSummoningSickness()) f.addFeature("SummoningSick");
-            if(p.canAttack(opponentID, game)) f.addFeature("CanAttack"); //use p.canAttack()
+            if(p.canAttack(game.getOpponents(playerId).iterator().next(), game)) f.addFeature("CanAttack"); //use p.canAttack()
             if(p.canBlockAny(game)) f.addFeature("CanBlock");
             //if(p.hasSummoningSickness()) f.addFeature("SummoningSickness");
             if(p.isAttacking()) {
@@ -206,8 +266,10 @@ public class StateEncoder {
     }
     private void processCardInZone(Card c, Zone z, Game game, Features f) {
 
-        //process as card
+        //process as card (static features)
         processCard(c, game, f);
+
+
         Abilities<Ability> allAbilities = c.getAbilities(game);
         //static abilities
         for (StaticAbility sa : allAbilities.getStaticAbilities(z)) {
@@ -226,14 +288,14 @@ public class StateEncoder {
 
         }
     }
-    private void processBattlefield(Battlefield bf, Game game, Features f, UUID playerID) {
+    private void processBattlefield(Battlefield bf, Game game, Features f, UUID playerId) {
         TreeMap<String, Permanent> sortedPerms = new TreeMap<>();
-        for(Permanent p : bf.getAllActivePermanents(playerID)) {
-            sortedPerms.put(p.getValue(game, myPlayerID), p);
+        for(Permanent p : bf.getAllActivePermanents(playerId)) {
+            sortedPerms.put(p.getValue(game, playerId), p);
         }
         for (Permanent p : sortedPerms.values()) {
             Features permFeatures = f.getSubFeatures(p.getName());
-            processPermBattlefield(p, game, permFeatures);
+            processPermBattlefield(p, game, playerId, permFeatures);
         }
     }
     private void processGraveyard(Graveyard gy, Game game, Features f) {
@@ -248,14 +310,23 @@ public class StateEncoder {
             processCardInZone(c, Zone.HAND, game, handCardFeatures);
         }
     }
-    private void processStackObject(StackObject so, int stackPosition, Game game, Features f) {
+    private void processStackObject(StackObject so, int stackPosition, Game game, UUID playerId, Features f) {
 
         f.addNumericFeature("StackPosition", stackPosition, false);
-        if(so.getControllerId().equals(myPlayerID)) f.addFeature("isController");
+        if(so.getControllerId().equals(playerId)) f.addFeature("isController");
         Ability sa = so.getStackAbility();
-        for (Target target : sa.getTargets()) {
-            for (UUID id : target.getTargets()) {
-                f.addFeature(game.getEntityName(id));
+        Targets myTargets = sa.getTargets();
+        if(!myTargets.isEmpty()) {
+            Features targetFeatures = f.getSubFeatures("targets", false);
+            for (Target target : myTargets) {
+                for (UUID id : target.getTargets()) {
+                    Card c = game.getCard(id);
+                    if (c == null) {
+                        targetFeatures.addFeature(game.getEntityName(id));
+                    } else {
+                        processCard(c, game, targetFeatures);
+                    }
+                }
             }
         }
         if(sa instanceof TriggeredAbility) {
@@ -270,7 +341,7 @@ public class StateEncoder {
             }
         }
     }
-    private void processStack(SpellStack stack, Game game, Features f) {
+    private void processStack(SpellStack stack, Game game, UUID playerId, Features f) {
         Iterator<StackObject> itr = stack.descendingIterator();
         StackObject so;
         f.addNumericFeature("StackSize", stack.size());
@@ -279,7 +350,7 @@ public class StateEncoder {
             so = itr.next();
             i++;
             Features soFeatures = f.getSubFeatures(so.toString());
-            processStackObject(so, i, game, soFeatures);
+            processStackObject(so, i, game, playerId, soFeatures);
         }
     }
     private void processExileZone(ExileZone exileZone, Game game, Features f) {
@@ -304,50 +375,47 @@ public class StateEncoder {
         f.addNumericFeature("ColorlessMana", mp.getColorless());
         //TODO: deal with conditional mana
     }
-    public void flipPerspective() {
-        UUID temp = myPlayerID;
-        myPlayerID = opponentID;
-        opponentID = temp;
-    }
-    private void processOpponentState(Game game, UUID activePlayerID) {
-        //switch for perspective reasons
-        flipPerspective();
+    private void processPlayer(Game game, UUID playerId, UUID decisionPlayerId, Features f) {
+        Player myPlayer = game.getPlayer(playerId);
 
-        Player myPlayer = game.getPlayer(myPlayerID);
-        //game metadata
-        features.addNumericFeature("OpponentLifeTotal", myPlayer.getLife());
-        if(myPlayer.canPlayLand()) features.addFeature("OpponentCanPlayLand"); //use features.addFeature(myPlayer.canPlayLand())
+        //current targets selected for when it's in the middle selecting multiple targets
+        Features chosenTargetsFeatures = f.getSubFeatures("ChosenTargets", false);
+        for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
+            chosenTargetsFeatures.addFeature(game.getEntityName(targetID));
+        }
+        if(game.isActivePlayer(playerId)) f.addFeature("IsActivePlayer");
+        if(decisionPlayerId.equals(playerId)) f.addFeature("IsDecisionPlayer");
+        f.addNumericFeature("LifeTotal", myPlayer.getLife());
+        if(myPlayer.canPlayLand()) f.addFeature("CanPlayLand");
+
+
         //mana pool
-        Features mpFeatures = features.getSubFeatures("OpponentManaPool");
+        Features mpFeatures = f.getSubFeatures("ManaPool", false);
         processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
         //start with battlefield
         Battlefield bf = game.getBattlefield();
-        Features bfFeatures = features.getSubFeatures("OpponentBattlefield");
-        processBattlefield(bf, game, bfFeatures, myPlayerID);
+        Features bfFeatures = f.getSubFeatures("Battlefield");
+        processBattlefield(bf, game, bfFeatures, playerId);
 
         //now do graveyard
         Graveyard gy = myPlayer.getGraveyard();
-        Features gyFeatures = features.getSubFeatures("OpponentGraveyard");
+        Features gyFeatures = f.getSubFeatures("Graveyard");
         processGraveyard(gy, game, gyFeatures);
 
-        //now do hand (cards are face down so only keep count of number of cards
-        //TODO: special handling of revealed cards
-        if(myPlayerID==activePlayerID || perfectInfo) { //invert perspective
+        //now do hand
+        if(playerId==decisionPlayerId || perfectInfo) { //keep perspective
             Cards hand = myPlayer.getHand();
-            Features handFeatures = features.getSubFeatures("OpponentHand");
+            Features handFeatures = f.getSubFeatures("Hand");
             processHand(hand, game, handFeatures);
         } else {
             Cards hand = myPlayer.getHand();
-            features.addNumericFeature("CardsInHand", hand.size());
+            f.addNumericFeature("CardsInHand", hand.size());
         }
-        Features exileFeatures = features.getSubFeatures("Exile");
-        processExile(game.getExile(), game, exileFeatures);
-        //switch back
-        flipPerspective();
 
+
+        //TODO dungeons
     }
-
     /**
      * vectorizes (hashes) the entire game state in a neural network-learnable way. These vectors are massive and sparse -
      * they are designed to have redundant features masked before training and used with a massive embedding bag in pytorch
@@ -361,62 +429,34 @@ public class StateEncoder {
         features.stateRefresh();
         featureVector.clear();
 
-        Player myPlayer = game.getPlayer(myPlayerID);
+        //globals
+
+        if(game.getPhase() != null) {
+            features.addFeature(game.getTurnStepType().toString()); //phases
+        }
+
         //decision type
         features.addFeature(decisionType.toString());
         //decision state
         features.addFeature(decisionsText);
-        //current targets selected for when it's in the middle selecting multiple targets
-        Features chosenTargetsFeatures = features.getSubFeatures("ChosenTargets", false);
-        for(UUID targetID : game.getPlayer(decisionPlayerId).getPlayerHistory().targetSequence) {
-            chosenTargetsFeatures.addFeature(game.getEntityName(targetID));
-        }
-
-        //game metadata
-        if(game.getPhase() != null) {
-            features.addFeature(game.getTurnStepType().toString()); //phases
-        }
-        if(game.isActivePlayer(myPlayerID)) features.addFeature("IsActivePlayer");
-        if(decisionPlayerId.equals(myPlayerID)) features.addFeature("IsDecisionPlayer");
-        features.addNumericFeature("LifeTotal", myPlayer.getLife());
-        if(myPlayer.canPlayLand()) features.addFeature("CanPlayLand");
-
-
-
 
         //stack
         Features stackFeatures = features.getSubFeatures("Stack", false);
-        processStack(game.getStack(), game, stackFeatures);
+        processStack(game.getStack(), game, myPlayerId, stackFeatures);
 
-        //mana pool
-        Features mpFeatures = features.getSubFeatures("ManaPool", false);
-        processManaPool(myPlayer.getManaPool(), game, mpFeatures);
-
-        //start with battlefield
-        Battlefield bf = game.getBattlefield();
-        Features bfFeatures = features.getSubFeatures("Battlefield");
-        processBattlefield(bf, game, bfFeatures, myPlayerID);
-
-        //now do graveyard
-        Graveyard gy = myPlayer.getGraveyard();
-        Features gyFeatures = features.getSubFeatures("Graveyard");
-        processGraveyard(gy, game, gyFeatures);
-
-        //now do hand
-        if(myPlayerID==decisionPlayerId || perfectInfo) { //keep perspective
-            Cards hand = myPlayer.getHand();
-            Features handFeatures = features.getSubFeatures("Hand");
-            processHand(hand, game, handFeatures);
-        } else {
-            Cards hand = myPlayer.getHand();
-            features.addNumericFeature("OpponentCardsInHand", hand.size());
-        }
+        //exiled
         Features exileFeatures = features.getSubFeatures("Exile");
         processExile(game.getExile(), game, exileFeatures);
 
+        //each player
 
-        //lastly do opponent
-        processOpponentState(game, decisionPlayerId);
+        //PlayerA
+        Features playerFeatures = features.getSubFeatures("Player");
+        processPlayer(game, myPlayerId, decisionPlayerId, playerFeatures);
+        //PlayerB
+        Features opponentFeatures = features.getSubFeatures("Opponent");
+        processPlayer(game, opponentId, decisionPlayerId, opponentFeatures);
+
 
         return new HashSet<>(featureVector);
 

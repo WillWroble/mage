@@ -18,16 +18,16 @@ import mage.cards.repository.CardRepository;
 import mage.choices.Choice;
 import mage.constants.*;
 import mage.filter.common.FilterLandCard;
+import mage.game.ExileZone;
 import mage.game.Game;
+import mage.game.command.CommandObject;
 import mage.game.draft.Draft;
 import mage.game.events.GameEvent;
 import mage.game.match.Match;
 import mage.game.permanent.Permanent;
+import mage.game.stack.StackObject;
 import mage.game.tournament.Tournament;
-import mage.players.ChooseCreatureToBlockAbility;
-import mage.players.ManaPoolItem;
-import mage.players.Player;
-import mage.players.PlayerImpl;
+import mage.players.*;
 import mage.players.net.UserData;
 import mage.players.net.UserGroup;
 import mage.target.Target;
@@ -58,7 +58,7 @@ public class ComputerPlayer extends PlayerImpl {
     //for discrete choices
     public Set<String> choiceOptions = new HashSet<>();
     //for modes
-    public int modeOptionsSize;
+    public int numOptionsSize;
     //for priorities
     public List<ActivatedAbility> playables = new ArrayList<>();
     //allow mulligans for test mode
@@ -119,7 +119,7 @@ public class ComputerPlayer extends PlayerImpl {
         chooseTargetOptions = new HashSet<>(player.chooseTargetOptions);
         choiceOptions = new HashSet<>(player.choiceOptions);
         playables = new  ArrayList<>(player.playables);
-        modeOptionsSize = player.modeOptionsSize;
+        numOptionsSize = player.numOptionsSize;
         allowMulligans = player.allowMulligans;
     }
 
@@ -231,11 +231,18 @@ public class ComputerPlayer extends PlayerImpl {
 
         return out;
     }
-
     /**
      * Default choice logic for X or amount values
      */
-    private int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
+    protected int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
+        if(min >= max) {
+            return min;
+        }
+        int out = makeChoiceAmountHelper(min, max, game, source, isManaPay);
+        getPlayerHistory().numSequence.add(out-min);
+        return out;
+    }
+    private int makeChoiceAmountHelper(int min, int max, Game game, Ability source, boolean isManaPay) {
         // fast calc on nothing to choose
         if (min >= max) {
             return min;
@@ -811,6 +818,16 @@ public class ComputerPlayer extends PlayerImpl {
 
     @Override
     public int announceX(int min, int max, String message, Game game, Ability source, boolean isManaPay) {
+        if(isManaPay) {
+            MageObject obj = source.getSourceObject(game);
+            boolean hasCostAdjuster = source.getCostAdjuster() != null; // card may have set X bounds or value already
+            boolean hasAltPay = obj != null && mage.util.CardUtil.getAbilities(obj, game).stream()
+                    .anyMatch(a -> a instanceof mage.abilities.costs.mana.AlternateManaPaymentAbility);
+
+            if (!hasCostAdjuster && !hasAltPay) {
+                max = Math.min(max, getManaPool().getMana().count());
+            }
+        }
         return makeChoiceAmount(min, max, game, source, isManaPay);
     }
 
@@ -905,7 +922,7 @@ public class ComputerPlayer extends PlayerImpl {
             return  chooseCreatureType(outcome, choice, game);
         }
         if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1) {
-            return chooseHelper(outcome, choice, game);
+            //return chooseHelper(outcome, choice, game);
         }
         boolean out = chooseHelper(outcome, choice, game);
         if(choice.getChoice() != null) getPlayerHistory().choiceSequence.add(choice.getChoice());
@@ -1060,7 +1077,7 @@ public class ComputerPlayer extends PlayerImpl {
         }
         Mode out = chooseModeHelper(modes, source, game);
         int outIdx = options.indexOf(out);
-        getPlayerHistory().modeSequence.add(outIdx);
+        getPlayerHistory().numSequence.add(outIdx);
         return out;
     }
     public Mode chooseModeHelper(Modes modes, Ability source, Game game) {
@@ -1514,23 +1531,162 @@ public class ComputerPlayer extends PlayerImpl {
             chooseTargetOptions = new HashSet<>(cPlayer.chooseTargetOptions);
             choiceOptions = new HashSet<>(cPlayer.choiceOptions);
             playables = new ArrayList<>(cPlayer.playables);
-            modeOptionsSize = cPlayer.modeOptionsSize;
+            numOptionsSize = cPlayer.numOptionsSize;
             allowMulligans = cPlayer.allowMulligans;
         }
         this.human = false;
     }
-    protected List<ActivatedAbility> getPlayableAbilities(Game game) {
-        List<ActivatedAbility> playables = getPlayable(game, true);
-        playables.add(new PassAbility());
-        return playables;
-//        List<ActivatedAbility> out = new ArrayList<>();
-//        for (ActivatedAbility aa : playables) {
-//            if (!aa.isManaAbility()) {
-//                out.add(aa);
-//            }
-//        }
-//        out.add(new PassAbility());
-//        return out;
+    protected List<ActivatedAbility> getPlayableAbilities(Game originalGame) {
+        // Build only from floating mana + conditional mana in pool
+        Game game = originalGame.createSimulationForPlayableCalc();
+
+        ManaOptions availableMana = new ManaOptions();
+        // floating mana
+        availableMana.addMana(getManaPool().getMana());
+        // conditional mana already floating
+        for (ConditionalMana c : getManaPool().getConditionalMana()) {
+            availableMana.addMana(c);
+        }
+
+        List<ActivatedAbility> playable = new ArrayList<>();
+        boolean fromAll = true; // we scan all zones like the base implementation
+
+        // Hidden zone: hand (this player only)
+        for (Card card : getHand().getCards(game)) {
+            for (Ability ability : card.getAbilities(game)) {
+                if (!ability.getZone().match(Zone.HAND)) {
+                    continue;
+                }
+                boolean isPlaySpell = ability instanceof SpellAbility;
+                boolean isPlayLand = ability instanceof PlayLandAbility;
+
+                if (isPlayLand && game.getContinuousEffects().preventedByRuleModification(
+                        GameEvent.getEvent(GameEvent.EventType.PLAY_LAND, ability.getSourceId(), ability, this.getId()),
+                        ability, game, true)) {
+                    continue;
+                }
+
+                GameEvent castEvent = GameEvent.getEvent(GameEvent.EventType.CAST_SPELL, ability.getId(), ability, this.getId());
+                castEvent.setZone(Zone.HAND);
+                if (isPlaySpell && game.getContinuousEffects().preventedByRuleModification(castEvent, ability, game, true)) {
+                    continue;
+                }
+
+                GameEvent castLateEvent = GameEvent.getEvent(GameEvent.EventType.CAST_SPELL_LATE, ability.getId(), ability, this.getId());
+                castLateEvent.setZone(Zone.HAND);
+                if (isPlaySpell && game.getContinuousEffects().preventedByRuleModification(castLateEvent, ability, game, true)) {
+                    continue;
+                }
+
+                ActivatedAbility playAbility = findActivatedAbilityFromPlayable(card, availableMana, ability, game);
+                if (playAbility != null && !playable.contains(playAbility)) {
+                    playable.add(playAbility);
+                }
+            }
+        }
+
+        // Graveyards (all players in range)
+        for (UUID pid : game.getState().getPlayersInRange(getId(), game)) {
+            Player p = game.getPlayer(pid);
+            if (p == null) continue;
+            for (Card card : p.getGraveyard().getCards(game)) {
+                getPlayableFromObjectAll(game, Zone.GRAVEYARD, card, availableMana, playable);
+            }
+        }
+
+        // Exile
+        for (ExileZone exile : game.getExile().getExileZones()) {
+            for (Card card : exile.getCards(game)) {
+                getPlayableFromObjectAll(game, Zone.EXILED, card, availableMana, playable);
+            }
+        }
+
+        // Revealed
+        for (Cards revealed : game.getState().getRevealed().values()) {
+            for (Card card : revealed.getCards(game)) {
+                getPlayableFromObjectAll(game, game.getState().getZone(card.getId()), card, availableMana, playable);
+            }
+        }
+
+        // Outside: companion and sideboard (Wish effects)
+        for (Cards companion : game.getState().getCompanion().values()) {
+            for (Card card : companion.getCards(game)) {
+                getPlayableFromObjectAll(game, Zone.OUTSIDE, card, availableMana, playable);
+            }
+        }
+        for (UUID sideId : this.getSideboard()) {
+            Card sideCard = game.getCard(sideId);
+            if (sideCard != null) {
+                getPlayableFromObjectAll(game, Zone.OUTSIDE, sideCard, availableMana, playable);
+            }
+        }
+
+        // Library top card (each player in range)
+        for (UUID pid : game.getState().getPlayersInRange(getId(), game)) {
+            Player p = game.getPlayer(pid);
+            if (p != null && p.getLibrary().hasCards()) {
+                Card top = p.getLibrary().getFromTop(game);
+                if (top != null) {
+                    getPlayableFromObjectAll(game, Zone.LIBRARY, top, availableMana, playable);
+                }
+            }
+        }
+
+        // Other players’ hands (Sen Triplets style permissions; AI can see in sim)
+        for (UUID pid : game.getState().getPlayersInRange(getId(), game)) {
+            Player p = game.getPlayer(pid);
+            if (p != null && !p.getHand().isEmpty()) {
+                for (Card card : p.getHand().getCards(game)) {
+                    if (card != null) {
+                        getPlayableFromObjectAll(game, Zone.HAND, card, availableMana, playable);
+                    }
+                }
+            }
+        }
+
+        // Battlefield (activated abilities and special actions)
+        Map<String, ActivatedAbility> unique = new HashMap<>();
+        List<ActivatedAbility> activatedAll = new ArrayList<>();
+        for (Permanent permanent : game.getBattlefield().getAllActivePermanents()) {
+            boolean canUseActivated = permanent.canUseActivatedAbilities(game);
+            List<ActivatedAbility> current = new ArrayList<>();
+            getPlayableFromObjectAll(game, Zone.BATTLEFIELD, permanent, availableMana, current);
+            for (ActivatedAbility a : current) {
+                if (a instanceof SpecialAction || canUseActivated) {
+                    unique.putIfAbsent(a.toString(), a);
+                    activatedAll.add(a);
+                }
+            }
+        }
+
+        // Stack objects
+        for (StackObject so : game.getState().getStack()) {
+            List<ActivatedAbility> current = new ArrayList<>();
+            getPlayableFromObjectAll(game, Zone.STACK, so, availableMana, current);
+            for (ActivatedAbility a : current) {
+                unique.put(a.toString(), a);
+                activatedAll.add(a);
+            }
+        }
+
+        // Command zone (emblems, commanders)
+        for (CommandObject co : game.getState().getCommand()) {
+            List<ActivatedAbility> current = new ArrayList<>();
+            getPlayableFromObjectAll(game, Zone.COMMAND, co, availableMana, current);
+            for (ActivatedAbility a : current) {
+                unique.put(a.toString(), a);
+                activatedAll.add(a);
+            }
+        }
+
+        // Keep duplicates if that’s your policy (AI often wants all copies)
+        playable.addAll(activatedAll);
+
+        // Always include pass
+        playable.add(new PassAbility());
+
+        // Return copies to avoid sim coupling
+        return playable.stream().map(ActivatedAbility::copy).collect(Collectors.toList());
     }
     //TODO: make this more efficient
     @Deprecated
@@ -1556,6 +1712,62 @@ public class ComputerPlayer extends PlayerImpl {
             }
         }
         return all;
+    }
+    protected boolean autoPayFromPool(Ability ability, ManaCost unpaid, final Game game) {
+        // Only spend from floating mana. Do NOT activate mana abilities here.
+        // All special/alternate/additional costs (like Convoke/Improvise/Delve/Phyrexian/Life,
+        // sacrifice/discard/return, etc.) are handled by the engine via micro-decisions that
+        // ComputerPlayer already answers.
+
+        Set<ApprovingObject> approvingObjects = game.getContinuousEffects().asThough(ability.getSourceId(), AsThoughEffectType.SPEND_OTHER_MANA, ability, ability.getControllerId(), game);
+        boolean hasApprovingObject = !approvingObjects.isEmpty();
+
+        ManaCost cost;
+        if (unpaid instanceof ManaCosts) {
+            ManaCosts<ManaCost> manaCosts = (ManaCosts<ManaCost>) unpaid;
+            cost = manaCosts.get(manaCosts.size() - 1);
+        } else {
+            cost = unpaid;
+        }
+
+        ManaPool pool = getManaPool();
+
+        // Allow allocator to use any color from pool without manual unlocks
+        boolean prevAuto = pool.isAutoPayment();
+        boolean prevAutoRestricted = pool.isAutoPaymentRestricted();
+        pool.setAutoPayment(true);
+        pool.setAutoPaymentRestricted(false);
+
+        try {
+            unpaid.assignPayment(game, ability, pool, ability.getManaCostsToPay());
+        } finally {
+            // Restore allocator flags
+            pool.setAutoPayment(prevAuto);
+            pool.setAutoPaymentRestricted(prevAutoRestricted);
+        }
+        if(unpaid.isPaid()) {
+            return true;
+        }
+        // pay special mana like convoke cost (tap for pay)
+        SpecialAction specialAction = game.getState().getSpecialActions().getControlledBy(this.getId(), true).values()
+                .stream().min(Comparator.comparing(SpecialAction::toString))
+                .orElse(null);
+        ManaOptions specialMana = specialAction == null ? null : specialAction.getManaOptions(ability, game, unpaid);
+        if (specialMana != null) {
+            for (Mana netMana : specialMana) {
+                if (cost.testPay(netMana) || hasApprovingObject) {
+                    if (netMana instanceof ConditionalMana && !((ConditionalMana) netMana).apply(ability, game, getId(), cost)) {
+                        continue;
+                    }
+                    if (activateAbility(specialAction, game)) {
+                        return true;
+                    }
+                    // only one time try to pay to skip infinite AI loop
+                    break;
+                }
+            }
+        }
+        return false;
     }
 
     protected void simulateVariableCosts(Ability ability, List<Ability> options, Game game) {

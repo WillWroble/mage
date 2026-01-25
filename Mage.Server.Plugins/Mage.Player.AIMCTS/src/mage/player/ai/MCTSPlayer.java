@@ -2,14 +2,11 @@ package mage.player.ai;
 
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
-import mage.abilities.mana.ManaAbility;
+import mage.abilities.costs.mana.ManaCost;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
-import mage.game.combat.Combat;
-import mage.game.combat.CombatGroup;
-import mage.game.permanent.Permanent;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
@@ -45,7 +42,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
 
     public enum NextAction {
-        PRIORITY, CHOOSE_MODE, BLANK, CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE
+        PRIORITY, CHOOSE_NUM, BLANK, CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE
     }
 
     public MCTSPlayer(UUID id) {
@@ -94,9 +91,6 @@ public class MCTSPlayer extends ComputerPlayer {
             //game.firePriorityEvent(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
             boolean success = activateAbility(ability, game);
-            if(ability instanceof ManaAbility) {//automatically add manual mana activations
-                getPlayerHistory().prioritySequence.add(ability.copy());
-            }
             if(!success && !lastToAct) {//if decision costs need to be resolved let them simulate out
                 logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString());
                 illegalGameState(game);
@@ -127,6 +121,11 @@ public class MCTSPlayer extends ComputerPlayer {
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
         selectBlockersOneAtATime(source, game, defendingPlayerId);
+    }
+    @Override
+    public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
+        if(game.isPaused() || game.checkIfGameIsOver()) return false;
+        return autoPayFromPool(ability, unpaid, game);
     }
 
     @Override
@@ -201,7 +200,7 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if (outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1 || game.isPaused() || game.checkIfGameIsOver()) {
+        if (choice.getChoices().size() == 1 || game.isPaused() || game.checkIfGameIsOver()) {
             return chooseHelper(outcome, choice, game);
         }
         if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
@@ -267,6 +266,29 @@ public class MCTSPlayer extends ComputerPlayer {
         return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
     }
     @Override
+    protected int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
+        if(game.isPaused() || game.checkIfGameIsOver()) {
+            return min;
+        }
+        if(min >= max) {//one or fewer choices
+            return min;
+        }
+        if(max - min > 64) {//clamp for safety
+            max = min + 64;
+        }
+        numOptionsSize = max - min + 1;
+        if (!actionScript.numSequence.isEmpty()) {
+            int chosenNum = actionScript.numSequence.pollFirst();
+            getPlayerHistory().numSequence.add(chosenNum);
+            return chosenNum + min;
+        }
+        decisionText = "choose num for " + source.toString();
+        game.pause();
+        lastToAct = true;
+        nextAction = NextAction.CHOOSE_NUM;
+        return 0;
+    }
+    @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) {
             return super.chooseModeHelper(modes, source, game);
@@ -275,25 +297,8 @@ public class MCTSPlayer extends ComputerPlayer {
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
         if(modes.getMinModes() == 0) modeOptions.add(null);
-        modeOptionsSize = modeOptions.size();
-        if(modeOptions.isEmpty()) {
-            logger.debug("no mode options - fizzle");
-            return null; //fizzle
-        }
-        if(modeOptions.size() == 1) {
-            return modeOptions.iterator().next();
-        }
-        if (!actionScript.modeSequence.isEmpty()) {
-            int chosenMode = actionScript.modeSequence.pollFirst();
-            getPlayerHistory().modeSequence.add(chosenMode);
-            if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried mode: %s ", chosenMode));
-            return modeOptions.get(chosenMode);
-        }
-        decisionText = "choose mode for " + source.toString();
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.CHOOSE_MODE;
-        return super.chooseModeHelper(modes, source, game);
+        int selected = makeChoiceAmount(0, modeOptions.size()-1, game, source, false);
+        return modeOptions.get(selected);
     }
     @Override
     public void illegalGameState(Game game) {

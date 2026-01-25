@@ -1,19 +1,13 @@
 package mage.player.ai;
 
 import mage.MageObject;
-import mage.abilities.Ability;
-import mage.abilities.ActivatedAbility;
-import mage.abilities.Mode;
-import mage.abilities.Modes;
+import mage.abilities.*;
 import mage.abilities.common.PassAbility;
-import mage.abilities.mana.ManaAbility;
+import mage.abilities.costs.mana.ManaCost;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
-import mage.constants.Outcome;
-import mage.constants.PhaseStep;
-import mage.constants.RangeOfInfluence;
-import mage.constants.Zone;
+import mage.constants.*;
 import mage.game.Game;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.players.Player;
@@ -105,6 +99,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             pass(game);
             return false;
         }
+        logger.info("playable abilities: " + playableAbilities);
         game.setLastPriority(playerId);
         Ability ability = null;
         MCTSNode best = getNextAction(game, NextAction.PRIORITY);
@@ -114,9 +109,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             ability = best.getAction().copy();
             success = activateAbility((ActivatedAbility) ability, game);
             root = best;
-        }
-        if(ability instanceof ManaAbility) {//automatically add manual mana activations
-            getPlayerHistory().prioritySequence.add(ability.copy());
         }
         if(!success) {
             logger.error("failed to activate chosen ability - passing instead");
@@ -129,11 +121,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return false;
         logLife(game);
         printBattlefieldScore(game, playerId);
-        if(root.getAction().getTargets().isEmpty()) {
+        if(root.getAction().getTargets().isEmpty() || game.getEntityName(root.getAction().getTargets().getFirstTarget()).equals("null")) {
             logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getMeanScore());
         } else {
             if(game.getEntityName(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntityName(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntityName(root.getAction().getTargets().getFirstTarget()) + ") success ratio: " + root.getMeanScore());
             } else if (game.getPlayer(root.getAction().getTargets().getFirstTarget()) != null) {
                 logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
             } else {
@@ -182,6 +174,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
         selectBlockersOneAtATime(source, game, defendingPlayerId);
     }
+    @Override
+    public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
+        return autoPayFromPool(ability, unpaid, game);
+    }
+
     @Override
     protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
         // choose itself for starting player all the time
@@ -244,7 +241,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
         if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1 || game.isSimulation()) {
-            return chooseHelper(outcome, choice, game);
+            //return chooseHelper(outcome, choice, game);
         }
         if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
             if (chooseCreatureType(outcome, choice, game)) {
@@ -275,28 +272,35 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
         return true;
     }
+    @Override
+    protected int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
+        if(game.isPaused() || game.checkIfGameIsOver()) {
+            return min;
+        }
+        if(min >= max) {//one or fewer choices
+            return min;
+        }
+        if(max - min > 64) {//clamp for safety
+            max = min + 64;
+        }
+        numOptionsSize = max - min + 1;
+        logger.info("base choose amount " + min + " to " + max);
+        root = getNextAction(game, NextAction.CHOOSE_NUM);
+        if(root == null) {
+            return min;
+        }
+        int chosenNum = root.modeAction;
+        logger.info(String.format("Choosing num %s", chosenNum + min));
+        getPlayerHistory().numSequence.add(chosenNum);
+
+        return chosenNum + min;
+    }
     public Mode chooseMode(Modes modes, Ability source, Game game) {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
         if(modes.getMinModes() == 0) modeOptions.add(null);
-        modeOptionsSize = modeOptions.size();
-        if(modeOptions.isEmpty()) {
-            logger.info("choice is empty, spell fizzled");
-            return null;
-        }
-        if(modeOptions.size() == 1) {
-            return modeOptions.iterator().next();
-        }
-        logger.info("base choose mode " + modes.toString());
-        root = getNextAction(game, NextAction.CHOOSE_MODE);
-        if(root == null) {
-            return null;
-        }
-        int chosenMode = root.modeAction;
-        logger.info(String.format("Choosing mode %s", chosenMode));
-        getPlayerHistory().modeSequence.add(chosenMode);
-
+        int chosenMode = makeChoiceAmount(0, modeOptions.size()-1, game, source, false);
         return modeOptions.get(chosenMode);
     }
     @Override

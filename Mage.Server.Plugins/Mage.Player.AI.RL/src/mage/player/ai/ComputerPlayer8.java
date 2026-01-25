@@ -2,10 +2,8 @@ package mage.player.ai;
 
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
-import mage.abilities.mana.ManaAbility;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.GameException;
 import mage.game.events.GameEvent;
 import mage.players.Player;
 import mage.target.Target;
@@ -15,10 +13,6 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
-
-import static mage.player.ai.ComputerPlayerMCTS2.createAllActionsFromDeck;
-import static mage.player.ai.ComputerPlayerMCTS2.createAllTargetsFromDecks;
 
 /**
  * minimax player that logs priority decisions (as one hot vectors) and state values (as minimax derived score of root normalized to -1,1)
@@ -186,7 +180,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         //save state vector
                         Set<Integer> stateVector = encoder.processState(game, getId());
                         //add scores
-                        double perspectiveFactor = getId() == encoder.getMyPlayerID() ? 1.0 : -1.0;
+                        double perspectiveFactor = getId() == encoder.getMyPlayerId() ? 1.0 : -1.0;
                         double score = perspectiveFactor * Math.tanh(root.score * 1.0 / 20000);
                         encoder.addLabeledState(stateVector, actionVec, score, MCTSPlayer.NextAction.PRIORITY, name.equals("PlayerA"));
                     }
@@ -202,9 +196,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                     }
                 }
                 this.activateAbility((ActivatedAbility) ability, game);
-                if(ability instanceof ManaAbility) {//automatically add manual mana activations
-                    getPlayerHistory().prioritySequence.add(ability.copy());
-                }
                 if (ability.isUsesStack()) {
                     usedStack = true;
                 }

@@ -319,6 +319,7 @@ public class GameState implements Serializable, Copyable<GameState> {
             } else {
                 sb.append(player.getHand().size());
             }
+            sb.append("pool").append(player.getManaPool().getMana());
             sb.append("library").append(player.getLibrary().size()).append("graveyard").append(player.getGraveyard());
         }
 
@@ -361,6 +362,7 @@ public class GameState implements Serializable, Copyable<GameState> {
             } else {
                 sb.append(player.getHand().size());
             }
+            sb.append("pool").append(player.getManaPool().getMana());
             sb.append("library").append(player.getLibrary().size());
             sb.append("graveyard");
             sb.append(player.getGraveyard().getValue(game));
@@ -421,6 +423,7 @@ public class GameState implements Serializable, Copyable<GameState> {
             } else {
                 sb.append(player.getHand().size());
             }
+            sb.append("pool").append(player.getManaPool().getMana());
             sb.append("library").append(player.getLibrary().size());
             sb.append("graveyard");
             sb.append(player.getGraveyard().getValue(game));

@@ -176,8 +176,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if(offlineMode) {
             node.policy = null;
             if(myPlayer.getNextAction().equals(NextAction.PRIORITY)) {
-                int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
-                node.networkScore = Math.tanh(heuristicScore * 1.0 / 50000);
+                //int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
+                //node.networkScore = Math.tanh(heuristicScore * 1.0 / 50000);
+                node.networkScore = GameStateEvaluator3.evaluateNormalized(playerId, game);
             } else {
                 if(node.getParent() != null) {
                     node.networkScore = node.getParent().networkScore;
