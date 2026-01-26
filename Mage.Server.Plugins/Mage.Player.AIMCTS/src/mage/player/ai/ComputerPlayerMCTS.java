@@ -44,6 +44,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
     //how confident to be in network policy priors (lower = less confident)
     public static double POLICY_PRIOR_TEMP = 1.5;
+    //how much to discount the Q scores backpropagation through MCTS; lower means less confident in simulated outcomes
+    public static double BACKPROP_DISCOUNT = 0.99;
     //exploration constant
     public static double C_PUCT = 1;
     //adjust based on available RAM and threads running
@@ -83,11 +85,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
                 logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList(hand.getCards(game)));
                 lastPhase = game.getTurn().getValue(game.getTurnNum());
-                if (MCTSNode.USE_ACTION_CACHE) {
-                    int count = MCTSNode.cleanupCache(game.getTurnNum());
-                    if (count > 0)
-                        logger.info("Removed " + count + " cache entries");
-                }
             }
         }
         game.getState().setPriorityPlayerId(playerId);
@@ -151,7 +148,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (root != null) {
             root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), nextAction, getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
         }
-        if (root == null || root.getStateValue() == null) {
+        if (root == null || root.rootState == null) {
             Game sim = createMCTSGame(game.getLastPriority());
             MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
             player.setNextAction(nextAction);//can remove this

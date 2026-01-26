@@ -95,13 +95,11 @@ public class Config {
     public static class MctsConfig {
         public final int searchBudget;
         public final int timeoutMs;
-        public final double cPuct;
         public final double tdDiscount;
 
         public MctsConfig(Map<String, Object> raw) {
             this.searchBudget = ((Number) raw.getOrDefault("search_budget", 300)).intValue();
             this.timeoutMs = ((Number) raw.getOrDefault("timeout_ms", 4000)).intValue();
-            this.cPuct = ((Number) raw.getOrDefault("c_puct", 1.0)).doubleValue();
             this.tdDiscount = ((Number) raw.getOrDefault("td_discount", 0.95)).doubleValue();
         }
     }

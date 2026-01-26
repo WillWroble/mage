@@ -20,7 +20,6 @@ player_a:
   mcts:
     search_budget: 1000
     timeout_ms: 4000
-    c_puct: 1.0 #does nothing
     td_discount: 0.95
 
   mulligans:
@@ -43,14 +42,13 @@ player_b:
   mcts:
     search_budget: 1000
     timeout_ms: 4000
-    c_puct: 1.0 #does nothing
     td_discount: 0.95
 
   mulligans:
     enabled: false
 
 training:
-  games: 200
+  games: 4
   threads: 4
   max_turns: 50 #does nothing
 

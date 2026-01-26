@@ -24,8 +24,6 @@ public class Features implements Serializable {
 
     private final Map<String, Features> subFeatures;
     private final Map<String, Integer> occurrences;
-    private final Map<String, Features> categoryMap; //isn't reset between states, anchored at parent
-    private final Set<Features> activeCategories; //resets every state represents temporary category features fall under
     public boolean passToParent = true;
 
     private transient StateEncoder encoder;
@@ -40,8 +38,6 @@ public class Features implements Serializable {
     public Features() {
         subFeatures = new HashMap<>();
         occurrences = new HashMap<>();
-        categoryMap = new HashMap<>();
-        activeCategories = new HashSet<>();
         parent = null;
         featureName = "root";
         seed = GLOBAL_SEED;
@@ -67,19 +63,9 @@ public class Features implements Serializable {
         for (String name : subFeatures.keySet()) {
             subFeatures.get(name).setEncoder(encoder);
         }
-        for (String name : categoryMap.keySet()) {
-            categoryMap.get(name).setEncoder(encoder);
-        }
+
     }
-    private Features getCategory(String name) {
-        if (categoryMap.containsKey(name)) { //already contains category
-            return categoryMap.get(name);
-        } else { //completely new
-            Features newCat = new Features(name + "_" + featureName, encoder, hash64(name, seed));
-            categoryMap.put(name, newCat);
-            return newCat;
-        }
-    }
+
 
     /**
      * gets subfeatures at name or creates them if they dont exist
@@ -107,35 +93,16 @@ public class Features implements Serializable {
         }
     }
 
-    /**
-     * similar to a subfeature a category will pool features within itself. however
-     * unlike subfeatures a feature can inherit multiple categories(ie card type and color).
-     * you can think of subfeatures as abstract classes and categories as interfaces
-     * this function creates/finds the category with the given name and adds it as a
-     * category for this feature to pass up to, similar to the parent
-     * Categories should always be added before features you want to pool into them
-     *
-     * can not add categories to root!!
-     *
-     * @param name
-     */
-    public void addCategory(String name) {
-        addFeature(name); //first add as feature since every category is also a feature
-        Features categoryFeature = parent.getCategory(name);
-        activeCategories.add(categoryFeature);
-    }
 
     public void addFeature(String name) {
         addFeature(name, true);
     }
 
     public void addFeature(String name, boolean callParent) {
-        //usually add feature to parent/categories
+        //usually add feature to parent
         if (parent != null && callParent && passToParent) {
             parent.addFeature(name);
-            for (Features c : activeCategories) {
-                c.addFeature(name);
-            }
+
         }
         int n;
         n = occurrences.getOrDefault(name, 0);
@@ -164,13 +131,9 @@ public class Features implements Serializable {
     }
 
     public void stateRefresh() {
-        activeCategories.clear();
         occurrences.replaceAll((k, v) -> 0);
         for (String n : subFeatures.keySet()) {
             subFeatures.get(n).stateRefresh();
-        }
-        for (String n : categoryMap.keySet()) {
-            categoryMap.get(n).stateRefresh();
         }
     }
     private void addIndex(long h, String key) {
@@ -182,19 +145,8 @@ public class Features implements Serializable {
                 nameSpace = indexFor(hash64(featureName, parent.seed));
             } else {
                 nameSpace = -1;
-                if(!featureName.equals("root")) {
-                    key = (featureName + "::" + key);
-                }
             }
             encoder.featureMap.addFeature(key, nameSpace, idx);
-        }
-        if (encoder.seenIndices != null) {
-            if (!encoder.seenIndices.contains((int) h)) {
-                encoder.seenIndices.add((int) h);
-                if (Features.printNewFeatures) logger.info("new feature, " + key + " in " + featureName + ", at index: " + idx);
-            } else {
-                if (Features.printOldFeatures) logger.info("seen feature, " + key  + " in " + featureName + ", at index: " + idx);
-            }
         }
     }
     private static int indexFor(long h) {

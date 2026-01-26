@@ -16,6 +16,17 @@ public class FeatureMap implements Serializable {
     private Map<Integer, Set<Pair<Long, String>>> map = new HashMap<>();
     private static final Logger logger = Logger.getLogger(FeatureMap.class);
 
+    public int getFeatureCount() {
+        int count = 0;
+        for (Map.Entry<Integer, Set<Pair<Long, String>>> entry : map.entrySet()) {
+            count += entry.getValue().size();
+        }
+        return count;
+    }
+    public int getIndexCount() {
+        return map.size();
+    }
+
     public void addFeature(String name, long nameSpace, int idx) {
         if(map.containsKey(idx)) {
             map.get(idx).add(new Pair<>(nameSpace, name));

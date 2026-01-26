@@ -35,7 +35,7 @@ public class MCTSNode {
 
     public int visits = 0;
     public int virtual_visits = 0;
-    private int wins = 0;
+    public boolean isFinalized = false;
     public double score = 0;
     public double virtual_score = 0;
     public double networkScore;//initial score given from value network
@@ -380,12 +380,7 @@ public class MCTSNode {
             virtual_score += result;
         }
         if (parent != null) {
-            double discount = 0.99;
-            //if(parent.nextAction.equals(MCTSPlayer.NextAction.PRIORITY)) discount = 1;
-            //if(!parent.playerId.equals(targetPlayer)) discount = 1;
-            //if(parent.isRandomTransition) discount = 1;
-            //if(discount > .1) logger.warn("discount: " + discount);
-            parent.backpropagate(result * discount, virtual);
+            parent.backpropagate(result * ComputerPlayerMCTS.BACKPROP_DISCOUNT, virtual);
         }
     }
     public void resetVirtual() {
@@ -534,6 +529,10 @@ public class MCTSNode {
     public String getStateValue() {
         return stateValue;
     }
+    public String getFullStateValue() {
+        return fullStateValue;
+    }
+
 
     public double getMeanScore() {
         if (getVisits() > 0)
@@ -597,7 +596,7 @@ public class MCTSNode {
         int showCount = 0;
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
-            if(current.fullStateValue == null) continue;//tree can have unfinalized nodes
+            if(!current.isFinalized || current.fullStateValue==null) continue;//tree can have unfinalized nodes
             if(showCount < 10) {
                 logger.debug(current.prefixScript.toString() + " =should= " + prefixScript.toString());
                 logger.debug(current.opponentPrefixScript.toString() + " =should= " + opponentPrefixScript.toString());
@@ -612,62 +611,6 @@ public class MCTSNode {
         }
         return null;
     }
-
-    public void merge(MCTSNode merge) {
-        // Check that states match; if not, no merge occurs.
-        if (!stateValue.equals(merge.stateValue) || !merge.chooseTargetAction.equals(chooseTargetAction)) {
-            logger.info("mismatched merge states at root");
-            return;
-        }
-
-        // Update accumulated statistics atomically.
-        synchronized (this) {
-            this.visits += merge.visits;
-            this.wins += merge.wins;
-            this.score += merge.score;
-            this.networkScore = merge.networkScore;
-        }
-
-        // Make a snapshot of the merge node's children.
-        List<MCTSNode> mergeChildren;
-        synchronized (merge.children) {
-            mergeChildren = new ArrayList<>(merge.children);
-        }
-
-        // Synchronize on this.children for safe merging.
-        synchronized (this.children) {
-            Iterator<MCTSNode> iterator = mergeChildren.iterator();
-            while (iterator.hasNext()) {
-                MCTSNode mergeChild = iterator.next();
-                boolean merged = false;
-                // Iterate over our children.
-                List<MCTSNode> tempChildren = new ArrayList<>(this.children);
-                for (MCTSNode child : tempChildren) {
-                    if (mergeChild.action != null && child.action != null) {
-                        if (mergeChild.action.toString().equals(child.action.toString()) && mergeChild.action.getTargets().equals(child.action.getTargets())) {
-                            if (!mergeChild.stateValue.equals(child.stateValue) || !mergeChild.chooseTargetAction.equals(child.chooseTargetAction)) {
-                                // Record mismatch if needed; skip merge.
-                            } else {
-                                // Recursively merge the matching child.
-                                child.merge(mergeChild);
-                                merged = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if (merged) {
-                    iterator.remove();
-                }
-            }
-
-            // Any remaining merge children that weren't merged get added as new children.
-            for (MCTSNode child : mergeChildren) {
-                child.parent = this;
-                this.children.add(child);
-            }
-        }
-    }
     public int size() {
         int num = 1;
         synchronized (children) {
@@ -677,70 +620,10 @@ public class MCTSNode {
         }
         return num;
     }
-    private static final ConcurrentHashMap<String, List<ActivatedAbility>> playablesCache = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, List<List<UUID>>> attacksCache = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, List<List<List<UUID>>>> blocksCache = new ConcurrentHashMap<>();
 
-    private static long playablesHit = 0;
-    private static long playablesMiss = 0;
-    private static long attacksHit = 0;
-    private static long attacksMiss = 0;
-    private static long blocksHit = 0;
-    private static long blocksMiss = 0;
-
-    protected static List<ActivatedAbility> getPlayables(MCTSPlayer player, String state, Game game) {
-        if (playablesCache.containsKey(state)) {
-            playablesHit++;
-            return playablesCache.get(state);
-        }
-        else {
-            playablesMiss++;
-            List<ActivatedAbility> abilities = player.getPlayableAbilities(game);
-            playablesCache.put(state, abilities);
-            return abilities;
-        }
-    }
-
-
-    public static int cleanupCache(int turnNum) {
-        Set<String> playablesKeys = playablesCache.keySet();
-        Iterator<String> playablesIterator = playablesKeys.iterator();
-        int count = 0;
-        while(playablesIterator.hasNext()) {
-            String next = playablesIterator.next();
-            int cacheTurn = Integer.parseInt(next.split(":", 2)[0].substring(1));
-            if (cacheTurn < turnNum) {
-                playablesIterator.remove();
-                count++;
-            }
-        }
-
-        Set<String> attacksKeys = attacksCache.keySet();
-        Iterator<String> attacksIterator = attacksKeys.iterator();
-        while(attacksIterator.hasNext()) {
-            int cacheTurn = Integer.parseInt(attacksIterator.next().split(":", 2)[0].substring(1));
-            if (cacheTurn < turnNum) {
-                attacksIterator.remove();
-                count++;
-            }
-        }
-
-        Set<String> blocksKeys = blocksCache.keySet();
-        Iterator<String> blocksIterator = blocksKeys.iterator();
-        while(blocksIterator.hasNext()) {
-            int cacheTurn = Integer.parseInt(blocksIterator.next().split(":", 2)[0].substring(1));
-            if (cacheTurn < turnNum) {
-                blocksIterator.remove();
-                count++;
-            }
-        }
-
-        return count;
-    }
     public void reset() {
         children.clear();
         score = 0;
-        wins = 0;
         visits = 0;
         virtual_visits = 0;
         depth = 1;
@@ -832,20 +715,6 @@ public class MCTSNode {
         finalizeState(rootGame);
         return rootGame;
     }
-    public static void logHitMiss() {
-        if (USE_ACTION_CACHE) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("Playables Cache -- Hits: ").append(playablesHit).append(" Misses: ").append(playablesMiss).append('\n');
-            sb.append("Attacks Cache -- Hits: ").append(attacksHit).append(" Misses: ").append(attacksMiss).append('\n');
-            sb.append("Blocks Cache -- Hits: ").append(blocksHit).append(" Misses: ").append(blocksMiss).append('\n');
-            logger.info(sb.toString());
-        }
-    }
-    public static void clearCaches() {
-        playablesCache.clear();
-        attacksCache.clear();
-        blocksCache.clear();
-    }
     /**
      * Copies game and replaces all players in copy with simulated players
      * Shuffles each players library so that there is no knowledge of its order
@@ -865,14 +734,12 @@ public class MCTSNode {
         randomizePlayers(sim, playerId);
         return sim;
     }
+    @Deprecated
     public int simulate(UUID playerId, Game game) {
-//        long startTime = System.nanoTime();
         Game sim = createSimulation(game, playerId);
         sim.resume();
-//        long duration = System.nanoTime() - startTime;
         int retVal = -1;  //anything other than a win is a loss
         for (Player simPlayer: sim.getPlayers().values()) {
-//            logger.info(simPlayer.getName() + " calculated " + ((SimulatedPlayerMCTS)simPlayer).getActionCount() + " actions in " + duration/1000000000.0 + "s");
             if (simPlayer.getId().equals(playerId) && simPlayer.hasWon()) {
                 logger.info("AI won the simulation");
                 retVal = 1;

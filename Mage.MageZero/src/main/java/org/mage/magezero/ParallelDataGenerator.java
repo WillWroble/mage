@@ -16,15 +16,9 @@ import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
-import org.roaringbitmap.RoaringBitmap;
-import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 
-import java.io.DataOutputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -33,8 +27,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static java.nio.file.StandardOpenOption.READ;
 
 
 /**
@@ -45,13 +37,10 @@ import static java.nio.file.StandardOpenOption.READ;
 public class ParallelDataGenerator {
 
     // ================================== FILE PATHS ==================================
-    protected static String SEEN_INDICES_PATH = "seenIndices.roar";
     protected static String SEEN_FEATURES_PATH = "seenFeatures.ser";
     protected static String FEATURE_TABLE_OUT = "FeatureTable.txt";
     // ================================== GLOBAL FIELDS ==================================
-    private RoaringBitmap seenIndices = new RoaringBitmap();
     private final FeatureMap seenFeatures = new FeatureMap();
-    private int initialRawSize;
     public final AtomicInteger gameCount = new AtomicInteger(0);
     public final AtomicInteger winCount = new AtomicInteger(0);
     protected RemoteModelEvaluator remoteModelEvaluatorA = null;
@@ -92,14 +81,7 @@ public class ParallelDataGenerator {
         winCount.set(0);
         gameCount.set(0);
 
-        try (FileChannel ch = FileChannel.open(Paths.get(SEEN_INDICES_PATH), READ)) {
-            MappedByteBuffer mbb = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
-            ImmutableRoaringBitmap imm = new ImmutableRoaringBitmap(mbb);
-            seenIndices = imm.toRoaringBitmap();
-            logger.info("global seen features list size: " + seenIndices.getCardinality());
-        } catch (IOException e) {
-            logger.warn("external seen index list not found");
-        }
+
         String modelUrlA = "http://" + Config.INSTANCE.server.host + ":" + Config.INSTANCE.server.port;
         try {
             remoteModelEvaluatorA = new RemoteModelEvaluator(modelUrlA);
@@ -114,7 +96,6 @@ public class ParallelDataGenerator {
             logger.warn("Failed to establish connection to network model B; falling back to offline mode");
             remoteModelEvaluatorB = null;
         }
-        initialRawSize = seenIndices.getCardinality();
         Features.useFeatureMap = Config.INSTANCE.logging.logFeatureHash;
     }
     public void print_known_feature_map() {
@@ -154,7 +135,7 @@ public class ParallelDataGenerator {
     public void generateData() {
 
 
-        initialRawSize = 0;
+
         loadAllFiles();
         ComputerPlayerMCTS2.SHOW_THREAD_INFO = true;
         LabeledStateWriter fwA;
@@ -190,14 +171,11 @@ public class ParallelDataGenerator {
             writer.join();
         } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
 
-        saveRoaring(seenIndices, SEEN_INDICES_PATH);
         saveFeatureMap(seenFeatures, SEEN_FEATURES_PATH);
 
         logger.info("Processing " + fwA.batchStates + " states.");
-        logger.info("Initial feature count: " + initialRawSize);
         logger.info("Final unique feature count from dataset: " + fwA.batchFeatures.size());
-        logger.info("Global unique feature count: " + seenIndices.getCardinality());
-        logger.info("Features added: " + (seenIndices.getCardinality() - initialRawSize));
+
 
         if(Config.INSTANCE.logging.writeFinalWR) {
             writeResults("trainingWinRates.txt", "WR with " + deckNameA + " vs " +
@@ -308,9 +286,6 @@ public class ParallelDataGenerator {
             Player playerA = createLocalPlayer(game, "PlayerA", Config.INSTANCE.playerA.deckPath, localMatch);
             Player playerB = createLocalPlayer(game, "PlayerB", Config.INSTANCE.playerB.deckPath, localMatch);
 
-            threadEncoderA.seenIndices = seenIndices.clone();
-            threadEncoderB.seenIndices = seenIndices.clone();
-
 
             configurePlayer(playerA, threadEncoderA, threadEncoderB);
             configurePlayer(playerB, threadEncoderB, threadEncoderA);
@@ -351,8 +326,7 @@ public class ParallelDataGenerator {
             game.start(null);
             boolean playerAWon = playerA.hasWon();
             //merge to the final features
-            synchronized (seenIndices) {
-                seenIndices.or(threadEncoderA.seenIndices);
+            synchronized (seenFeatures) {
                 seenFeatures.merge(threadEncoderA.featureMap);
             }
             if(playerA.hasWon()) winCount.incrementAndGet();
@@ -438,7 +412,15 @@ public class ParallelDataGenerator {
             logger.warn("couldn't load feature map");
         }
         try {
+            int initialFeatureSize = baseMap.getFeatureCount();
+            int initialIndexSize = baseMap.getIndexCount();
+            logger.info("Initial feature count: " + initialFeatureSize);
+            logger.info("Initial index count: " + initialIndexSize);
             baseMap.merge(fm);
+            logger.info("Global unique feature count: " + baseMap.getFeatureCount());
+            logger.info("Global index count: " + baseMap.getIndexCount());
+            logger.info("Features added: " + (baseMap.getFeatureCount() - initialFeatureSize));
+            logger.info("Indices added: " + (baseMap.getIndexCount() - initialIndexSize));
             baseMap.saveToFile(filePath);
         } catch (IOException e) {
             logger.warn("couldn't save feature map");
@@ -448,27 +430,6 @@ public class ParallelDataGenerator {
         } catch (IOException e) {
             logger.warn("couldn't print feature table to text file");
         }
-    }
-
-    void saveRoaring(RoaringBitmap rb, String filePath) {
-        try (DataOutputStream out = new DataOutputStream(new FileOutputStream(filePath))) {
-            rb.serialize(out);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-    public static void printMapByValue(Map<String, Integer> map) {
-        if (map == null || map.isEmpty()) {
-            System.out.println("(empty)");
-            return;
-        }
-
-        int maxKeyLen = map.keySet().stream().mapToInt(String::length).max().orElse(0);
-
-        map.entrySet().stream()
-                .sorted(Comparator.<Map.Entry<String,Integer>>comparingInt(Map.Entry::getValue).reversed()
-                        .thenComparing(Map.Entry::getKey)) // tie-breaker: key asc
-                .forEach(e -> System.out.printf("%-" + maxKeyLen + "s  : %,d%n", e.getKey(), e.getValue()));
     }
     protected Player createLocalPlayer(Game game, String name, String deckPath, Match match) throws GameException {
         Player player = createPlayer(name, game.getRangeOfInfluence());

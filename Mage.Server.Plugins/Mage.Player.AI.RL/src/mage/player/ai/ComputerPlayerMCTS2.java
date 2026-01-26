@@ -1,21 +1,14 @@
 package mage.player.ai;
 
 
-import mage.abilities.Ability;
-import mage.abilities.ActivatedAbility;
-import mage.abilities.effects.Effect;
-import mage.abilities.effects.common.CreateTokenEffect;
-import mage.cards.Card;
-import mage.cards.decks.Deck;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.game.GameException;
-import mage.game.permanent.token.Token;
 import mage.player.ai.MCTSPlayer.NextAction;
 import mage.player.ai.score.GameStateEvaluator2;
 import mage.player.ai.score.GameStateEvaluator3;
 import mage.players.Player;
+import mage.players.PlayerScript;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 
@@ -40,7 +33,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
     is enabled by default if no network is found*/
     public boolean offlineMode = false;
-    protected static String MODEL_URL = "http://127.0.0.1:50052";
+    public String DEFAULT_URL = "http://127.0.0.1:50052";
     public transient RemoteModelEvaluator nn;
 
 
@@ -58,84 +51,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         super(player); nn = player.nn;
         stateEncoder = player.stateEncoder;
     }
-    public static void createAllActionsFromDeck(Deck deck, Map<String, Integer> actionMap) throws GameException {
-        logger.info("createAllActionsFromDeck; deck size: " + deck.getCards().size());
-        if (deck.getMaindeckCards().size() < 40) {
-            throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
-        }
-        //pass is always 0
-        actionMap.put("Pass", 0);
-        int index = 1;
-        List<Card> sortedCards = new ArrayList<>(deck.getCards());
-        sortedCards.sort(Comparator.comparing(Card::getName));
-        for(Card card : sortedCards) {
-            List<Ability> sortedAbilities = new ArrayList<>(card.getAbilities());
-            sortedAbilities.sort(Comparator.comparing(Ability::toString));
-            for(Ability aa : sortedAbilities) {
-                if(aa instanceof ActivatedAbility) {
-                    String name = aa.toString();
-                    if (!actionMap.containsKey(name)) {
-                        actionMap.put(name, index++);
-                        logger.info("mapping " + name + " to " + (index - 1));
-                    }
-                }
-            }
-        }
-    }
-    public static void createAllTargetsFromDecks(Deck deckA, Deck deckB, Map<String, Integer> targetMap, String nameA, String nameB) throws GameException {
-        Deck[] decks = new Deck[] {deckA, deckB};
-        //null (no targets) is always 0
-        targetMap.put("null", 0);
-        targetMap.put(nameA, 1);
-        targetMap.put(nameB, 2);
-        int index = 3;
-        for(Deck deck : decks) {
-            if (deck.getMaindeckCards().size() < 40) {
-                throw new IllegalArgumentException("Couldn't load deck, deck size=" + deck.getMaindeckCards().size());
-            }
-            List<Card> sortedCards = new ArrayList<>(deck.getCards());
-            sortedCards.sort(Comparator.comparing(Card::getName));
-            for (Card card : sortedCards) {
-                if(!targetMap.containsKey(card.getName())) {
-                    targetMap.put(card.getName(), index++);
-                    logger.info("mapping " + card.getName() + " to " + (index - 1));
-                }
-                //check for tokens
-                List<Ability> sortedAbilities = new ArrayList<>(card.getAbilities());
-                sortedAbilities.sort(Comparator.comparing(Ability::toString));
-                for (Ability ta : sortedAbilities) {
-                    List<Effect>  sortedEffects = new ArrayList<>(ta.getEffects());
-                    sortedEffects.sort(Comparator.comparing(Effect::toString));
-                    for (Effect effect : sortedEffects) {
-                        if (effect instanceof CreateTokenEffect) {
-                            CreateTokenEffect createTokenEffect = (CreateTokenEffect) effect;
-                            List<Token> sortedTokens = new ArrayList<>(createTokenEffect.tokens);
-                            sortedTokens.sort(Comparator.comparing(Token::getName));
-                            for (Token token : sortedTokens) {
-                                String name = token.getName();
-                                if (!targetMap.containsKey(token.getName())) {
-                                    targetMap.put(name, index++);
-                                    logger.info("mapping " + name + " to " + (index - 1));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    public void actionsInit(Game game) {
-        Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
-        actionEncoder = new ActionEncoder();
-        //make action maps
-//        try {
-//            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
-//            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
-//            createAllTargetsFromDecks(getMatchPlayer().getDeck(), opponent.getMatchPlayer().getDeck(), actionEncoder.targetMap, getName(), opponent.getName());
-//        } catch (GameException e) {
-//            throw new RuntimeException(e);
-//        }
-    }
     public void RLInit(Game game) {
         logger.info("RL init for " + getName() + " (MZ ver1.2)");
         Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
@@ -143,12 +58,10 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         stateEncoder = new StateEncoder();
         stateEncoder.setAgent(getId());
         stateEncoder.setOpponent(opponent.getId());
-        stateEncoder.seenIndices = null;
         //find model endpoint
         try {
-            nn = new RemoteModelEvaluator(MODEL_URL);
+            nn = new RemoteModelEvaluator(DEFAULT_URL);
         } catch (Exception e) {
-            e.printStackTrace();
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
             offlineMode = true;
         }
@@ -176,8 +89,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if(offlineMode) {
             node.policy = null;
             if(myPlayer.getNextAction().equals(NextAction.PRIORITY)) {
-                //int heuristicScore = GameStateEvaluator2.evaluate(playerId, game).getTotalScore();
-                //node.networkScore = Math.tanh(heuristicScore * 1.0 / 50000);
                 node.networkScore = GameStateEvaluator3.evaluateNormalized(playerId, game);
             } else {
                 if(node.getParent() != null) {
@@ -251,7 +162,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             RLInit(game);
         }
         if(actionEncoder == null) {
-            actionsInit(game);
+            actionEncoder = new ActionEncoder();
         }
         root.resetVirtual();
         int initialVisits = root.getVisits();
@@ -298,11 +209,21 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             //temporary reference to a game that represents this node's state
             Game tempGame = null;
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
-                tempGame = current.getGame(); //can become terminal here
-                if(!current.isTerminal() && ((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed) {//remove child if failed
-                    if(current.getParent() != null) current.getParent().purge(current);
-                    continue;
+                tempGame = current.getGame();
+                if(!tempGame.checkIfGameIsOver()) {
+                    //remove child if failed script or node is already in tree
+                    if (((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed
+                            || (current != root && root.getMatchingState(current.getFullStateValue(), current.nextAction, current.prefixScript, current.opponentPrefixScript) != null)) {
+                        if (current.getParent() != null) {
+                            current.getParent().purge(current);
+                        } else {
+                            logger.error("tried purging root node");
+                        }
+                        continue;
+                    }
                 }
+                //finalize node
+                current.isFinalized = true;
             }
             double result;
             if (!current.isTerminal()) {
@@ -336,7 +257,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             logger.info("Total: simulated " + totalSimulations + " evaluations in " + totalThinkTime
                     + " seconds - Average: " + (totalThinkTime > 0 ? totalSimulations / totalThinkTime : 0));
         }
-        MCTSNode.logHitMiss();
     }
     int[] getActionVec(MCTSNode node, boolean isPlayer) {
         int[] out = new int[128];

@@ -17,6 +17,9 @@ import mage.game.Exile;
 import mage.game.ExileZone;
 import mage.game.Game;
 import mage.game.Graveyard;
+import mage.game.command.CommandObject;
+import mage.game.command.Commander;
+import mage.game.command.Emblem;
 import mage.game.permanent.Battlefield;
 import mage.game.permanent.Permanent;
 import mage.game.permanent.PermanentCard;
@@ -28,7 +31,9 @@ import mage.target.Target;
 import mage.target.Targets;
 import mage.util.CardUtil;
 import mage.watchers.Watcher;
-import org.roaringbitmap.RoaringBitmap;
+import mage.watchers.common.CastSpellLastTurnWatcher;
+import mage.watchers.common.CreatedTokenWatcher;
+import mage.watchers.common.PlayerGainedLifeWatcher;
 import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.apache.log4j.Logger;
 
@@ -39,10 +44,8 @@ import java.util.*;
  *
  */
 public class StateEncoder {
-    public static volatile ImmutableRoaringBitmap globalIgnore;
     public FeatureMap featureMap = new FeatureMap();
     protected static Logger logger = Logger.getLogger(StateEncoder.class);
-    public volatile RoaringBitmap seenIndices;
     public static boolean perfectInfo = true;
     private final Features features;
     public Set<Integer> featureVector = new HashSet<>();
@@ -65,18 +68,15 @@ public class StateEncoder {
     public synchronized UUID getMyPlayerId() {return myPlayerId;}
 
 
-    private void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, Boolean callParent) {
-
-        //f.addFeature(manaCost.getText());
-        f.addNumericFeature("ManaValue", manaCost.manaValue(), callParent);
+    private void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, String suffix) {
+        f.addNumericFeature("ManaValue" + suffix, manaCost.manaValue());
         for(ManaCost mc : manaCost) {
-            f.addFeature(mc.getText());
+            f.addFeature(mc.getText() + suffix);
         }
     }
     private void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f) {
 
-        //if(c.c) f.addFeature("CanPay"); //use c.canPay()
-        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, false);
+        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, "_dynamic");
         if(costs == null || costs.isEmpty()) return;
         for(Cost cc : costs) {
             f.addFeature(cc.getText());
@@ -85,15 +85,13 @@ public class StateEncoder {
     private void processAbility(Ability a, Game game, Features f) {
 
         Costs<Cost> c = a.getCosts();
-        //for now lets not worry about encoding costs per abilities
         ManaCosts<ManaCost> mcs = a.getManaCostsToPay();
         if(!c.isEmpty() || !mcs.isEmpty()) {
-            Features costFeature = f.getSubFeatures("AbilityCost");
-            processCosts(c, mcs, game, costFeature); //dont propagate mana cost up for abilities
+            processCosts(c, mcs, game, f);
         }
         for(Mode m : a.getModes().getAvailableModes(a, game)) {
             for(Effect e : m.getEffects()) {
-                f.parent.addFeature(e.getText(m));//only add feature for abstraction (isn't dynamic)
+                f.parent.addFeature(cleanString(e.getText(m)));//only add feature for abstraction (isn't dynamic)
             }
         }
         //process watchers
@@ -105,7 +103,6 @@ public class StateEncoder {
 
         processAbility(aa, game, f);
         if(aa.isManaAbility()) f.addFeature("ManaAbility");
-        //TODO: seems broken with new cards?
         try {
             UUID controllerId = aa.getControllerId();
             if (controllerId != null && aa.copy().canActivate(controllerId, game).canActivate()) {
@@ -119,7 +116,7 @@ public class StateEncoder {
 
         processAbility(ta, game, f);
 
-        if(!ta.checkTriggeredLimit(game)) f.addFeature("ReachedTriggerLimit"); //use ta.checkTriggeredLimit()
+        if(!ta.checkTriggeredLimit(game)) f.addFeature("ReachedTriggerLimit");
         if(ta.checkUsedAlready(game)) f.addFeature("UsedAlready");//use ta.checkUsedAlready(game)
         if(ta.getTriggerEvent() != null) f.addFeature(ta.getTriggerEvent().getType().name());
 
@@ -146,24 +143,24 @@ public class StateEncoder {
             f.addFeature("Permanent");
         }
         //add types
-        for (CardType ct : c.getCardType(game)) {
+        for (CardType ct : c.getCardType()) {
             f.addFeature(ct.name());
         }
         //add color
-        if(c.getColor(game).isRed()) f.addFeature("RedCard");
-        if(c.getColor(game).isWhite()) f.addFeature("WhiteCard");
-        if(c.getColor(game).isBlack()) f.addFeature("BlackCard");
-        if(c.getColor(game).isGreen()) f.addFeature("GreenCard");
-        if(c.getColor(game).isBlue()) f.addFeature("BlueCard");
-        if(c.getColor(game).isColorless()) f.addFeature("ColorlessCard");
-        if(c.getColor(game).isMulticolored()) f.addFeature("MultiColored");
+        if(c.getColor().isRed()) f.addFeature("RedCard");
+        if(c.getColor().isWhite()) f.addFeature("WhiteCard");
+        if(c.getColor().isBlack()) f.addFeature("BlackCard");
+        if(c.getColor().isGreen()) f.addFeature("GreenCard");
+        if(c.getColor().isBlue()) f.addFeature("BlueCard");
+        if(c.getColor().isColorless()) f.addFeature("ColorlessCard");
+        if(c.getColor().isMulticolored()) f.addFeature("MultiColored");
 
         //add subtypes
-        for (SubType st : c.getSubtype(game)) {
+        for (SubType st : c.getSubtype()) {
             if(!st.name().isEmpty()) f.addFeature(st.name());
         }
         ManaCosts<ManaCost> mc = c.getManaCost();
-        processManaCosts(mc, game, f, true);
+        processManaCosts(mc, game, f, "");
 
 
 
@@ -189,6 +186,7 @@ public class StateEncoder {
 
 
 
+
         //process attachments
         List<UUID> attachments = p.getAttachments();
         if(attachments != null && !attachments.isEmpty()) {
@@ -209,9 +207,8 @@ public class StateEncoder {
             for (UUID id : imprinted) {
                 Card imprintedCard = game.getCard(id);
                 if(imprintedCard == null) continue;
-                //don't pass pooled attachment features up, or they will be counted twice
-                Features attachmentFeatures = imprintedFeatures.getSubFeatures(imprintedCard.getName());
-                processCard(imprintedCard, game, attachmentFeatures);
+                Features imprintedCardFeatures = imprintedFeatures.getSubFeatures(imprintedCard.getName());
+                processCard(imprintedCard, game, imprintedCardFeatures);
 
             }
         }
@@ -289,6 +286,7 @@ public class StateEncoder {
         }
     }
     private void processBattlefield(Battlefield bf, Game game, Features f, UUID playerId) {
+        //sort for deterministic traversal
         TreeMap<String, Permanent> sortedPerms = new TreeMap<>();
         for(Permanent p : bf.getAllActivePermanents(playerId)) {
             sortedPerms.put(p.getValue(game, playerId), p);
@@ -349,7 +347,7 @@ public class StateEncoder {
         while(itr.hasNext()) {
             so = itr.next();
             i++;
-            Features soFeatures = f.getSubFeatures(so.toString());
+            Features soFeatures = f.getSubFeatures(cleanString(so.toString()));
             processStackObject(so, i, game, playerId, soFeatures);
         }
     }
@@ -375,6 +373,65 @@ public class StateEncoder {
         f.addNumericFeature("ColorlessMana", mp.getColorless());
         //TODO: deal with conditional mana
     }
+    private void processCommandZone(Game game, UUID playerId, Features f) {
+        // Command zone
+        for (CommandObject co : game.getState().getCommand()) {
+            if (co instanceof Emblem) {
+                Emblem emblem = (Emblem) co;
+                if (playerId.equals(emblem.getControllerId())) {
+                    Features emblemFeatures = f.getSubFeatures(emblem.getName());
+                    emblemFeatures.addFeature("Emblem");
+                    // Emblems mainly have continuous/static abilities
+                    for (Ability a : emblem.getAbilities()) {
+                        Features aFeatures = emblemFeatures.getSubFeatures(a.getRule());
+                        processAbility(a, game, aFeatures);
+                    }
+                }
+            }
+            if(co instanceof Commander) {
+                Commander commander = (Commander) co;
+                Features commanderFeatures = f.getSubFeatures("Commander");
+                commanderFeatures.addFeature(commander.getName());
+                processCard(commander.getSourceObject(), game, commanderFeatures);
+                for (Ability a : commander.getAbilities()) {
+                    Features aFeatures = commanderFeatures.getSubFeatures(a.getRule());
+                    processAbility(a, game, aFeatures);
+                }
+            }
+        }
+
+        // Helper emblems (some emblems can be mirrored here)
+        for (Emblem emblem : game.getState().getHelperEmblems()) {
+            if (playerId.equals(emblem.getControllerId())) {
+                Features eFeatures = f.getSubFeatures(emblem.getName());
+                eFeatures.addFeature("Emblem");
+                for (Ability a : emblem.getAbilities()) {
+                    Features aFeatures = eFeatures.getSubFeatures(a.getRule());
+                    processAbility(a, game, aFeatures);
+                }
+            }
+        }
+        //TODO: companions
+    }
+    private void processWatchers(Game game, UUID playerId, Features f) {
+        // Storm / spells cast counts
+        CastSpellLastTurnWatcher stormW = game.getState().getWatcher(CastSpellLastTurnWatcher.class);
+        if (stormW != null) {
+            f.addNumericFeature("SpellsCastThisTurn", stormW.getAmountOfSpellsPlayerCastOnCurrentTurn(playerId));
+        }
+
+        // Life gained this turn
+        PlayerGainedLifeWatcher lifeW = game.getState().getWatcher(PlayerGainedLifeWatcher.class);
+        if (lifeW != null) {
+            f.addNumericFeature("LifeGainedThisTurn", lifeW.getLifeGained(playerId));
+        }
+
+        // Tokens created this turn
+        CreatedTokenWatcher tokenW = game.getState().getWatcher(CreatedTokenWatcher.class);
+        if (tokenW != null) {
+            f.addNumericFeature("TokensCreatedThisTurn", CreatedTokenWatcher.getPlayerCount(playerId, game));
+        }
+    }
     private void processPlayer(Game game, UUID playerId, UUID decisionPlayerId, Features f) {
         Player myPlayer = game.getPlayer(playerId);
 
@@ -388,22 +445,38 @@ public class StateEncoder {
         f.addNumericFeature("LifeTotal", myPlayer.getLife());
         if(myPlayer.canPlayLand()) f.addFeature("CanPlayLand");
 
+        //library
+        f.addNumericFeature("LibraryCount", myPlayer.getLibrary().size());
+
+        //attachments
+        List<UUID> attachments = myPlayer.getAttachments();
+        if(attachments != null && !attachments.isEmpty()) {
+            Features attachmentsFeatures = f.getSubFeatures("Attachments", false);
+            for(UUID id : attachments) {
+                processPermBattlefield(game.getPermanent(id), game, playerId, attachmentsFeatures);
+            }
+        }
+        //counters
+        Counters counters = myPlayer.getCountersAsCopy();
+        for (String counterName : counters.keySet()) {
+            f.addNumericFeature(counterName, counters.get(counterName).getCount());
+        }
 
         //mana pool
         Features mpFeatures = f.getSubFeatures("ManaPool", false);
         processManaPool(myPlayer.getManaPool(), game, mpFeatures);
 
-        //start with battlefield
+        //battlefield
         Battlefield bf = game.getBattlefield();
         Features bfFeatures = f.getSubFeatures("Battlefield");
         processBattlefield(bf, game, bfFeatures, playerId);
 
-        //now do graveyard
+        //graveyard
         Graveyard gy = myPlayer.getGraveyard();
         Features gyFeatures = f.getSubFeatures("Graveyard");
         processGraveyard(gy, game, gyFeatures);
 
-        //now do hand
+        //hand
         if(playerId==decisionPlayerId || perfectInfo) { //keep perspective
             Cards hand = myPlayer.getHand();
             Features handFeatures = f.getSubFeatures("Hand");
@@ -412,6 +485,13 @@ public class StateEncoder {
             Cards hand = myPlayer.getHand();
             f.addNumericFeature("CardsInHand", hand.size());
         }
+        //command zone
+        Features commandZoneFeatures = f.getSubFeatures("CommandZone", false);
+        processCommandZone(game, playerId, commandZoneFeatures);
+
+        //global watchers
+        Features globalWatcherFeatures = f.getSubFeatures("GlobalWatchers", false);
+        //processWatchers(game, playerId, globalWatcherFeatures);
 
 
         //TODO dungeons
@@ -430,7 +510,6 @@ public class StateEncoder {
         featureVector.clear();
 
         //globals
-
         if(game.getPhase() != null) {
             features.addFeature(game.getTurnStepType().toString()); //phases
         }
@@ -439,6 +518,7 @@ public class StateEncoder {
         features.addFeature(decisionType.toString());
         //decision state
         features.addFeature(decisionsText);
+
 
         //stack
         Features stackFeatures = features.getSubFeatures("Stack", false);
@@ -481,6 +561,8 @@ public class StateEncoder {
         if (input == null || input.isEmpty()) {
             return input;
         }
-        return input.replaceAll(" \\[[0-9a-f]+]", "");
+        String cleaned = input.replaceAll(" \\[[0-9a-f]+]", "");
+        cleaned = cleaned.replaceAll("<[^>]*>", "");
+        return cleaned;
     }
 }
