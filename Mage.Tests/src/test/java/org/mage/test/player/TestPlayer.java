@@ -1856,6 +1856,10 @@ public class TestPlayer implements Player {
             }
         }
     }
+    @Override
+    public boolean isMCTSComputerPlayer() {
+        return computerPlayer.isMCTSComputerPlayer();
+    }
 
     private void assertManaPoolInner(PlayerAction action, Player player, ManaType manaType, Integer amount) {
         Integer normal = player.getManaPool().getMana().get(manaType);

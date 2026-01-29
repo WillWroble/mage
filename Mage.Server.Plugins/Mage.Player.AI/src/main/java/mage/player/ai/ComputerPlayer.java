@@ -33,6 +33,7 @@ import mage.players.net.UserGroup;
 import mage.target.Target;
 import mage.target.TargetAmount;
 import mage.target.TargetCard;
+import mage.target.TargetImpl;
 import mage.target.common.TargetAttackingCreature;
 import mage.util.*;
 import org.apache.log4j.Logger;
@@ -51,7 +52,6 @@ import java.util.stream.Collectors;
  * @author BetaSteward_at_googlemail.com, JayDi85
  */
 public class ComputerPlayer extends PlayerImpl {
-    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
 
     //for targeting microdecisions
     public Set<UUID> chooseTargetOptions = new HashSet<>();
@@ -197,6 +197,9 @@ public class ComputerPlayer extends PlayerImpl {
 
         return target.isChosen(game) && !target.getTargets().isEmpty();
     }
+    protected boolean makeChoiceFallback(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+        return target.isChosen(game) && !target.getTargets().isEmpty();
+    }
 
     /**
      * Default choice logic for any choose dialogs due effect's outcome and possible target priority
@@ -226,7 +229,7 @@ public class ComputerPlayer extends PlayerImpl {
         if(out) {
             getPlayerHistory().targetSequence.addAll(target.getTargets());
             //if there are still more options that could be optionally chosen. add early stop flag to mirror MCTS logging.
-            if(!target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) getPlayerHistory().targetSequence.add(STOP_CHOOSING);
+            if(!target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) getPlayerHistory().targetSequence.add(TargetImpl.STOP_CHOOSING);
         }
 
         return out;
@@ -853,6 +856,16 @@ public class ComputerPlayer extends PlayerImpl {
         boolean out = outcome != Outcome.AIDontUseIt; // Added for Desecration Demon sacrifice ability
         getPlayerHistory().useSequence.add(out);
         return out;
+    }
+    public boolean chooseFallback(Outcome outcome, Choice choice, Game game) {
+        if (!choice.getChoices().isEmpty()) {
+            String chosen = choice.getChoices().stream().min(Comparator.naturalOrder()).orElse("");
+            choice.setChoice(chosen);
+        } else if (!choice.getKeyChoices().isEmpty()) {
+            String chosenKey = choice.getKeyChoices().keySet().stream().min(Comparator.naturalOrder()).orElse("");
+            choice.setChoiceByKey(chosenKey);
+        }
+        return true;
     }
     public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
         //TODO: improve this

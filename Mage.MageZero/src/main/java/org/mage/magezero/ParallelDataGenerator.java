@@ -39,6 +39,8 @@ public class ParallelDataGenerator {
     // ================================== FILE PATHS ==================================
     protected static String SEEN_FEATURES_PATH = "seenFeatures.ser";
     protected static String FEATURE_TABLE_OUT = "FeatureTable.txt";
+    protected static String WINRATE_OUT = "WinRates.txt";
+
     // ================================== GLOBAL FIELDS ==================================
     private final FeatureMap seenFeatures = new FeatureMap();
     public final AtomicInteger gameCount = new AtomicInteger(0);
@@ -178,7 +180,7 @@ public class ParallelDataGenerator {
 
 
         if(Config.INSTANCE.logging.writeFinalWR) {
-            writeResults("trainingWinRates.txt", "WR with " + deckNameA + " vs " +
+            writeResults(WINRATE_OUT, "WR with " + deckNameA + " vs " +
                     deckNameB + ": " + winCount.get() * 1.0 / gameCount.get() + " in " + gameCount.get() + " games");
         }
 

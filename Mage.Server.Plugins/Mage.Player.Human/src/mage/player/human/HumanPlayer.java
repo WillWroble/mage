@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 
 import static mage.constants.PlayerAction.REQUEST_AUTO_ANSWER_RESET_ALL;
 import static mage.constants.PlayerAction.TRIGGER_AUTO_ORDER_RESET_ALL;
+import static mage.target.TargetImpl.STOP_CHOOSING;
 
 /**
  * Human: server side logic to exchange game data between server app and another player's app
@@ -65,7 +66,6 @@ import static mage.constants.PlayerAction.TRIGGER_AUTO_ORDER_RESET_ALL;
 public class HumanPlayer extends PlayerImpl {
 
     private static final boolean ALLOW_USERS_TO_PUT_NON_PLAYABLE_SPELLS_ON_STACK_WORKAROUND = false; // warning, see workaround's info on usage
-    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
 
 
     // TODO: all user feedback actions executed and waited in diff threads and can't catch exceptions, e.g. on wrong code usage

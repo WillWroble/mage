@@ -15,7 +15,20 @@ public class ActionEncoder {
     public ActionEncoder() {
         playerActionMap = new HashMap<>();
         opponentActionMap = new HashMap<>();
+        List<Map<String, Integer>> maps = new ArrayList<>(); maps.add(playerActionMap); maps.add(opponentActionMap);
+        for(Map<String, Integer> map : maps) {
+            /*map.put("Pass", 0);
+            map.put("{T}: Add {B}.", 1);
+            map.put("{T}: Add {G}.", 2);
+            map.put("{T}: Add {R}.", 3);
+            map.put("{T}: Add {U}.", 4);
+            map.put("{T}: Add {W}.", 5);
+            map.put("{T}: Add {C}.", 6);*/
+        }
+
         targetMap = new HashMap<>();
+        //targetMap.put("Stop Choosing", 0);
+
     }
 
     public int getActionIndex(Ability sa, boolean isPlayer) {

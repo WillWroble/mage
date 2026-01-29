@@ -3,7 +3,7 @@
 goes_first: player_a  # player_a, player_b, random
 
 player_a:
-  deckPath: decks/Standard-MonoU.dck
+  deckPath: decks/UWTempo.dck
   type: mcts
   output_dir: data/playerA
 
@@ -23,10 +23,10 @@ player_a:
     td_discount: 0.95
 
   mulligans:
-    enabled: false
+    enabled: False
 
 player_b:
-  deckPath: decks/MTGA_MonoG.dck
+  deckPath: decks/Standard-MonoU.dck
   type: minimax
   output_dir: data/playerB
 
@@ -48,7 +48,7 @@ player_b:
     enabled: false
 
 training:
-  games: 4
+  games: 200
   threads: 4
   max_turns: 50 #does nothing
 

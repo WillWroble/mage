@@ -6,6 +6,7 @@ import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.players.Player;
+import mage.players.PlayerScript;
 import mage.target.Target;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,13 +37,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
         actionEncoder = new ActionEncoder();
         //make action maps
-//        try {
-//            createAllActionsFromDeck(getMatchPlayer().getDeck(), actionEncoder.opponentActionMap);
-//            createAllActionsFromDeck(opponent.getMatchPlayer().getDeck(), actionEncoder.playerActionMap);
-//            createAllTargetsFromDecks(opponent.getMatchPlayer().getDeck(), getMatchPlayer().getDeck(), actionEncoder.targetMap, opponent.getName(), getName());
-//        } catch (GameException e) {
-//            throw new RuntimeException(e);
-//        }
     }
 
     @Override
@@ -60,7 +54,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         game.firePriorityEvent(playerId);
 
         List<ActivatedAbility> playableAbilities = getPlayable(game, true);
-        //List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
 
         if(playableAbilities.isEmpty() && !game.isCheckPoint()) {//just pass when only option
             pass(game);
@@ -159,10 +152,11 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 log.info("===> SELECTED ACTION for {}: {}", getName(), getAbilityAndSourceInfo(game, ability, true));
 
                 Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+                Set<Integer> stateVector = encoder.processState(game, playerId);
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
                     MCTSNode root = mcts2.root;
-                    if(root != null) root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), MCTSPlayer.NextAction.PRIORITY, getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+                    if(root != null) root = root.getMatchingState(stateVector);
                     if (root != null) {
                         log.info("found matching root with {} visits", root.visits);
                         root.emancipate();
@@ -177,8 +171,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         log.info("logged: {} for {}", ability.toString(), name);
                         //save action vector
                         int[] actionVec = getActionVec(ability);
-                        //save state vector
-                        Set<Integer> stateVector = encoder.processState(game, getId());
                         //add scores
                         double perspectiveFactor = getId() == encoder.getMyPlayerId() ? 1.0 : -1.0;
                         double score = perspectiveFactor * Math.tanh(root.score * 1.0 / 20000);

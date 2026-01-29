@@ -23,6 +23,8 @@ import java.util.*;
  */
 public abstract class TargetImpl implements Target {
 
+    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
+
     protected final Map<UUID, Integer> targets = new LinkedHashMap<>();
     protected final Map<UUID, Integer> zoneChangeCounters = new HashMap<>();
 

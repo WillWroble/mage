@@ -19,6 +19,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
+import static mage.target.TargetImpl.STOP_CHOOSING;
+
 /**
  * traditional MCTS (Monte Carlo Tree Search), expanded to incorporate micro decisions
  *
@@ -51,11 +53,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     //adjust based on available RAM and threads running
     public static int MAX_TREE_NODES = 100000;
 
-    public final static UUID STOP_CHOOSING = new UUID(0, "stop choosing flag".hashCode());
-
     public transient MCTSNode root;
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
-    public int poolSize = 2;
     protected transient ExecutorService threadPoolSimulations = null;
 
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
@@ -102,8 +101,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         MCTSNode best = getNextAction(game, NextAction.PRIORITY);
         //root.emancipate();
         boolean success = false;
-        if(best != null && best.getAction() != null) {
-            ability = best.getAction().copy();
+        if(best != null && best.getActionSequence() != null) {
+            ability = best.getActionSequence().copy();
             success = activateAbility((ActivatedAbility) ability, game);
             root = best;
         }
@@ -118,13 +117,13 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return false;
         logLife(game);
         printBattlefieldScore(game, playerId);
-        if(root.getAction().getTargets().isEmpty() || game.getEntityName(root.getAction().getTargets().getFirstTarget()).equals("null")) {
-            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + " success ratio: " + root.getMeanScore());
+        if(root.getActionSequence().getTargets().isEmpty() || game.getEntityName(root.getActionSequence().getTargets().getFirstTarget()).equals("null")) {
+            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getActionSequence() + " success ratio: " + root.getMeanScore());
         } else {
-            if(game.getEntityName(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getEntityName(root.getAction().getTargets().getFirstTarget()) + ") success ratio: " + root.getMeanScore());
-            } else if (game.getPlayer(root.getAction().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getAction() + "(targeting " + game.getPlayer(root.getAction().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
+            if(game.getEntityName(root.getActionSequence().getTargets().getFirstTarget()) != null) {
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getActionSequence() + "(targeting " + game.getEntityName(root.getActionSequence().getTargets().getFirstTarget()) + ") success ratio: " + root.getMeanScore());
+            } else if (game.getPlayer(root.getActionSequence().getTargets().getFirstTarget()) != null) {
+                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getActionSequence() + "(targeting " + game.getPlayer(root.getActionSequence().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
             } else {
                 logger.fatal("no target found");
             }
@@ -145,21 +144,8 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
 
     protected MCTSNode getNextAction(Game game, NextAction nextAction) {
-        if (root != null) {
-            root = root.getMatchingState(game.getLastPriority().getState().getValue(true, game.getLastPriority()), nextAction, getPlayerHistory(), game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
-        }
-        if (root == null || root.rootState == null) {
-            Game sim = createMCTSGame(game.getLastPriority());
-            MCTSPlayer player = (MCTSPlayer) sim.getPlayer(playerId);
-            player.setNextAction(nextAction);//can remove this
-            root = new MCTSNode(this, sim, nextAction);
-            root.prefixScript = new PlayerScript(getPlayerHistory());
-            root.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
-            logger.info("prefix at root: " + root.prefixScript.toString());
-            logger.info("opponent prefix at root: " + root.opponentPrefixScript.toString());
-        }
-        root.emancipate();
-        return calculateActions(game, nextAction);
+        //TODO: implement. right now only RL version supported
+        return null;
     }
 
     @Override
@@ -353,11 +339,15 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
+            if(!(origPlayer instanceof ComputerPlayerMCTS)) {
+                newPlayer.allowAutoPay = true;
+            }
         }
         mcts.pause();
         mcts.setMCTSSimulation(true);
         return mcts;
     }
+    //TODO: make true stochastic MCTS (hidden feature set + MCTS discount works for now)
     public static void shuffleUnknowns(Game mcts, UUID playerId) {
         for (Player newPlayer : mcts.getState().getPlayers().values()) {
             if (!newPlayer.getId().equals(playerId)) {
@@ -377,16 +367,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             }
         }
     }
-    protected void displayMemory() {
-        long heapSize = Runtime.getRuntime().totalMemory();
-        long heapMaxSize = Runtime.getRuntime().maxMemory();
-        long heapFreeSize = Runtime.getRuntime().freeMemory();
-        long heapUsedSize = heapSize - heapFreeSize;
-        long mb = 1024 * 1024;
-
-        logger.info("Max heap size: " + heapMaxSize / mb + " Heap size: " + heapSize / mb + " Used: " + heapUsedSize / mb);
-    }
-
     protected void logLife(Game game) {
         StringBuilder sb = new StringBuilder();
         sb.append(game.getTurn().getValue(game.getTurnNum()));

@@ -22,3 +22,8 @@ WR with Standard-MonoU vs MTGA_MonoG: 0.3 in 20 games
 WR with Standard-MonoU vs MTGA_MonoG: 0.0 in 4 games
 WR with Standard-MonoU vs MTGA_MonoG: 0.25 in 4 games
 WR with Standard-MonoU vs MTGA_MonoG: 0.25 in 4 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.265 in 200 games
+WR with UWTempo vs Standard-MonoB: 0.08 in 200 games
+WR with UWTempo vs Standard-MonoB: 0.1 in 20 games
+WR with UWTempo vs Standard-MonoB: 0.05 in 20 games
+WR with UWTempo vs MTGA_MonoG: 0.5 in 8 games

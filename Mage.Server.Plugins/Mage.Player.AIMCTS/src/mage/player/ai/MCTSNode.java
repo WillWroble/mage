@@ -1,9 +1,7 @@
 package mage.player.ai;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
-import mage.abilities.ActivatedAbility;
 import mage.constants.Zone;
 import mage.abilities.Ability;
 import mage.cards.Card;
@@ -28,7 +26,6 @@ import static java.lang.Math.*;
  */
 public class MCTSNode {
 
-    public static final boolean USE_ACTION_CACHE = false;
     private static final Logger logger = Logger.getLogger(MCTSNode.class);
 
 
@@ -50,8 +47,7 @@ public class MCTSNode {
     public Boolean useAction;
 
     public ComputerPlayerMCTS basePlayer;
-    private String stateValue;
-    private String fullStateValue;
+
     public UUID playerId;
     private boolean terminal = false;
     private boolean winner;
@@ -65,7 +61,7 @@ public class MCTSNode {
     //the single dynamic game that is reused for all simulation logic
     public Game rootGame;
     //the fixed saved state of this node so it can be reset after use.
-    public GameState rootState;
+    public GameState state;
     //prefix scripts represent the sequence of actions that need to be taken since the last priority to represent this microstate
     public PlayerScript prefixScript = new PlayerScript();
     public PlayerScript opponentPrefixScript = new PlayerScript();
@@ -75,23 +71,20 @@ public class MCTSNode {
     MCTSPlayer.NextAction nextAction;
 
     /**
-     * root constructor, is mostly finalized
+     * root constructor, mostly finalized, needs to be pre-expanded outside before use.
      * @param targetPlayer
      * @param game
      */
     public MCTSNode(ComputerPlayerMCTS targetPlayer, Game game, MCTSPlayer.NextAction nextAction) {
         rootGame = game;
-        rootState = game.getState().copy();
-        //rootState.pause();
+        state = game.getState().copy();
         this.basePlayer = targetPlayer;
         this.targetPlayer = targetPlayer.getId();
-        this.stateValue = game.getState().getValue(game, targetPlayer.getId());
-        this.fullStateValue = game.getState().getValue(true, game);
         this.terminal = game.checkIfGameIsOver();
         this.winner = isWinner(game, targetPlayer.getId());
         this.action = null; //root can have null action (prev action doesn't matter)
         this.nextAction = nextAction;
-        //mostly finalized still needs the nextAction, lastToAct and playerId fields; happens right before first expand
+        //mostly finalized still needs the nextAction, lastToAct, stateVector, Policy, and playerId fields; happens right before first expand
     }
 
     protected MCTSNode(MCTSNode parent, Ability action) {
@@ -129,15 +122,10 @@ public class MCTSNode {
         }
         nextAction = actingPlayer.getNextAction();
         if(actingPlayer.getNextAction() == MCTSPlayer.NextAction.PRIORITY) {//priority point, use current state value
-            this.stateValue = game.getState().getValue(game, targetPlayer);
-            this.fullStateValue = game.getState().getValue(true, game);
-            this.rootState = game.getState();
+            this.state = game.getState();
         } else {//micro point, use previous state value
-            this.stateValue = parent.stateValue;
-            this.fullStateValue = parent.fullStateValue;
-            this.rootState = parent.rootState;
+            this.state = parent.state;
         }
-
     }
     private void setPlayer(Game game) {
         //System.out.println("this happening");
@@ -162,7 +150,7 @@ public class MCTSNode {
         logger.warn("this should not happen");
     }
     /**
-     * recursively backtracks through the tree until reaching the root and then resets its game to the given state
+     * resets root game to the given state
      * @param state state to reset to
      */
     public void resetRootGame(GameState state) {
@@ -186,7 +174,6 @@ public class MCTSNode {
             mp.numOptionsSize = 0;
             mp.playables.clear();
             mp.decisionText = "";
-            mp.autoPassed=0;
         }
     }
     public boolean containsPriorityNode() {
@@ -210,7 +197,6 @@ public class MCTSNode {
         }
 
         boolean isTarget = playerId.equals(targetPlayerId);
-        boolean allChildrenVisited = true;
         double sign = isTarget ? +1.0 : -1.0;
 
         MCTSNode best    = null;
@@ -219,7 +205,6 @@ public class MCTSNode {
         double sqrtN = Math.sqrt(getVisits());
 
         for (MCTSNode child : children) {
-            if(child.getVisits() == 0) allChildrenVisited = false;
             // value term: 0 if unvisited, else average reward
             double q = (child.getVisits() > 0)
                     ? (child.getMeanScore())
@@ -250,6 +235,7 @@ public class MCTSNode {
                 MCTSNode node = new MCTSNode(this, playable);
                 children.add(node);
             }
+            children.sort(Comparator.comparing(n -> n.action.toString()));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
             Set<UUID> targetOptions = player.chooseTargetOptions;
             for(UUID target : targetOptions) {
@@ -258,6 +244,7 @@ public class MCTSNode {
                 node.chooseTargetAction = target;
                 children.add(node);
             }
+            children.sort(Comparator.comparing(n -> game.getEntityName(n.chooseTargetAction)));
         } else if(nextAction == MCTSPlayer.NextAction.MAKE_CHOICE) {
             Set<String> choiceOptions = player.choiceOptions;
             for(String choice : choiceOptions) {
@@ -266,6 +253,7 @@ public class MCTSNode {
                 node.choiceAction = choice;
                 children.add(node);
             }
+            children.sort(Comparator.comparing(n -> n.choiceAction));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_NUM) {
             for (int mode = 0; mode < player.numOptionsSize; mode++) {
                 logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + mode);
@@ -290,7 +278,7 @@ public class MCTSNode {
     private int nodeToIdx(MCTSNode node, MCTSPlayer.NextAction nextAction, Game game) {
         int idx;
         if(nextAction == MCTSPlayer.NextAction.PRIORITY) {
-            idx = basePlayer.actionEncoder.getActionIndex(node.getAction(), playerId.equals(targetPlayer));
+            idx = basePlayer.actionEncoder.getActionIndex(node.getActionSequence(), playerId.equals(targetPlayer));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_TARGET) {
             idx = basePlayer.actionEncoder.getTargetIndex(game.getEntityName(node.chooseTargetAction));
         } else if(nextAction == MCTSPlayer.NextAction.CHOOSE_USE) {
@@ -349,14 +337,11 @@ public class MCTSNode {
                 double[] dir = new double[K];
                 double sum = 0;
 
-                // 1) create a Commons-Math RNG and seed it
                 JDKRandomGenerator rg = new JDKRandomGenerator();
                 rg.setSeed(seed);
 
-                // 2) pass it into the GammaDistribution
                 GammaDistribution gd = new GammaDistribution(rg, alpha, 1.0);
 
-                // 3) sample & mix exactly as before
                 for (int i = 0; i < K; i++) {
                     dir[i] = gd.sample();
                     sum += dir[i];
@@ -370,6 +355,9 @@ public class MCTSNode {
                 dirichletSeed = 0;
             }
         }
+    }
+    public void backpropagate(double result) {
+        backpropagate(result, false);
     }
     public void backpropagate(double result, boolean virtual) {
         if(!virtual) {
@@ -514,7 +502,7 @@ public class MCTSNode {
         return parent.getRoot();
     }
 
-    public Ability getAction() {
+    public Ability getActionSequence() {
         return action;
     }
 
@@ -526,12 +514,7 @@ public class MCTSNode {
         return parent;
     }
 
-    public String getStateValue() {
-        return stateValue;
-    }
-    public String getFullStateValue() {
-        return fullStateValue;
-    }
+
 
 
     public double getMeanScore() {
@@ -584,27 +567,14 @@ public class MCTSNode {
     public boolean isWinner() {
         return winner;
     }
-
-    /**
-     * * performs a breadth first search for a matching game state
-     * * @param state - the game state that we are looking for
-     * @return the matching state or null if no match is found
-     */
-    public MCTSNode getMatchingState(String state, MCTSPlayer.NextAction nextAction, PlayerScript prefixScript, PlayerScript opponentPrefixScript) {
+    public MCTSNode getMatchingState(Set<Integer> state) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
-        int showCount = 0;
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
-            if(!current.isFinalized || current.fullStateValue==null) continue;//tree can have unfinalized nodes
-            if(showCount < 10) {
-                logger.debug(current.prefixScript.toString() + " =should= " + prefixScript.toString());
-                logger.debug(current.opponentPrefixScript.toString() + " =should= " + opponentPrefixScript.toString());
-                logger.debug(current.fullStateValue + "\n =should= \n" + state);
-                logger.debug(current.nextAction.toString() + " =should= " + nextAction.toString());
-                showCount++;
-            }
-            if (current.fullStateValue.equals(state) && prefixScript.equals(current.prefixScript) && opponentPrefixScript.equals(current.opponentPrefixScript) && current.nextAction.equals(nextAction)) { //&& current.chooseTargetAction.equals(chosenTargets) && current.choiceAction.equals(chosenChoices) && current.playerId.equals(givenPlayerId)) {
+            if(!current.isFinalized || current.stateVector==null) continue;//tree can have unfinalized nodes
+
+            if(current.stateVector.equals(state)) {
                 return current;
             }
             queue.addAll(current.children);
@@ -636,17 +606,14 @@ public class MCTSNode {
      * populates action lists by back tracing through the tree (opponent player is the non-target player)
      * @param myScript
      * @param opponentScript
-     * @return the game state at the root of this sequence
      */
-    public GameState getActionSequence(PlayerScript myScript, PlayerScript opponentScript) {
+    public void getActionSequence(PlayerScript myScript, PlayerScript opponentScript) {
 
-        if(rootState != null) {
+        if(parent == null) {
             myScript.append(prefixScript);
             opponentScript.append(opponentPrefixScript);
-            return rootState;
+            return;
         }
-
-        GameState out = parent.rootState;
         myScript.append(parent.prefixScript);
         opponentScript.append(parent.opponentPrefixScript);
 
@@ -683,7 +650,6 @@ public class MCTSNode {
         } else {
             logger.error("no action found in node");
         }
-        return out;
     }
 
 
@@ -695,8 +661,14 @@ public class MCTSNode {
 
         PlayerScript myScript = new PlayerScript();
         PlayerScript opponentScript = new PlayerScript();
-        GameState rootState = getActionSequence(myScript, opponentScript);
-        resetRootGame(rootState.copy());
+        getActionSequence(myScript, opponentScript);
+        GameState baseState;
+        if(parent == null) {
+            baseState = state.copy();
+        } else {
+            baseState = parent.state.copy();
+        }
+        resetRootGame(baseState);
         //set base player actions
         MCTSPlayer myPlayer = (MCTSPlayer) rootGame.getPlayer(targetPlayer);
         myPlayer.actionScript = myScript;
@@ -708,7 +680,7 @@ public class MCTSNode {
         if(rootGame.getPhase() == null) {
             rootGame.getOptions().skipInitShuffling = true;
             rootGame.getState().resume();
-            rootGame.start(rootState.getChoosingPlayerId());
+            rootGame.start(rootGame.getState().getChoosingPlayerId());
         } else {
             rootGame.resume();
         }
@@ -722,6 +694,7 @@ public class MCTSNode {
      * @param game
      * @return a new game object with simulated players
      */
+    @Deprecated
     protected Game createSimulation(Game game, UUID playerId) {
         Game sim = game.createSimulationForAI();
 

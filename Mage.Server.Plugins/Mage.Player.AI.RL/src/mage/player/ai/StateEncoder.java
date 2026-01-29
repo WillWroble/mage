@@ -34,13 +34,13 @@ import mage.watchers.Watcher;
 import mage.watchers.common.CastSpellLastTurnWatcher;
 import mage.watchers.common.CreatedTokenWatcher;
 import mage.watchers.common.PlayerGainedLifeWatcher;
-import org.roaringbitmap.buffer.ImmutableRoaringBitmap;
 import org.apache.log4j.Logger;
 
 import java.util.*;
 
 /**
  * Global sparse state encoder for deep learning.
+ * @author WillWroble
  *
  */
 public class StateEncoder {
@@ -184,8 +184,15 @@ public class StateEncoder {
         if(p.getColor(game).isColorless()) f.addFeature("ColorlessCard_dynamic");
         if(p.getColor(game).isMulticolored()) f.addFeature("MultiColored_dynamic");
 
-
-
+        //dynamic abilities
+        List<Ability> abilities = p.getAbilities(game);
+        if(!abilities.isEmpty()) {
+            Features permAbilities = f.getSubFeatures("DynamicPermAbilities", false);
+            for(Ability a : abilities) {
+                Features permAbility =  permAbilities.getSubFeatures(a.getRule());
+                processAbility(a, game, permAbility);
+            }
+        }
 
         //process attachments
         List<UUID> attachments = p.getAttachments();
@@ -289,7 +296,7 @@ public class StateEncoder {
         //sort for deterministic traversal
         TreeMap<String, Permanent> sortedPerms = new TreeMap<>();
         for(Permanent p : bf.getAllActivePermanents(playerId)) {
-            sortedPerms.put(p.getValue(game, playerId), p);
+            sortedPerms.put(p.getValue(game, playerId)+p.getId(), p);
         }
         for (Permanent p : sortedPerms.values()) {
             Features permFeatures = f.getSubFeatures(p.getName());
@@ -315,13 +322,12 @@ public class StateEncoder {
         Ability sa = so.getStackAbility();
         Targets myTargets = sa.getTargets();
         if(!myTargets.isEmpty()) {
-            Features targetFeatures = f.getSubFeatures("targets", false);
+            Features targetsFeatures = f.getSubFeatures("targets", false);
             for (Target target : myTargets) {
                 for (UUID id : target.getTargets()) {
+                    Features targetFeatures = targetsFeatures.getSubFeatures(game.getEntityName(id));
                     Card c = game.getCard(id);
-                    if (c == null) {
-                        targetFeatures.addFeature(game.getEntityName(id));
-                    } else {
+                    if (c != null) {
                         processCard(c, game, targetFeatures);
                     }
                 }
@@ -432,8 +438,41 @@ public class StateEncoder {
             f.addNumericFeature("TokensCreatedThisTurn", CreatedTokenWatcher.getPlayerCount(playerId, game));
         }
     }
+    private void processMicroDecisions(Game game, UUID playerId, Features f) {
+        Player myPlayer = game.getPlayer(playerId);
+        //micro decision counters for full validation/context
+        f.addNumericFeature("prioritySequenceSize", myPlayer.getPlayerHistory().prioritySequence.size());
+        f.addNumericFeature("useSequenceSize", myPlayer.getPlayerHistory().useSequence.size());
+        f.addNumericFeature("targetSequenceSize", myPlayer.getPlayerHistory().targetSequence.size());
+        f.addNumericFeature("choiceSequenceSize", myPlayer.getPlayerHistory().choiceSequence.size());
+        f.addNumericFeature("numSequenceSize", myPlayer.getPlayerHistory().numSequence.size());
+        //latest micro decision made
+        if(!myPlayer.getPlayerHistory().prioritySequence.isEmpty()) {
+            f.addFeature(myPlayer.getPlayerHistory().prioritySequence.peekLast().getRule());
+        }
+        if(!myPlayer.getPlayerHistory().useSequence.isEmpty()) {
+            f.addFeature(myPlayer.getPlayerHistory().useSequence.peekLast().toString());
+        }
+        if(!myPlayer.getPlayerHistory().targetSequence.isEmpty()) {
+            f.addFeature(game.getEntityName(myPlayer.getPlayerHistory().targetSequence.peekLast()));
+        }
+        if(!myPlayer.getPlayerHistory().choiceSequence.isEmpty()) {
+            f.addFeature(myPlayer.getPlayerHistory().choiceSequence.peekLast().toString());
+        }
+        if(!myPlayer.getPlayerHistory().numSequence.isEmpty()) {
+            f.addFeature(myPlayer.getPlayerHistory().numSequence.peekLast().toString());
+        }
+        if(myPlayer instanceof MCTSPlayer) {
+            MCTSPlayer mctsPlayer = (MCTSPlayer) myPlayer;
+            if(mctsPlayer.scriptFailed) f.addFeature("ScriptFailed");
+        }
+    }
     private void processPlayer(Game game, UUID playerId, UUID decisionPlayerId, Features f) {
         Player myPlayer = game.getPlayer(playerId);
+
+        //micro decision state
+        Features microFeatures = f.getSubFeatures("Micro", false);
+        processMicroDecisions(game, playerId, microFeatures);
 
         //current targets selected for when it's in the middle selecting multiple targets
         Features chosenTargetsFeatures = f.getSubFeatures("ChosenTargets", false);
@@ -517,7 +556,7 @@ public class StateEncoder {
         //decision type
         features.addFeature(decisionType.toString());
         //decision state
-        features.addFeature(decisionsText);
+        features.addFeature(cleanString(decisionsText));
 
 
         //stack

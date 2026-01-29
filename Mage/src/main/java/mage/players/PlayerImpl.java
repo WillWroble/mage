@@ -83,7 +83,6 @@ public abstract class PlayerImpl implements Player, Serializable {
     static final Map<PhaseStep, Step.StepPart> SILENT_PHASES_STEPS = ImmutableMap.<PhaseStep, Step.StepPart>builder().
             put(PhaseStep.DECLARE_ATTACKERS, Step.StepPart.PRE).build();
 
-    public int autoPassed = 0;
     /**
      * Used to cancel waiting requests send to the player
      */
@@ -1646,8 +1645,10 @@ public abstract class PlayerImpl implements Player, Serializable {
             pass(game);
             return true;
         }
+        //never log mana abilities outside MCTS since other AIs use don't use manual tapping
+        boolean isNonMCTSManaAbility = !isMCTSComputerPlayer() && ability instanceof ManaAbility;
         //needs to happen after pass since pass() logs ability separately
-        if(!(ability instanceof SpecialAction) && !game.isPaused() && !game.checkIfGameIsOver()) {
+        if(!(ability instanceof SpecialAction) && !game.isPaused() && !game.checkIfGameIsOver() && !isNonMCTSManaAbility) {
             playerHistory.prioritySequence.add(ability.copy());
         }
         Card card = game.getCard(ability.getSourceId());
@@ -2634,15 +2635,6 @@ public abstract class PlayerImpl implements Player, Serializable {
         resetStoredBookmark(game);
     }
 
-    /**
-     * doesn't update playerHistories (use when skipping forced passes)
-     * @param game
-     */
-    public void quietPass(Game game) {
-        this.passed = true;
-        this.autoPassed++;
-        resetStoredBookmark(game);
-    }
 
     @Override
     public void resetMicroActions() {
@@ -5712,6 +5704,11 @@ public abstract class PlayerImpl implements Player, Serializable {
                 game.fireEvent(GameEvent.getEvent(GameEvent.EventType.RING_BEARER_CHOSEN, newBearerId, null, getId()));
             }
         }
+    }
+
+    @Override
+    public boolean isMCTSComputerPlayer() {
+        return false;
     }
 
     @Override

@@ -15,6 +15,8 @@ import org.apache.log4j.Logger;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static mage.target.TargetImpl.STOP_CHOOSING;
+
 /**
  * Dummy player for MCTS sims. replays through micro-decisions with deterministic action scripts created by
  * controlling/thinking player.
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 public class MCTSPlayer extends ComputerPlayer {
 
     public boolean lastToAct = false;
+    public boolean allowAutoPay = false;
     //flag meaning the script given to this player wasn't followable
     public boolean scriptFailed = false;
     private NextAction nextAction;
@@ -58,6 +61,7 @@ public class MCTSPlayer extends ComputerPlayer {
         super(player);
         this.nextAction = player.nextAction;
         this.targetPlayer = player.targetPlayer;
+        this.allowAutoPay = player.allowAutoPay;
     }
 
     @Override
@@ -91,11 +95,10 @@ public class MCTSPlayer extends ComputerPlayer {
             //game.firePriorityEvent(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
             boolean success = activateAbility(ability, game);
-            if(!success && !lastToAct) {//if decision costs need to be resolved let them simulate out
+            if(!success && !game.isPaused()) {//if decision costs need to be resolved let them simulate out
                 logger.warn(game.getTurn().getValue(game.getTurnNum()) + " INVALID SCRIPT AT: " + ability.toString());
                 illegalGameState(game);
                 return false;
-                //do something here to alert the main process (parent resume call) but handle gracefully
             }
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
@@ -125,13 +128,16 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
-        return autoPayFromPool(ability, unpaid, game);
+        if(playerId.equals(targetPlayer) || !allowAutoPay) {
+            return autoPayFromPool(ability, unpaid, game);
+        }
+        return super.playManaHandling(ability, unpaid, game);
     }
 
     @Override
     protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
         if (game.isPaused() || game.checkIfGameIsOver())
-            return makeChoiceHelper(outcome, target, source, game, fromCards); //if game is already paused don't overwrite last decision
+            return makeChoiceFallback(outcome, target, source, game, fromCards); //if game is already paused don't overwrite last decision
 
         // choose itself for starting player all the time
         if (target.getMessage(game).equals("Select a starting player")) {
@@ -160,7 +166,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return false;
         }
         if(target.isChosen(game)) {
-            possible.add(ComputerPlayerMCTS.STOP_CHOOSING);//finish choosing early flag
+            possible.add(STOP_CHOOSING);//finish choosing early flag
         }
 
 
@@ -169,7 +175,7 @@ public class MCTSPlayer extends ComputerPlayer {
             UUID choice = actionScript.targetSequence.pollFirst();
             if(PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried target: %s ", game.getEntityName(choice).toString()));
             getPlayerHistory().targetSequence.add(choice);
-            if(!choice.equals(ComputerPlayerMCTS.STOP_CHOOSING)) {
+            if(!choice.equals(STOP_CHOOSING)) {
                 target.addTarget(choice, source, game);
                 //choose another?
                 makeChoice(outcome, target, source, game, fromCards);
@@ -196,11 +202,14 @@ public class MCTSPlayer extends ComputerPlayer {
         game.pause();
         lastToAct = true;
         nextAction = NextAction.CHOOSE_TARGET;
-        return makeChoiceHelper(outcome, target, source, game, fromCards);//continue with default target until able to pause
+        return makeChoiceFallback(outcome, target, source, game, fromCards);//continue with default target until able to pause
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if (choice.getChoices().size() == 1 || game.isPaused() || game.checkIfGameIsOver()) {
+        if(game.isPaused() || game.checkIfGameIsOver()) {
+            return chooseFallback(outcome, choice, game);
+        }
+        if (choice.getChoices().size() == 1) {
             return chooseHelper(outcome, choice, game);
         }
         if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
@@ -233,7 +242,7 @@ public class MCTSPlayer extends ComputerPlayer {
         game.pause();
         lastToAct = true;
         nextAction = NextAction.MAKE_CHOICE;
-        return chooseHelper(outcome, choice, game);
+        return chooseFallback(outcome, choice, game);
     }
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText, Ability source, Game game) {
@@ -287,6 +296,10 @@ public class MCTSPlayer extends ComputerPlayer {
         lastToAct = true;
         nextAction = NextAction.CHOOSE_NUM;
         return 0;
+    }
+    @Override
+    public boolean isMCTSComputerPlayer() {
+        return !allowAutoPay;
     }
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {

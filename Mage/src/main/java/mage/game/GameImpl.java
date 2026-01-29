@@ -62,12 +62,10 @@ import mage.game.turn.Step;
 import mage.game.turn.Turn;
 import mage.game.turn.TurnMod;
 import mage.players.Player;
+import mage.players.PlayerImpl;
 import mage.players.PlayerList;
 import mage.players.Players;
-import mage.target.Target;
-import mage.target.TargetCard;
-import mage.target.TargetPermanent;
-import mage.target.TargetPlayer;
+import mage.target.*;
 import mage.util.*;
 import mage.util.functions.CopyApplier;
 import mage.watchers.Watcher;
@@ -499,8 +497,20 @@ public abstract class GameImpl implements Game {
         player = getPlayer(permanent.getControllerId());
         return player;
     }
+
+    /**
+     * hyper safe UUID to semantic name; can take anything, will never return nothing
+     * @param entityId
+     * @return never null
+     */
     @Override
     public String getEntityName(UUID entityId) {
+        if(entityId == null) {
+            return "null";
+        }
+        if(entityId.equals(TargetImpl.STOP_CHOOSING)) {
+            return "Stop Choosing";
+        }
         MageObject obj = null;
         try {
             obj = getObject(entityId);

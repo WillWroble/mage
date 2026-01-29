@@ -268,12 +268,12 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
             return name;
         }
     }
-
+    //TODO: remove, consolidate code (DONT USE THIS VERSION FOR MCTS AI!)
     @Override
     public String getValue(GameState state) {
         StringBuilder sb = threadLocalBuilder.get();
         sb.append(controllerId).append(getName()).append(tapped).append(damage);
-        if(!this.isLand()) sb.append(getId());//TODO: temporary workaround for non deterministic auto-tapper. need to make auto tapper deterministic at some point
+        if(!this.isLand()) sb.append(getId());
         sb.append(subtype).append(supertype).append(power.getValue()).append(toughness.getValue());
         sb.append(abilities.getValue());
         for(UUID att : attachments) {
@@ -289,7 +289,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         StringBuilder sb = threadLocalBuilder.get();
         sb.append(controllerId.equals(targetPlayer)).append(getName()).append(tapped).append(damage);
         sb.append(subtype).append(supertype).append(power.getValue()).append(toughness.getValue());
-        sb.append(abilities.getValue());
+        sb.append(getAbilities(game).getValue());
         List<String> names =  new ArrayList<>();
         for(UUID att : attachments) {
             names.add(game.getEntityName(att));
