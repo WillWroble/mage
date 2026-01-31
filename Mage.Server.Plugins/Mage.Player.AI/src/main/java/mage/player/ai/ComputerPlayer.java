@@ -198,7 +198,7 @@ public class ComputerPlayer extends PlayerImpl {
         return target.isChosen(game) && !target.getTargets().isEmpty();
     }
     protected boolean makeChoiceFallback(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
-        return target.isChosen(game) && !target.getTargets().isEmpty();
+        return makeChoiceHelper(outcome, target, source, game, fromCards);
     }
 
     /**
@@ -1692,7 +1692,7 @@ public class ComputerPlayer extends PlayerImpl {
             }
         }
 
-        // Keep duplicates if that’s your policy (AI often wants all copies)
+        // Keep duplicates (AI often wants all copies)
         playable.addAll(activatedAll);
 
         // Always include pass
@@ -1726,12 +1726,15 @@ public class ComputerPlayer extends PlayerImpl {
         }
         return all;
     }
-    protected boolean autoPayFromPool(Ability ability, ManaCost unpaid, final Game game) {
-        // Only spend from floating mana. Do NOT activate mana abilities here.
-        // All special/alternate/additional costs (like Convoke/Improvise/Delve/Phyrexian/Life,
-        // sacrifice/discard/return, etc.) are handled by the engine via micro-decisions that
-        // ComputerPlayer already answers.
 
+    /**
+     * Only spend from floating mana. Do NOT activate mana abilities here.
+     * @param ability
+     * @param unpaid
+     * @param game
+     * @return
+     */
+    protected boolean autoPayFromPool(Ability ability, ManaCost unpaid, final Game game) {
         Set<ApprovingObject> approvingObjects = game.getContinuousEffects().asThough(ability.getSourceId(), AsThoughEffectType.SPEND_OTHER_MANA, ability, ability.getControllerId(), game);
         boolean hasApprovingObject = !approvingObjects.isEmpty();
 
@@ -1761,7 +1764,7 @@ public class ComputerPlayer extends PlayerImpl {
         if(unpaid.isPaid()) {
             return true;
         }
-        // pay special mana like convoke cost (tap for pay)
+        // pay special mana like convoke cost (tap for pay) TODO: support handling multiple special actions (ie Hogaak)
         SpecialAction specialAction = game.getState().getSpecialActions().getControlledBy(this.getId(), true).values()
                 .stream().min(Comparator.comparing(SpecialAction::toString))
                 .orElse(null);

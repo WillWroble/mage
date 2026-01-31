@@ -30,6 +30,12 @@
             <artifactId>mage-sets</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>11.0.2</version>
+            <scope>compile</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -48,11 +48,12 @@ import java.util.stream.Collectors;
 
 public interface Game extends MageItem, Serializable, Copyable<Game> {
 
-    boolean isCheckPoint();
+    boolean isCheckPoint(UUID playerId);
     Random getLocalRandom();
     void setLocalRandom(Random random);
     Game getLastPriority();
     UUID getLastPriorityPlayerId();
+    Player getOpponent(UUID playerId);
 
     void setLastPriority(UUID id);
 
@@ -95,7 +96,7 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     MageObject getObject(UUID objectId);
 
     MageObject getObject(Ability source);
-    String getEntityName(UUID entityId);
+    String getEntityName(UUID entityId, UUID playerId);
 
     MageObject getBaseObject(UUID objectId);
 
@@ -561,7 +562,6 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
      * Inner engine call to reset all game objects and re-apply all layered continuous effects.
      * Do NOT use indiscriminately. See processAction() instead.
      */
-    @Deprecated
     void applyEffects();
 
     /**

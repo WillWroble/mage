@@ -1201,7 +1201,7 @@ public class HumanPlayer extends PlayerImpl {
 
         //for MCTS opponent
         List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
-        if(playableAbilities.isEmpty() && !game.isCheckPoint()) {//just pass when only option
+        if(playableAbilities.isEmpty() && !game.isCheckPoint(playerId)) {//just pass when only option
             pass(game);
             return false;
         }

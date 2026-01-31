@@ -311,17 +311,21 @@ public abstract class GameImpl implements Game {
     }
 
     /**
-     * determinse wether this state should be used as an anchor for MCTS Nodes
+     * get the opponent from a player in 1v1 games
+     * @param playerId
      * @return
      */
-    public boolean isCheckPoint() {
-        boolean isStarting = getTurnNum()==1 && getTurnStepType().equals(PhaseStep.UPKEEP);
-        //forced checkpoint before combat decisions
-        boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT);
-        boolean isPreBlock = getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS);
-        boolean isPostBlock = getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS);
-        boolean isStack = false; //TODO: replace with dynamic cache of Stack-Object to save decision state
-        return  isStarting || isPreAttack ||  isPreBlock || isPostBlock || isStack;
+    @Override
+    public Player getOpponent(UUID playerId) {
+        return getPlayer(getOpponents(playerId).iterator().next());
+    }
+
+    /**
+     * determine whether this state should be used as an anchor for MCTS Nodes
+     */
+    //TODO: implement sparse checkpoint mode
+    public boolean isCheckPoint(UUID playerId) {
+        return true;
     }
     @Override
     public boolean isSimulation() {
@@ -499,12 +503,12 @@ public abstract class GameImpl implements Game {
     }
 
     /**
-     * hyper safe UUID to semantic name; can take anything, will never return nothing
+     * hyper safe UUID to semantic ML-safe name; can take anything, will never return nothing
      * @param entityId
      * @return never null
      */
     @Override
-    public String getEntityName(UUID entityId) {
+    public String getEntityName(UUID entityId, UUID playerId) {
         if(entityId == null) {
             return "null";
         }
@@ -519,7 +523,11 @@ public abstract class GameImpl implements Game {
                 if (player == null) {
                     return "null";
                 }
-                return player.getName();
+                if(player.getId().equals(playerId)) {
+                    return "PlayerA";
+                } else {
+                    return "PlayerB";
+                }
             }
         } catch (Exception e) {
             logger.warn("couldn't get entity name for entity " + entityId);

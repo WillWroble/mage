@@ -4,12 +4,12 @@ package mage.player.ai;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
-import mage.player.ai.MCTSPlayer.NextAction;
+import mage.player.ai.encoder.ActionEncoder;
+import mage.player.ai.encoder.StateEncoder;
 import mage.player.ai.score.GameStateEvaluator2;
 import mage.player.ai.score.GameStateEvaluator3;
 import mage.players.Player;
 import mage.players.PlayerScript;
-import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 /**
  *
- * AlphaZero style MCTS that uses a Neural Network with the PUCT formula. Supports almost all decision points for MTG (priority, choose_target, choose_use, make_choice)
+ * AlphaZero style MCTS that uses a Neural Network with the PUCT formula. Supports almost all decision points for MTG (priority, choose_target, choose_use, make_choice, choose_mode)
  * All decision types besides make_choice have their own learnable priors as heads of the neural network. priorityA and priorityB are deck dependent; choose_target and choose_use are matchup dependent.
  * See StateEncoder.java for how MTG states are vectorized for the network.
  *
@@ -28,12 +28,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
     private static final Logger logger = Logger.getLogger(ComputerPlayerMCTS2.class);
 
-    private transient StateEncoder stateEncoder = null;
+
     public static boolean SHOW_THREAD_INFO = true;
-    /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and even priors.
+    /**if offline mode is on it won't use a neural network and will instead use a heuristic value function and uniform priors.
     is enabled by default if no network is found*/
     public boolean offlineMode = false;
-    public String DEFAULT_URL = "http://127.0.0.1:50052";
+    public String defaultURL = "http://127.0.0.1:50052";
     public transient RemoteModelEvaluator nn;
 
 
@@ -48,19 +48,21 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     }
 
     public ComputerPlayerMCTS2(final ComputerPlayerMCTS2 player) {
-        super(player); nn = player.nn;
-        stateEncoder = player.stateEncoder;
+        super(player);
+        nn = player.nn;
+        offlineMode = player.offlineMode;
+        defaultURL = player.defaultURL;
     }
     public void RLInit(Game game) {
-        logger.info("RL init for " + getName() + " (MZ ver1.2)");
-        Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+        logger.info("RL init for " + getName() + " (MZ ver1.0.2)");
+        Player opponent = game.getOpponent(playerId);
         //make encoder
         stateEncoder = new StateEncoder();
         stateEncoder.setAgent(getId());
         stateEncoder.setOpponent(opponent.getId());
         //find model endpoint
         try {
-            nn = new RemoteModelEvaluator(DEFAULT_URL);
+            nn = new RemoteModelEvaluator(defaultURL);
         } catch (Exception e) {
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
             offlineMode = true;
@@ -73,22 +75,19 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     }
 
     /**
-     * Evaluates a node's game state using the neural network.
-     * This method encodes the state into sparse global indices, runs inference,
-     * and updates the node's policy prior.
+     * Evaluates a node's game state using a neural network.
+     * This method collects the encoded state of sparse indices, runs inference,
+     * and updates the node's policy prior. If network can not be found falls back to heuristic evaluation
      *
      * @param node The MCTSNode to evaluate.
      * @return The value of the game state as predicted by the neural network's value head.
      */
-    protected double evaluateState(MCTSNode node, Game game) {
-        MCTSPlayer myPlayer = (MCTSPlayer)game.getPlayer(node.playerId);
-
-        Set<Integer> featureSet = stateEncoder.processState(game, node.playerId, myPlayer.getNextAction(), myPlayer.decisionText);
-        node.stateVector = featureSet;
-
+    protected double evaluateState(MCTSNode node) {
+        MCTSPlayer myPlayer = node.getPlayer();
+        Game game = node.getGame();
         if(offlineMode) {
             node.policy = null;
-            if(myPlayer.getNextAction().equals(NextAction.PRIORITY)) {
+            if(myPlayer.getNextAction().equals(ActionEncoder.ActionType.PRIORITY)) {
                 node.networkScore = GameStateEvaluator3.evaluateNormalized(playerId, game);
             } else {
                 if(node.getParent() != null) {
@@ -101,9 +100,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         }
 
 
-        long[] nnIndices = new long[featureSet.size()];
+        long[] nnIndices = new long[node.stateVector.size()];
         int k = 0;
-        for (int i : featureSet)  {
+        for (int i : node.stateVector)  {
             nnIndices[k++] = i;
         }
 
@@ -112,7 +111,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         switch (myPlayer.getNextAction()) {
             case PRIORITY:
                 if(noPolicyPriority) break;
-                if (node.playerId.equals(playerId)) {
+                if (myPlayer.getId().equals(playerId)) {
                     node.policy = out.policy_player;
                 } else {
                     if (!noPolicyOpponent) {
@@ -140,10 +139,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         return node.networkScore;
     }
-
-    public void setStateEncoder(StateEncoder enc) {
-        stateEncoder = enc;
-    }
     @Override
     public boolean priority(Game game) {
         if (game.getTurnStepType() == PhaseStep.END_TURN) {
@@ -155,12 +150,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      * core MCTS search implementation, with legality and transposition pruning
      */
     @Override
-    protected void applyMCTS(final Game game, final NextAction action) {
-        if(stateEncoder == null) {
-            RLInit(game);
-        }
-        if(actionEncoder == null) {
-            actionEncoder = new ActionEncoder();
+    protected void applyMCTS(final Game game, final ActionEncoder.ActionType action) {
+        if(!action.equals(ActionEncoder.ActionType.PRIORITY)) {
+            allMana = false;
         }
         root.resetVirtual();
         int initialVisits = root.getVisits();
@@ -171,7 +163,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         double totalThinkTimeThisMove = 0;
 
         // Apply dirichlet noise once at the start of the search for this turn
-        if(!noNoise) root.dirichletSeed = RandomUtil.nextInt();
+        if(!noNoise) root.randomizeNoiseSeed();
 
         long startTime = System.nanoTime();
         long endTime = (long) (startTime + (searchTimeout * 1_000_000_000L));
@@ -186,7 +178,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 logger.error("force time out after one minute - couldn't find legal move");
                 break;
             }
-            if(root.containsPriorityNode()) { //can only exit search if the tree contains a priority node (meaning a future legal state)
+            if(root.containsLegalNode()) { //can only exit search if the tree contains a priority node (meaning a future legal state)
                 if (System.nanoTime() > endTime) {
                     logger.info("timed out, ending search");
                     break;
@@ -209,33 +201,33 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if(current.getParent() == null) {
                 logger.error("root not pre-expanded");
             }
-            //temporary reference to a game that represents this node's state
-            Game tempGame = null;
-            double result = 0;
             if(!current.isTerminal()) {//if terminal is true current must be finalized so skip getGame()
-                tempGame = current.getGame();//can become terminal here
-                if(!tempGame.checkIfGameIsOver()) {
+
+                current.validateState();//can become terminal here
+
+                if(!current.isTerminal()) {
                     //remove child if failed script
-                    if (((MCTSPlayer)tempGame.getPlayer(current.playerId)).scriptFailed) {
+                    if (current.getPlayer().scriptFailed) {
                         illegalPurged++;
                         current.getParent().purge(current);
                         continue;
                     }
-                    // eval
-                    result = evaluateState(current, tempGame);
                     //remove child if node is already in the tree
-                    if(current.getParent().getMatchingState(current.stateVector) != null) {
+                    MCTSNode match = current.getPlayerScope().getMatchingState(current.stateVector);
+                    if(match != null) {
                         duplicatePurged++;
+                        current.backpropagate(match.networkScore);
                         current.getParent().purge(current);
                         continue;
                     }
                 }
-                //finalize node
-                current.isFinalized = true;
             }
+            double result;
             if (!current.isTerminal()) {
+                // eval
+                result = evaluateState(current);
                 //expand
-                current.expand(tempGame);
+                current.expand();
 
             } else {
                 result = current.isWinner() ? 1.0 : -1.0;
@@ -246,17 +238,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             simCount++;
         }
         totalSimulations += simCount;
-        totalThinkTimeThisMove += (System.nanoTime() - startTime)/1e9;
-
-        if (SHOW_THREAD_INFO) {
-            logger.info(String.format("Ran %d simulations.", simCount));
-            logger.info(String.format("COMPOSITE CHILDREN: %s", getChildVisitsFromRoot().toString()));
-        }
-
-
+        totalThinkTimeThisMove = (System.nanoTime() - startTime)/1e9;
         totalThinkTime += totalThinkTimeThisMove;
 
-        if (SHOW_THREAD_INFO) {
+        if (SHOW_THREAD_INFO && !allMana) {
+            logger.info(String.format("Ran %d simulations.", simCount));
+            logger.info(String.format("COMPOSITE CHILDREN: %s", getChildVisitsFromRoot().toString()));
             logger.info("Player: " + name + " simulated " + simCount + " evaluations in " + totalThinkTimeThisMove
                     + " seconds - nodes in tree: " + root.size());
             logger.info("Total: simulated " + totalSimulations + " evaluations in " + totalThinkTime
@@ -267,9 +254,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     int[] getActionVec(MCTSNode node, boolean isPlayer) {
         int[] out = new int[128];
         Arrays.fill(out, 0);
-        for (MCTSNode child : node.children) {
-            if (child.getActionSequence() != null) {
-                int idx = actionEncoder.getActionIndex(child.getActionSequence(), isPlayer);
+        for (MCTSNode child : node.getChildren()) {
+            if (child.getPriorityAction() != null) {
+                int idx = actionEncoder.getActionIndex(child.getPriorityAction(), isPlayer);
                 int v = child.getVisits();//un normalized counts
                 out[idx%128] += v;
             }
@@ -279,8 +266,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     int[] getTargetActionVec(MCTSNode node, Game game) {
         int[] out = new int[128];
         Arrays.fill(out, 0);
-        for (MCTSNode child : node.children) {
-            int idx = actionEncoder.getTargetIndex(game.getEntityName(child.chooseTargetAction));
+        for (MCTSNode child : node.getChildren()) {
+            int idx = actionEncoder.getTargetIndex(game.getEntityName(child.getTargetAction(), playerId));
             int v = child.getVisits();
             out[idx%128] += v;
         }
@@ -289,38 +276,47 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     int[] getUseActionVec(MCTSNode node) {
         int[] out = new int[128];
         Arrays.fill(out, 0);
-        for (MCTSNode child : node.children) {
-            int idx = child.useAction ? 1 : 0;
+        for (MCTSNode child : node.getChildren()) {
+            int idx = child.getUseAction() ? 1 : 0;
             int v = child.getVisits();
             out[idx] += v;
         }
         return out;
     }
     @Override
-    protected MCTSNode getNextAction(Game game, NextAction nextAction) {
+    protected MCTSNode getNextAction(Game game, ActionEncoder.ActionType actionType) {
+
+        if(stateEncoder == null) {
+            RLInit(game);
+        }
+        if(actionEncoder == null) {
+            actionEncoder = new ActionEncoder();
+        }
+
         Game sim = createMCTSGame(game.getLastPriority());
-        ((MCTSPlayer) sim.getPlayer(playerId)).setNextAction(nextAction);
-        MCTSNode newRoot = new MCTSNode(this, sim, nextAction);
-        newRoot.prefixScript = new PlayerScript(getPlayerHistory());
-        newRoot.opponentPrefixScript = new PlayerScript(game.getPlayer(game.getOpponents(playerId).iterator().next()).getPlayerHistory());
+        PlayerScript prefixScript = new PlayerScript(getPlayerHistory());
+        PlayerScript opponentPrefixScript = new PlayerScript(game.getOpponent(playerId).getPlayerHistory());
+        MCTSNode newRoot = new MCTSNode(this, sim, actionType, prefixScript, opponentPrefixScript);
+
         //do first expansion automatically
-        Game tempGame = newRoot.getGame();
-        evaluateState(newRoot, tempGame);
-        newRoot.expand(tempGame);
-        newRoot.isFinalized = true;
-        logger.info("prefix at root: " + newRoot.prefixScript);
-        logger.info("opponent prefix at root: " + newRoot.opponentPrefixScript);
+        newRoot.validateState();
+        evaluateState(newRoot);
+        newRoot.expand();
+        if(!prefixScript.isEmpty() || !opponentPrefixScript.isEmpty() ) {
+            logger.info("prefix at root: " + prefixScript);
+            logger.info("opponent prefix at root: " + opponentPrefixScript);
+        }
         if (root != null) {
             root = root.getMatchingState(newRoot.stateVector);
         }
-        if (root == null || root.state == null) {
+        if (root == null) {
             root = newRoot;
         }
         root.emancipate();
-        return calculateActions(game, nextAction);
+        return calculateActions(game, actionType);
     }
     @Override
-    protected MCTSNode calculateActions(Game game, NextAction action) {
+    protected MCTSNode calculateActions(Game game, ActionEncoder.ActionType action) {
         applyMCTS(game, action);
 
         MCTSNode best = root.bestChild(game);
@@ -329,13 +325,13 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             return null;
         }
         int[] actionVec = null;
-        if (action == NextAction.PRIORITY) {
+        if (action == ActionEncoder.ActionType.PRIORITY) {
             actionVec = getActionVec(root, true);
         }
-        else if(action == NextAction.CHOOSE_TARGET) {
+        else if(action == ActionEncoder.ActionType.CHOOSE_TARGET) {
             actionVec = getTargetActionVec(root, game);
         }
-        else if(action == NextAction.CHOOSE_USE) {
+        else if(action == ActionEncoder.ActionType.CHOOSE_USE) {
             actionVec = getUseActionVec(root);
         }
         if(actionVec != null) stateEncoder.addLabeledState(root.stateVector, actionVec, root.getMeanScore(), action, true);
@@ -351,9 +347,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
      * Helper method to get the visit counts of the root's children for a single tree.
      */
     private List<Integer> getChildVisitsFromRoot() {
-        if (root == null || root.children.isEmpty()) {
+        if (root == null || root.getChildren().isEmpty()) {
             return new ArrayList<>();
         }
-        return root.children.stream().map(MCTSNode::getVisits).collect(Collectors.toList());
+        return root.getChildren().stream().map(MCTSNode::getVisits).collect(Collectors.toList());
     }
 }

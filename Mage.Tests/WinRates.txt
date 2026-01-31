@@ -23,3 +23,68 @@ WR with EVG_Goblins vs Standard-MonoB: 0.0 in 4 games
 WR with Mind(MindvsMight) vs Standard-MonoB: 0.0 in 4 games
 WR with WillS_Tempo vs Standard-MonoB: 0.0 in 4 games
 WR with UW Control vs Standard-MonoB: 0.0 in 3 games
+WR with Standard-MonoB vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoG vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoR vs Standard-MonoB: 0.25 in 4 games
+WR with Standard-MonoU vs Standard-MonoB: 0.25 in 4 games
+WR with Standard-MonoW vs Standard-MonoB: 0.0 in 4 games
+WR with MTGA_MonoB vs Standard-MonoB: 0.0 in 4 games
+WR with MTGA_MonoG vs Standard-MonoB: 0.25 in 4 games
+WR with MTGA_MonoR vs Standard-MonoB: 0.0 in 4 games
+WR with MTGA_MonoU vs Standard-MonoB: 0.0 in 4 games
+WR with MTGA_MonoW vs Standard-MonoB: 0.25 in 4 games
+WR with BGRoots vs Standard-MonoB: 0.0 in 4 games
+WR with BWBats vs Standard-MonoB: 0.25 in 4 games
+WR with EsperTempo vs Standard-MonoB: 0.25 in 4 games
+WR with GBLegends vs Standard-MonoB: 0.0 in 4 games
+WR with MonoUArtifacts vs Standard-MonoB: 0.0 in 4 games
+WR with RB Aggro vs Standard-MonoB: 0.0 in 4 games
+WR with UBArtifacts vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs Standard-MonoB: 0.25 in 4 games
+WR with Standard-MonoB vs Standard-MonoB: 0.25 in 4 games
+WR with Standard-MonoG vs Standard-MonoB: 0.25 in 4 games
+WR with Standard-MonoB vs Standard-MonoG: 0.25 in 4 games
+WR with Standard-MonoB vs Standard-MonoR: 0.25 in 4 games
+WR with Standard-MonoR vs Standard-MonoB: 0.25 in 4 games
+WR with Standard-MonoU vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs Standard-MonoU: 0.5 in 4 games
+WR with Standard-MonoW vs Standard-MonoB: 0.25 in 4 games
+WR with MTGA_MonoB vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs Standard-MonoW: 0.25 in 4 games
+WR with MTGA_MonoG vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs MTGA_MonoB: 0.75 in 4 games
+WR with MTGA_MonoR vs Standard-MonoB: 0.0 in 4 games
+WR with MTGA_MonoU vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs MTGA_MonoG: 0.5 in 4 games
+WR with MTGA_MonoW vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs MTGA_MonoR: 0.5 in 4 games
+WR with BGRoots vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs MTGA_MonoU: 0.75 in 4 games
+WR with BWBats vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs MTGA_MonoW: 0.25 in 4 games
+WR with EsperTempo vs Standard-MonoB: 0.25 in 4 games
+WR with GBLegends vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs BGRoots: 0.0 in 4 games
+WR with MonoUArtifacts vs Standard-MonoB: 0.0 in 4 games
+WR with RB Aggro vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs BWBats: 0.5 in 4 games
+WR with UBArtifacts vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs EsperTempo: 0.5 in 4 games
+WR with simic-eldrazi vs Standard-MonoB: 0.0 in 4 games
+WR with HighNoonControl vs Standard-MonoB: 0.0 in 4 games
+WR with EVG_Elves vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs GBLegends: 0.5 in 4 games
+WR with EVG_Goblins vs Standard-MonoB: 0.0 in 4 games
+WR with Mind(MindvsMight) vs Standard-MonoB: 0.0 in 4 games
+WR with WillS_Tempo vs Standard-MonoB: 0.0 in 4 games
+WR with UW Control vs Standard-MonoB: 0.0 in 4 games
+WR with Standard-MonoB vs MonoUArtifacts: 0.75 in 4 games
+WR with Standard-MonoB vs RB Aggro: 1.0 in 4 games
+WR with Standard-MonoB vs UBArtifacts: 0.0 in 4 games
+WR with Standard-MonoB vs simic-eldrazi: 0.75 in 4 games
+WR with Standard-MonoB vs HighNoonControl: 1.0 in 4 games
+WR with Standard-MonoB vs EVG_Elves: 0.0 in 4 games
+WR with Standard-MonoB vs EVG_Goblins: 0.75 in 4 games
+WR with Standard-MonoB vs Mind(MindvsMight): 0.75 in 4 games
+WR with Standard-MonoB vs WillS_Tempo: 0.5 in 4 games
+WR with Standard-MonoB vs UW Control: 0.25 in 4 games

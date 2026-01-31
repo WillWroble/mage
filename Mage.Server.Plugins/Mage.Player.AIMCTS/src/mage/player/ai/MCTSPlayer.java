@@ -7,6 +7,8 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
+import mage.player.ai.encoder.ActionEncoder;
+import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.target.Target;
@@ -25,43 +27,52 @@ import static mage.target.TargetImpl.STOP_CHOOSING;
  */
 public class MCTSPlayer extends ComputerPlayer {
 
-    public boolean lastToAct = false;
-    public boolean allowAutoPay = false;
-    //flag meaning the script given to this player wasn't followable
-    public boolean scriptFailed = false;
-    private NextAction nextAction;
-    private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
-
     //the script of actions this dummy player is supposed to follow to catch up to the latest decision
     public PlayerScript actionScript = new PlayerScript();
+    public boolean scriptFailed = false;
+    private boolean lastToAct = false;
+    private boolean isRandomTransition;
+
+
+    private ActionEncoder.ActionType actionType;
+
+
     //additional text for state encoder that describes the decision the player is currently making
-    public String decisionText;
-    public boolean isRandomTransition;
-    public UUID targetPlayer;
+    private String decisionText;
+    private UUID targetPlayer;
+    private Set<Integer> stateVector;
+    private StateEncoder encoder;
 
+    private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
 
-
-    public static boolean PRINT_CHOOSE_DIALOGUES = true;
-
-
-    public enum NextAction {
-        PRIORITY, CHOOSE_NUM, BLANK, CHOOSE_TARGET, MAKE_CHOICE, CHOOSE_USE
-    }
 
     public MCTSPlayer(UUID id) {
         super(id);
     }
-    public MCTSPlayer(UUID id, UUID target) {
+    public MCTSPlayer(UUID id, UUID target, StateEncoder encoder) {
         super(id);
         this.targetPlayer = target;
+        this.encoder = encoder;
     }
 
 
     public MCTSPlayer(final MCTSPlayer player) {
         super(player);
-        this.nextAction = player.nextAction;
+        this.actionType = player.actionType;
         this.targetPlayer = player.targetPlayer;
-        this.allowAutoPay = player.allowAutoPay;
+        this.encoder = player.encoder;
+    }
+    public void clearFields() {
+        lastToAct = false;
+        isRandomTransition = false;
+        scriptFailed = false;
+        getPlayerHistory().clear();
+        actionScript.clear();
+        chooseTargetOptions.clear();
+        choiceOptions.clear();
+        numOptionsSize = 0;
+        playables.clear();
+        decisionText = "";
     }
 
     @Override
@@ -69,13 +80,14 @@ public class MCTSPlayer extends ComputerPlayer {
         return new MCTSPlayer(this);
     }
 
-    public NextAction getNextAction() {
-        return nextAction;
+    public ActionEncoder.ActionType getNextAction() {
+        return actionType;
     }
 
-    public void setNextAction(NextAction action) {
-        this.nextAction = action;
-    }
+    public boolean isRandomTransition() {return isRandomTransition;}
+    public boolean isLastToAct() {return lastToAct;}
+    public Set<Integer> getStateVector() {return stateVector;}
+
 
     @Override
     public void restore(Player player) {
@@ -86,6 +98,11 @@ public class MCTSPlayer extends ComputerPlayer {
     public int drawCards(int num, Ability source, Game game) {
         isRandomTransition = true;
         return drawCards(num, source, game, null);
+    }
+    private void freezeState(Game game) {
+        game.pause();
+        lastToAct = true;
+        stateVector = encoder.processState(game, playerId, actionType, decisionText);
     }
     @Override
     public boolean priority(Game game) {
@@ -104,15 +121,14 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         playables = getPlayableAbilities(game);
-        if(playables.size() == 1 && !game.isCheckPoint()) {//forced checkpoint at start
+        if(playables.size() == 1 && !game.isCheckPoint(playerId)) {//forced checkpoint at start
             pass(game);
             return false;
         }
         game.setLastPriority(playerId);
         decisionText = "priority";
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.PRIORITY;
+        actionType = ActionEncoder.ActionType.PRIORITY;
+        freezeState(game);
         return false;
     }
     @Override
@@ -125,13 +141,16 @@ public class MCTSPlayer extends ComputerPlayer {
         if(game.isPaused() || game.checkIfGameIsOver()) return;
         selectBlockersOneAtATime(source, game, defendingPlayerId);
     }
+    //MCTS always uses manual tapping
     @Override
     public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
-        if(playerId.equals(targetPlayer) || !allowAutoPay) {
-            return autoPayFromPool(ability, unpaid, game);
+        boolean out = autoPayFromPool(ability, unpaid, game);
+        if(!out) {
+            illegalGameState(game);
+            return false;
         }
-        return super.playManaHandling(ability, unpaid, game);
+        return true;
     }
 
     @Override
@@ -168,12 +187,8 @@ public class MCTSPlayer extends ComputerPlayer {
         if(target.isChosen(game)) {
             possible.add(STOP_CHOOSING);//finish choosing early flag
         }
-
-
-
         if (!actionScript.targetSequence.isEmpty()) {
             UUID choice = actionScript.targetSequence.pollFirst();
-            if(PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried target: %s ", game.getEntityName(choice).toString()));
             getPlayerHistory().targetSequence.add(choice);
             if(!choice.equals(STOP_CHOOSING)) {
                 target.addTarget(choice, source, game);
@@ -199,9 +214,8 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         sb.append(":Choose a target:").append(target.getTargetName());
         decisionText = sb.toString();
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.CHOOSE_TARGET;
+        actionType = ActionEncoder.ActionType.CHOOSE_TARGET;
+        freezeState(game);
         return makeChoiceFallback(outcome, target, source, game, fromCards);//continue with default target until able to pause
     }
     @Override
@@ -218,7 +232,6 @@ public class MCTSPlayer extends ComputerPlayer {
             }
         }
         //for choosing colors/types etc
-        if (PRINT_CHOOSE_DIALOGUES) logger.debug("CALLING MAKE CHOICE: " + choice.toString());
         if (!actionScript.choiceSequence.isEmpty()) {
             String chosen = actionScript.choiceSequence.pollFirst();
             if(!choice.getChoices().isEmpty()) {
@@ -227,7 +240,6 @@ public class MCTSPlayer extends ComputerPlayer {
                 choice.setChoiceByKey(chosen);
             }
             getPlayerHistory().choiceSequence.add(chosen);
-            if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried choice: %s ", chosen));
             return true;
         }
         choiceOptions = new HashSet<>(choice.getChoices());
@@ -239,9 +251,8 @@ public class MCTSPlayer extends ComputerPlayer {
             return false; //fizzle
         }
         decisionText = choice.getMessage();
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.MAKE_CHOICE;
+        actionType = ActionEncoder.ActionType.MAKE_CHOICE;
+        freezeState(game);
         return chooseFallback(outcome, choice, game);
     }
     @Override
@@ -252,7 +263,6 @@ public class MCTSPlayer extends ComputerPlayer {
         if(!actionScript.useSequence.isEmpty()) {
             Boolean chosen =  actionScript.useSequence.pollFirst();
             getPlayerHistory().useSequence.add(chosen);
-            if (PRINT_CHOOSE_DIALOGUES) logger.debug(String.format("tried use: %s ", chosen));
             return chosen;
         }
         //don't simulate opponent's mulligan decisions - assume they keep 7
@@ -261,11 +271,9 @@ public class MCTSPlayer extends ComputerPlayer {
             return false;
         }
         decisionText = message;
-        //logger.info("decisionText: " + decisionText);
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.CHOOSE_USE;
-        return false; //defaults to try to avoid infinite use issues from poorly implemented abilities
+        actionType = ActionEncoder.ActionType.CHOOSE_USE;
+        freezeState(game);
+        return false;
     }
     @Override
     public boolean chooseMulligan(Game game) {
@@ -283,6 +291,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return min;
         }
         if(max - min > 64) {//clamp for safety
+            logger.warn("unbounded amount selection - limiting to 64");
             max = min + 64;
         }
         numOptionsSize = max - min + 1;
@@ -292,14 +301,13 @@ public class MCTSPlayer extends ComputerPlayer {
             return chosenNum + min;
         }
         decisionText = "choose num for " + source.toString();
-        game.pause();
-        lastToAct = true;
-        nextAction = NextAction.CHOOSE_NUM;
+        actionType = ActionEncoder.ActionType.CHOOSE_NUM;
+        freezeState(game);
         return 0;
     }
     @Override
     public boolean isMCTSComputerPlayer() {
-        return !allowAutoPay;
+        return true;
     }
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
@@ -315,6 +323,8 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     public void illegalGameState(Game game) {
+        if(game.isPaused()) return;
+        logger.warn("Illegal game state: " + game);
         scriptFailed = true;
         lastToAct = true;
         game.pause();

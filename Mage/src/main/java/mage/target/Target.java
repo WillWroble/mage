@@ -29,8 +29,6 @@ public interface Target extends Copyable<Target>, Serializable {
      * Warning, for "up to" targets it will return true all the time, so make sure your dialog
      * use do-while logic and call "choose" one time min or use isChoiceCompleted
      */
-    @Deprecated
-    // TODO: replace with UUID abilityControllerId, Ability source, Game game
     boolean isChosen(Game game);
 
     /**

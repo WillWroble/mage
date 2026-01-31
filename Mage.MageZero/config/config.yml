@@ -25,8 +25,11 @@ player_a:
   mulligans:
     enabled: False
 
+  hidden_info:
+    see_opponent_hand: True
+
 player_b:
-  deckPath: decks/Standard-MonoU.dck
+  deckPath: decks/Standard-MonoW.dck
   type: minimax
   output_dir: data/playerB
 
@@ -47,6 +50,9 @@ player_b:
   mulligans:
     enabled: false
 
+  hidden_info:
+    see_opponent_hand: True
+
 training:
   games: 200
   threads: 4
@@ -58,6 +64,6 @@ server:
   opponent_port: 50053
 
 logging:
-  log_feature_hash: true
+  log_feature_hash: False
   save_final_wr: true
   show_wr: true #does nothing

@@ -71,6 +71,51 @@ public class MCTSDeckValidationTest {
             fail("Deck " + testDeck + " caused crash: " + e.getMessage(), e);
         }
     }
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "decks/Standard-MonoB.dck",
+            "decks/Standard-MonoG.dck",
+            "decks/Standard-MonoR.dck",
+            "decks/Standard-MonoU.dck",
+            "decks/Standard-MonoW.dck",
+            "decks/MTGA_MonoB.dck",
+            "decks/MTGA_MonoG.dck",
+            "decks/MTGA_MonoR.dck",
+            "decks/MTGA_MonoU.dck",
+            "decks/MTGA_MonoW.dck",
+            "decks/BGRoots.dck",
+            "decks/BWBats.dck",
+            "decks/EsperTempo.dck",
+            "decks/GBLegends.dck",
+            "decks/MonoUArtifacts.dck",
+            "decks/RB Aggro.dck",
+            "decks/UBArtifacts.dck",
+            "decks/simic-eldrazi.dck",
+            "decks/HighNoonControl.dck",
+            "decks/EVG_Elves.dck",
+            "decks/EVG_Goblins.dck",
+            "decks/Mind(MindvsMight).dck",
+            "decks/WillS_Tempo.dck",
+            "decks/UW Control.dck"
+    })
+    public void testMinimaxAgainstDeck(String testDeck) {
+        Config.INSTANCE.playerA.deckPath = OPPONENT_DECK;
+        Config.INSTANCE.playerB.deckPath = testDeck;
+        Config.INSTANCE.playerA.type = "mcts";
+        Config.INSTANCE.playerB.type = "minimax";
+        Config.INSTANCE.training.games = GAMES_PER_TEST;
+        Config.INSTANCE.training.maxTurns = MAX_TURNS;
+        Config.INSTANCE.training.threads = 4;
+        try {
+            ParallelDataGenerator generator = new ParallelDataGenerator();
+            generator.generateData();
+            int gamesPlayed = generator.gameCount.get();
+            assertEquals(GAMES_PER_TEST, gamesPlayed, "Should complete all games");
+            assertTrue(gamesPlayed > 0, "Should play at least one game");
+        } catch (Exception e) {
+            fail("Deck " + testDeck + " caused crash: " + e.getMessage(), e);
+        }
+    }
     @AfterAll
     static void cleanup() {
         CardRepository.instance.closeDB(true);

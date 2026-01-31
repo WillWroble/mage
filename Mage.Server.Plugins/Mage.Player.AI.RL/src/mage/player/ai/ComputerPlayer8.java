@@ -5,8 +5,9 @@ import mage.abilities.ActivatedAbility;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.events.GameEvent;
+import mage.player.ai.encoder.ActionEncoder;
+import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
-import mage.players.PlayerScript;
 import mage.target.Target;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +17,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * minimax player that logs priority decisions (as one hot vectors) and state values (as minimax derived score of root normalized to -1,1)
+ * minimax player designed for being the opponent in RL vs minimax games.
+ * logs priority decisions (as one hot vectors) and state values (as minimax derived score of root normalized to -1,1)
  * against a RL MCTS player will use that players search tree to create blended visit distributions instead of one hots and also use their MCTS derived value score for the root node (if states match)
  */
 public class ComputerPlayer8 extends ComputerPlayer7{
@@ -31,10 +33,8 @@ public class ComputerPlayer8 extends ComputerPlayer7{
     public void setEncoder(StateEncoder enc) {
         this.encoder = enc;
     }
-    public StateEncoder getEncoder() {return encoder;}
 
     public void actionsInit(Game game) {
-        Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
         actionEncoder = new ActionEncoder();
         //make action maps
     }
@@ -55,7 +55,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
 
         List<ActivatedAbility> playableAbilities = getPlayable(game, true);
 
-        if(playableAbilities.isEmpty() && !game.isCheckPoint()) {//just pass when only option
+        if(playableAbilities.isEmpty() && !game.isCheckPoint(playerId)) {//just pass when only option
             pass(game);
             return false;
         }
@@ -72,9 +72,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 // in old version it passes opponent's pre-combat step (game.isActivePlayer(playerId) -> pass(game))
                 // why?!
 
-
-                //printBattlefieldScore(game, "Sim PRIORITY on MAIN 1");
-
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -87,7 +84,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 pass(game);
                 return false;
             case DECLARE_ATTACKERS:
-                //printBattlefieldScore(game, "Sim PRIORITY on DECLARE ATTACKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -97,8 +93,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 act(game);
                 return true;
             case DECLARE_BLOCKERS:
-                log.info("DECLARE_BLOCKERS CP8");
-                //printBattlefieldScore(game, "Sim PRIORITY on DECLARE BLOCKERS");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -113,7 +107,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 pass(game);
                 return false;
             case POSTCOMBAT_MAIN:
-                //printBattlefieldScore(game, "Sim PRIORITY on MAIN 2");
                 if (actions.isEmpty()) {
                     calculateActions(game);
                 } else {
@@ -124,10 +117,6 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 return true;
             case END_TURN:
                 //state learning testing only check state at end of its turns
-                if(game.getActivePlayerId() == getId()) {
-                    //encoder.processState(game);
-                    printBattlefieldScore(game, "END STEP====================");
-                }
             case CLEANUP:
                 actionCache.clear();
                 pass(game);
@@ -151,30 +140,30 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 Ability ability = actions.poll();
                 log.info("===> SELECTED ACTION for {}: {}", getName(), getAbilityAndSourceInfo(game, ability, true));
 
-                Player opponent = game.getPlayer(game.getOpponents(playerId).iterator().next());
+                Player opponent = game.getOpponent(playerId);
                 Set<Integer> stateVector = encoder.processState(game, playerId);
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
                     MCTSNode root = mcts2.root;
                     if(root != null) root = root.getMatchingState(stateVector);
                     if (root != null) {
-                        log.info("found matching root with {} visits", root.visits);
+                        log.info("found matching root with {} visits", root.getVisits());
                         root.emancipate();
                         int[] visits = mcts2.getActionVec(root, false);
                         visits[actionEncoder.getActionIndex(ability, false)] += 100; //add 100 virtual visits of the actual action to the MCTS distribution
-                        encoder.addLabeledState(root.stateVector, visits, root.getMeanScore(), MCTSPlayer.NextAction.PRIORITY, name.equals("PlayerA"));
+                        encoder.addLabeledState(root.stateVector, visits, root.getMeanScore(), ActionEncoder.ActionType.PRIORITY, name.equals("PlayerA"));
                         //update root for the mcts player too
                         mcts2.root = root;
                     }
                 } else {
                     if (!getPlayable(game, true).isEmpty()) {//only log decision states
-                        log.info("logged: {} for {}", ability.toString(), name);
+                        log.info("logged: {} for {}", ability, name);
                         //save action vector
                         int[] actionVec = getActionVec(ability);
                         //add scores
                         double perspectiveFactor = getId() == encoder.getMyPlayerId() ? 1.0 : -1.0;
                         double score = perspectiveFactor * Math.tanh(root.score * 1.0 / 20000);
-                        encoder.addLabeledState(stateVector, actionVec, score, MCTSPlayer.NextAction.PRIORITY, name.equals("PlayerA"));
+                        encoder.addLabeledState(stateVector, actionVec, score, ActionEncoder.ActionType.PRIORITY, name.equals("PlayerA"));
                     }
                 }
                 if (!ability.getTargets().isEmpty()) {

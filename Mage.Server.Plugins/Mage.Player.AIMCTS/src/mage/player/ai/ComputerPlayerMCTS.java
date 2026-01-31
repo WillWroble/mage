@@ -9,14 +9,13 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.*;
 import mage.game.Game;
-import mage.player.ai.MCTSPlayer.NextAction;
+import mage.player.ai.encoder.ActionEncoder;
+import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
-import mage.players.PlayerScript;
 import mage.target.Target;
 import org.apache.log4j.Logger;
 
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 import static mage.target.TargetImpl.STOP_CHOOSING;
@@ -31,8 +30,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     public double searchTimeout = 4;//seconds
     public int searchBudget = 300;//per thread
-    //how many game turns ahead MCTS can look ahead
+
+
     public transient ActionEncoder actionEncoder = null;
+    public transient StateEncoder stateEncoder = null;
+
     //these flags should be set through fields in ParallelDataGenerator.java
     public boolean noNoise = true;
     public boolean noPolicyPriority = false;
@@ -40,12 +42,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public boolean noPolicyUse = false;
     public boolean noPolicyOpponent = false;
 
-
-    //if true will factorize each combat decision into sequences of micro decisions (chooseUse and chooseTarget)
     //dirichlet noise is applied once to the priors of the root node; this represents how much of those priors should be noise
-    public static double DIRICHLET_NOISE_EPS = 0;//was 0.15
-    //how confident to be in network policy priors (lower = less confident)
-    public static double POLICY_PRIOR_TEMP = 1.5;
+    public static double DIRICHLET_NOISE_EPS = 0;
+    public static double DIRICHLET_NOISE_ALPHA = 0.03;
+    //how confident to be in network policy priors
+    public static double PRIOR_TEMP = 1.5; //probability exponent (Higher = more confident)
+    public static double PRIOR_BONUS = 0.1; //minimum exploration budget (Higher = more stable)
     //how much to discount the Q scores backpropagation through MCTS; lower means less confident in simulated outcomes
     public static double BACKPROP_DISCOUNT = 0.99;
     //exploration constant
@@ -54,13 +56,18 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public static int MAX_TREE_NODES = 100000;
 
     public transient MCTSNode root;
+
+    protected String lastPhase = "";
+    protected double totalThinkTime = 0;
+    protected long totalSimulations = 0;
+    public boolean allMana = true;
+
     protected static final Logger logger = Logger.getLogger(ComputerPlayerMCTS.class);
-    protected transient ExecutorService threadPoolSimulations = null;
+
 
     public ComputerPlayerMCTS(String name, RangeOfInfluence range, int skill) {
         super(name, range);
         human = false;
-        //poolSize = 64;//Runtime.getRuntime().availableProcessors();
     }
 
     protected ComputerPlayerMCTS(UUID id) {
@@ -69,6 +76,20 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     public ComputerPlayerMCTS(final ComputerPlayerMCTS player) {
         super(player);
+        this.searchTimeout = player.searchTimeout;
+        this.searchBudget = player.searchBudget;
+        this.noNoise = player.noNoise;
+        this.noPolicyPriority = player.noPolicyPriority;
+        this.noPolicyTarget = player.noPolicyTarget;
+        this.noPolicyUse = player.noPolicyUse;
+        this.noPolicyOpponent = player.noPolicyOpponent;
+        this.actionEncoder = player.actionEncoder;
+        this.stateEncoder = player.stateEncoder;
+        this.root = player.root;
+        this.lastPhase = player.lastPhase;
+        this.totalThinkTime = player.totalThinkTime;
+        this.totalSimulations = player.totalSimulations;
+        this.allMana = player.allMana;
     }
 
     @Override
@@ -76,33 +97,33 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         return new ComputerPlayerMCTS(this);
     }
 
-    protected String lastPhase = "";
 
     @Override
     public boolean priority(Game game) {
         if (game.getTurnStepType() == PhaseStep.UPKEEP) {
             if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
-                logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList(hand.getCards(game)));
+                logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList<>(hand.getCards(game)));
                 lastPhase = game.getTurn().getValue(game.getTurnNum());
             }
         }
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
-        //(some mana abilities have other effects)
         List<ActivatedAbility> playableAbilities = getPlayableAbilities(game);
-        if(playableAbilities.size() < 2 && !game.isCheckPoint()) {
+        if(playableAbilities.size() < 2 && !game.isCheckPoint(playerId)) {
             logger.info("auto pass");
             pass(game);
             return false;
         }
-        logger.info("playable abilities: " + playableAbilities);
+        allMana = true;
+        for(ActivatedAbility ability : playableAbilities) {
+            allMana &= (ability.isManaActivatedAbility() || ability instanceof PassAbility);
+        }
         game.setLastPriority(playerId);
         Ability ability = null;
-        MCTSNode best = getNextAction(game, NextAction.PRIORITY);
-        //root.emancipate();
+        MCTSNode best = getNextAction(game, ActionEncoder.ActionType.PRIORITY);
         boolean success = false;
-        if(best != null && best.getActionSequence() != null) {
-            ability = best.getActionSequence().copy();
+        if(best != null && best.getPriorityAction() != null) {
+            ability = best.getPriorityAction().copy();
             success = activateAbility((ActivatedAbility) ability, game);
             root = best;
         }
@@ -113,37 +134,29 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(getPlayerHistory().prioritySequence.isEmpty()) {
             logger.error("priority sequence update failure");
         }
-        if (ability instanceof PassAbility)
+        if (ability instanceof PassAbility) {
             return false;
-        logLife(game);
-        printBattlefieldScore(game, playerId);
-        if(root.getActionSequence().getTargets().isEmpty() || game.getEntityName(root.getActionSequence().getTargets().getFirstTarget()).equals("null")) {
-            logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getActionSequence() + " success ratio: " + root.getMeanScore());
-        } else {
-            if(game.getEntityName(root.getActionSequence().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getActionSequence() + "(targeting " + game.getEntityName(root.getActionSequence().getTargets().getFirstTarget()) + ") success ratio: " + root.getMeanScore());
-            } else if (game.getPlayer(root.getActionSequence().getTargets().getFirstTarget()) != null) {
-                logger.info(game.getTurn().getValue(game.getTurnNum()) + "choose action:" + root.getActionSequence() + "(targeting " + game.getPlayer(root.getActionSequence().getTargets().getFirstTarget()).toString() + ") success ratio: " + root.getMeanScore());
-            } else {
-                logger.fatal("no target found");
-            }
+        }
+        if(!allMana) {
+            logger.info("playable abilities: " + playableAbilities);
+            logger.info(game.getTurn().getValue(game.getTurnNum()) + "chose action:" + ability + " success ratio: " + root.getMeanScore());
+            logLife(game);
+            printBattlefieldScore(game, playerId);
+        } else if(!getManaPool().isEmpty()) {
+            logger.info("pool=" + getManaPool());
         }
         return true;
     }
-    protected MCTSNode calculateActions(Game game, NextAction action) {
-
+    protected MCTSNode calculateActions(Game game, ActionEncoder.ActionType action) {
         applyMCTS(game, action);
-
         if (root != null && root.bestChild(game) != null) {
             return root.bestChild(game);
-            //root.emancipate();
         } else {
             logger.fatal("no root found");
             return null;
         }
     }
-
-    protected MCTSNode getNextAction(Game game, NextAction nextAction) {
+    protected MCTSNode getNextAction(Game game, ActionEncoder.ActionType actionType) {
         //TODO: implement. right now only RL version supported
         return null;
     }
@@ -159,7 +172,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
-        return autoPayFromPool(ability, unpaid, game);
+         return autoPayFromPool(ability, unpaid, game);
     }
 
     @Override
@@ -202,15 +215,16 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return true;
         }
 
-        root = getNextAction(game, NextAction.CHOOSE_TARGET);
+        root = getNextAction(game, ActionEncoder.ActionType.CHOOSE_TARGET);
         if(root == null) {
             return super.makeChoice( outcome,  target,  source,  game,  fromCards);
         }
-        UUID targetId = root.chooseTargetAction;
+        UUID targetId = root.getTargetAction();
         if(targetId == null) {
             logger.error("target id is null");
+            return false;
         }
-        logger.info(String.format("Targeting %s", game.getEntityName(targetId)));
+        logger.info(String.format("Targeting %s", game.getEntityName(targetId, playerId)));
         getPlayerHistory().targetSequence.add(targetId);
 
         if(!targetId.equals(STOP_CHOOSING)) {
@@ -223,9 +237,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1 || game.isSimulation()) {
-            //return chooseHelper(outcome, choice, game);
-        }
         if (choice.getMessage() != null && (choice.getMessage().equals("Choose creature type") || choice.getMessage().equals("Choose a creature type"))) {
             if (chooseCreatureType(outcome, choice, game)) {
                 return true;
@@ -240,11 +251,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.info("choice is empty, spell fizzled");
             return false;
         }
-        root = getNextAction(game, NextAction.MAKE_CHOICE);
+        root = getNextAction(game, ActionEncoder.ActionType.MAKE_CHOICE);
         if(root == null) {
             return false;
         }
-        String chosen = root.choiceAction;
+        String chosen = root.getChoiceAction();
         logger.info(String.format("Choosing %s", chosen));
         getPlayerHistory().choiceSequence.add(chosen);
         if(!choice.getChoices().isEmpty()) {
@@ -268,11 +279,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         numOptionsSize = max - min + 1;
         logger.info("base choose amount " + min + " to " + max);
-        root = getNextAction(game, NextAction.CHOOSE_NUM);
+        root = getNextAction(game, ActionEncoder.ActionType.CHOOSE_NUM);
         if(root == null) {
             return min;
         }
-        int chosenNum = root.modeAction;
+        int chosenNum = root.getAmountAction();
         logger.info(String.format("Choosing num %s", chosenNum + min));
         getPlayerHistory().numSequence.add(chosenNum);
 
@@ -292,14 +303,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if(game.isSimulation()) {
             return true;
         }
-        root = getNextAction(game, NextAction.CHOOSE_USE);
+        root = getNextAction(game, ActionEncoder.ActionType.CHOOSE_USE);
         if(root == null) {
             return false;
         }
-        Boolean chosen = root.useAction;
-        if(chosen == null) {
-            logger.error("chosen is null");
-        }
+        boolean chosen = root.getUseAction();
         logger.info("use " + message + ": " + chosen);
         getPlayerHistory().useSequence.add(chosen);
         return chosen;
@@ -312,10 +320,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         logger.info(getHand().getCards(game).toString());
         return chooseUse(Outcome.Neutral, "Mulligan Hand?", null, game);
     }
-    protected double totalThinkTime = 0;
-    protected long totalSimulations = 0;
 
-    protected void applyMCTS(final Game game, final NextAction action) {
+
+    protected void applyMCTS(final Game game, final ActionEncoder.ActionType action) {
         //TODO: implement. right now only RL version supported
 
     }
@@ -334,14 +341,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         Game mcts = game.createSimulationForAI();
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
             Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
-            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId());
+            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId(), stateEncoder);
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
-            if(!(origPlayer instanceof ComputerPlayerMCTS)) {
-                newPlayer.allowAutoPay = true;
-            }
         }
         mcts.pause();
         mcts.setMCTSSimulation(true);
@@ -401,8 +405,5 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.info(sb.toString());
         }
 
-    }
-    public void clearTree() {
-        root = null;
     }
 }

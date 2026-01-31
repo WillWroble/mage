@@ -29,8 +29,10 @@ import java.util.*;
  * <p>
  * Plays randomly
  *
+ *
  * @author BetaSteward_at_googlemail.com
  */
+//TODO: add support for classic random rollout MCTS? this file is currently unused
 public final class SimulatedPlayerMCTS extends MCTSPlayer {
 
     private boolean isSimulatedPlayer;

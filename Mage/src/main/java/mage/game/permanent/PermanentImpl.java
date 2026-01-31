@@ -268,7 +268,6 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
             return name;
         }
     }
-    //TODO: remove, consolidate code (DONT USE THIS VERSION FOR MCTS AI!)
     @Override
     public String getValue(GameState state) {
         StringBuilder sb = threadLocalBuilder.get();
@@ -292,7 +291,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         sb.append(getAbilities(game).getValue());
         List<String> names =  new ArrayList<>();
         for(UUID att : attachments) {
-            names.add(game.getEntityName(att));
+            names.add(game.getEntityName(att, targetPlayer));
         }
         names.sort(String::compareTo);
         for(String attName : names) {

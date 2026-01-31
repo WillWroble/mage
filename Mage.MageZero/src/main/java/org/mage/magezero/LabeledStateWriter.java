@@ -4,7 +4,7 @@ import ch.systemsx.cisd.hdf5.HDF5Factory;
 import ch.systemsx.cisd.hdf5.HDF5FloatStorageFeatures;
 import ch.systemsx.cisd.hdf5.HDF5IntStorageFeatures;
 import ch.systemsx.cisd.hdf5.IHDF5Writer;
-import mage.player.ai.LabeledState;
+import mage.player.ai.encoder.LabeledState;
 
 import java.io.Closeable;
 import java.io.Flushable;

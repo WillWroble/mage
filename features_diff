@@ -3297,7 +3297,7 @@ index 67b51a3702..8452a7a845 100644
 ++        encoder.featureVector.add(numericFeatures.get(name).get(num).get(numericOccurrences.get(name).get(num)));
       }
 - 
--     public static MCTSNodeNextAction createNextAction(MCTSPlayer.NextAction nextAction) {
+-     public static MCTSNodeNextAction createNextAction(MCTSPlayer.NextAction actionType) {
 -diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java
 -index aa4f867d67..78c22e965b 100644
 ---- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSNode.java
@@ -3518,7 +3518,7 @@ index 67b51a3702..8452a7a845 100644
 - 
 --
 -+    public boolean lastToAct =  false;
--     private NextAction nextAction;
+-     private NextAction actionType;
 --    public boolean isRoot = false;
 -     public long dirichletSeed = 0;
 -     public Set<Set<UUID>> chooseTargetOptions = new HashSet<>();
@@ -3539,7 +3539,7 @@ index 67b51a3702..8452a7a845 100644
 -@@ -59,6 +62,7 @@ public class MCTSPlayer extends ComputerPlayer {
 -     public MCTSPlayer(final MCTSPlayer player) {
 -         super(player);
--         this.nextAction = player.nextAction;
+-         this.actionType = player.actionType;
 -+        this.lastToAct = player.lastToAct;
 -     }
 - 
@@ -3565,7 +3565,7 @@ index 67b51a3702..8452a7a845 100644
 -+            if(mctsP.lastToAct) return false;
 -+        }
 -+        lastToAct = true;
--         nextAction = NextAction.PRIORITY;
+-         actionType = NextAction.PRIORITY;
 -         return false;
 -     }
 -@@ -215,12 +229,14 @@ public class MCTSPlayer extends ComputerPlayer {
@@ -3573,14 +3573,14 @@ index 67b51a3702..8452a7a845 100644
 -     public void selectAttackers(Game game, UUID attackingPlayerId) {
 -         game.pause();
 -+        lastToAct = true;
--         nextAction = NextAction.SELECT_ATTACKERS;
+-         actionType = NextAction.SELECT_ATTACKERS;
 -     }
 - 
 -     @Override
 -     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
 -         game.pause();
 -+        lastToAct = true;
--         nextAction = NextAction.SELECT_BLOCKERS;
+-         actionType = NextAction.SELECT_BLOCKERS;
 -     }
 -     public static void getAllPossible(Set<Set<UUID>> out, Set<UUID> possible, Target target, Ability source, Game game, UUID myID) {
 -@@ -240,10 +256,9 @@ public class MCTSPlayer extends ComputerPlayer {
@@ -3605,7 +3605,7 @@ index 67b51a3702..8452a7a845 100644
 -+            if(mctsP.lastToAct) return super.chooseTarget(outcome, target, source, game);
 -+        }
 -+        lastToAct = true;
--         nextAction = NextAction.CHOOSE_TARGET;
+-         actionType = NextAction.CHOOSE_TARGET;
 --        return false;
 -+        return super.chooseTarget(outcome, target, source, game);
 -+    }

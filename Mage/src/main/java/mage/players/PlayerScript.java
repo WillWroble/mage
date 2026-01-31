@@ -124,6 +124,9 @@ public class PlayerScript {
         for (T e : d) h = 31*h + hasher.applyAsInt(e);
         return h;
     }
+    public boolean isEmpty() {
+        return targetSequence.isEmpty() && choiceSequence.isEmpty() && useSequence.isEmpty() && numSequence.isEmpty() && prioritySequence.isEmpty();
+    }
 
     @Override
     public String toString() {

@@ -57,6 +57,7 @@ public class Config {
         public final NoiseConfig noise;
         public final MctsConfig mcts;
         public final MulligansConfig mulligans;
+        public final HiddenInfoConfig hiddenInfo;
 
         @SuppressWarnings("unchecked")
         public PlayerConfig(Map<String, Object> raw) {
@@ -67,6 +68,7 @@ public class Config {
             this.noise = new NoiseConfig((Map<String, Object>) raw.getOrDefault("noise", Collections.emptyMap()));
             this.mcts = new MctsConfig((Map<String, Object>) raw.getOrDefault("mcts", Collections.emptyMap()));
             this.mulligans = new MulligansConfig((Map<String, Object>) raw.getOrDefault("mulligans", Collections.emptyMap()));
+            this.hiddenInfo = new HiddenInfoConfig((Map<String, Object>) raw.getOrDefault("hiddenInfo", Collections.emptyMap()));
         }
     }
 
@@ -109,6 +111,13 @@ public class Config {
 
         public MulligansConfig(Map<String, Object> raw) {
             this.enabled = (boolean) raw.getOrDefault("enabled", true);
+        }
+    }
+    public static class HiddenInfoConfig {
+        public final boolean opponentHand;
+
+        public HiddenInfoConfig(Map<String, Object> raw) {
+            this.opponentHand = (boolean) raw.getOrDefault("see_opponent_hand", true);
         }
     }
 

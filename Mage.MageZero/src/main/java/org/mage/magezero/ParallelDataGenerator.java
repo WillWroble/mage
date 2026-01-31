@@ -12,6 +12,10 @@ import mage.game.match.Match;
 import mage.game.match.MatchOptions;
 import mage.game.mulligan.MulliganType;
 import mage.player.ai.*;
+import mage.player.ai.encoder.FeatureMap;
+import mage.player.ai.encoder.Features;
+import mage.player.ai.encoder.LabeledState;
+import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
@@ -293,8 +297,10 @@ public class ParallelDataGenerator {
             configurePlayer(playerB, threadEncoderB, threadEncoderA);
             threadEncoderA.setAgent(playerA.getId());
             threadEncoderA.setOpponent(playerB.getId());
+            threadEncoderA.perfectInfo = Config.INSTANCE.playerA.hiddenInfo.opponentHand;
             threadEncoderB.setAgent(playerB.getId());
             threadEncoderB.setOpponent(playerA.getId());
+            threadEncoderB.perfectInfo = Config.INSTANCE.playerB.hiddenInfo.opponentHand;
 
             // Based on CardTestPlayerAPIImpl.java, this is the correct thread-safe
             // way to configure and run a game simulation.
@@ -347,7 +353,7 @@ public class ParallelDataGenerator {
     protected void configurePlayer(Player player, StateEncoder encoder, StateEncoder opponentEncoder) {
         if (player.getRealPlayer() instanceof ComputerPlayerMCTS2) {
             ComputerPlayerMCTS2 mcts2  = (ComputerPlayerMCTS2) player.getRealPlayer();
-            mcts2.setStateEncoder(encoder);
+            mcts2.stateEncoder = encoder;
             if(player.getName().equals("PlayerA")) {
                 mcts2.nn = remoteModelEvaluatorA;
                 mcts2.noPolicyPriority = !Config.INSTANCE.playerA.priors.priority;
