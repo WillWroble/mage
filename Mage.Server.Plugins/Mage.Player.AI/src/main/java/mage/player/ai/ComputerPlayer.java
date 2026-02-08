@@ -63,6 +63,8 @@ public class ComputerPlayer extends PlayerImpl {
     public List<ActivatedAbility> playables = new ArrayList<>();
     //allow mulligans for test mode
     public boolean allowMulligans = false;
+    //determines whether agent taps manually or uses the XMage auto tapper.
+    public boolean autoTap = true;
 
     private static final Logger logger = Logger.getLogger(ComputerPlayer.class);
 
@@ -121,6 +123,7 @@ public class ComputerPlayer extends PlayerImpl {
         playables = new  ArrayList<>(player.playables);
         numOptionsSize = player.numOptionsSize;
         allowMulligans = player.allowMulligans;
+        autoTap = player.autoTap;
     }
 
     @Override
@@ -1546,6 +1549,7 @@ public class ComputerPlayer extends PlayerImpl {
             playables = new ArrayList<>(cPlayer.playables);
             numOptionsSize = cPlayer.numOptionsSize;
             allowMulligans = cPlayer.allowMulligans;
+            autoTap = cPlayer.autoTap;
         }
         this.human = false;
     }

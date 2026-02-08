@@ -129,7 +129,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         if(!success) {
             logger.error("failed to activate chosen ability - passing instead");
-            return false;
+            throw new IllegalStateException("failed to activate chosen ability - passing instead");
         }
         if(getPlayerHistory().prioritySequence.isEmpty()) {
             logger.error("priority sequence update failure");
@@ -172,7 +172,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     }
     @Override
     public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
-         return autoPayFromPool(ability, unpaid, game);
+        if(autoTap) {
+            return super.playManaHandling(ability, unpaid, game);
+        } else {
+            return autoPayFromPool(ability, unpaid, game);
+        }
     }
 
     @Override
@@ -405,5 +409,20 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.info(sb.toString());
         }
 
+    }
+    @Override
+    public boolean isManualTappingAI() {
+        return !autoTap;
+    }
+    @Override
+    protected List<ActivatedAbility> getPlayableAbilities(Game originalGame) {
+        if(autoTap) {
+            List<ActivatedAbility> out = getPlayable(originalGame, true);
+            out = out.stream().filter(a -> !a.isManaAbility()).collect(Collectors.toList());
+            out.add(new PassAbility());
+            return out;
+        } else {
+            return super.getPlayableAbilities(originalGame);
+        }
     }
 }

@@ -42,12 +42,11 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /** How many concurrent HTTP calls are allowed. Keep small when batching is enabled. */
-    public static int MAX_CONCURRENT_CALLS = 2;
+    public static int MAX_CONCURRENT_CALLS = 16;
 
     // ---------- batching controls ----------
-    public static final boolean enableBatching = true;
     public static final int batchInterval = 2500;//micro seconds
-    public static final int maxBatchSize = 32;
+    public static final int maxBatchSize = 4;
 
     private final OkHttpClient http;
     private final HttpUrl evalUrl;
@@ -69,7 +68,6 @@ public class RemoteModelEvaluator implements AutoCloseable {
         }
     }
 
-    /** host:port like "http://127.0.0.1:50052" with explicit batching controls. */
     public RemoteModelEvaluator(String baseUrl) throws IOException {
         this.permits = new Semaphore(Math.max(1, MAX_CONCURRENT_CALLS), true);
         this.http = new OkHttpClient.Builder()
@@ -93,33 +91,22 @@ public class RemoteModelEvaluator implements AutoCloseable {
                 throw new IOException("Health check failed: HTTP " + r.code());
             }
         }
-
-        if (enableBatching) {
-            this.pending = new ConcurrentLinkedQueue<>();
-            this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "RemoteModelEvaluator-BatchFlusher");
-                t.setDaemon(true);
-                return t;
-            });
-            // Flush every N ms (micro-batch cadence)
-            this.scheduler.scheduleAtFixedRate(this::flushIfAny, batchInterval, batchInterval, TimeUnit.MICROSECONDS);
-        } else {
-            this.pending = null;
-            this.scheduler = null;
-        }
+        this.pending = new ConcurrentLinkedQueue<>();
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "RemoteModelEvaluator-BatchFlusher");
+            t.setDaemon(true);
+            return t;
+        });
+        // Flush every N ms (micro-batch cadence)
+        this.scheduler.scheduleAtFixedRate(this::flushIfAny, batchInterval, batchInterval, TimeUnit.MICROSECONDS);
     }
 
-    /** Default to localhost; batching OFF by default. */
     public RemoteModelEvaluator() throws IOException { this("http://127.0.0.1:50052"); }
 
     // ----------------- Public API -----------------
 
-    /** Back-compat sync call. If batching is on, this waits for the micro-batch result. */
     public InferenceResult infer(long[] activeGlobalIndices) {
-        if (!enableBatching) {
-            // Legacy single-sample path
-            return doHttpCallSingle(activeGlobalIndices);
-        }
+
         try {
             return inferAsync(activeGlobalIndices).get();
         } catch (InterruptedException e) {
@@ -130,11 +117,11 @@ public class RemoteModelEvaluator implements AutoCloseable {
         }
     }
 
-    /** Asynchronous API. If batching is enabled, enqueues; otherwise does a single-sample async call. */
+    /** Asynchronous API for leaf parallelization
+     * @param activeGlobalIndices
+     * @return
+     */
     public CompletableFuture<InferenceResult> inferAsync(long[] activeGlobalIndices) {
-        if (!enableBatching) {
-            return CompletableFuture.supplyAsync(() -> doHttpCallSingle(activeGlobalIndices), exec);
-        }
 
         PendingReq pr = new PendingReq(activeGlobalIndices);
         pending.add(pr);
@@ -154,46 +141,8 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     // --------------- Internals ---------------
-
-    /** single-sample HTTP call. best used with highly parallel server */
-    private InferenceResult doHttpCallSingle(long[] activeGlobalIndices) {
-        try {
-            permits.acquire();
-            try {
-                MessageBufferPacker pk = MessagePack.newDefaultBufferPacker();
-                pk.packMapHeader(2);
-                pk.packString("indices");
-                pk.packArrayHeader(activeGlobalIndices.length);
-                for (long v : activeGlobalIndices) pk.packLong(v);
-                pk.packString("offsets");
-                pk.packArrayHeader(1);
-                pk.packLong(0);
-                pk.close();
-
-                RequestBody body = RequestBody.create(pk.toByteArray(), MediaType.parse("application/x-msgpack"));
-                Request req = new Request.Builder().url(evalUrl).post(body).header("Connection", "keep-alive").build();
-
-                try (Response resp = http.newCall(req).execute()) {
-                    if (!resp.isSuccessful()) throw new RuntimeException("HTTP " + resp.code() + " from model server");
-                    byte[] bytes = resp.body().bytes();
-                    MessageUnpacker up = MessagePack.newDefaultUnpacker(bytes);
-                    // Expect MAP for single
-                    return unpackOneResultMap(up);
-                }
-            } finally {
-                permits.release();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted during inference", e);
-        } catch (Exception e) {
-            throw new RuntimeException("HTTP inference failed", e);
-        }
-    }
-
     /** Periodic/bounds-triggered flush. No-op if nothing pending or permit not available. */
     private void flushIfAny() {
-        if (!enableBatching) return;
         if (pending.isEmpty()) return;
         // Try to acquire a permit without blocking; if we can’t, another HTTP call is active.
         if (!permits.tryAcquire()) return;

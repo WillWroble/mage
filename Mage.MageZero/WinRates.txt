@@ -1,3 +1,32 @@
+WR with BGRoots vs Standard-MonoG: 0.0 in 20 games
+WR with BGRoots vs Standard-MonoG: 0.0 in 20 games
+WR with BGRoots vs Standard-MonoG: 0.0 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.0 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.1 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.15 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.07 in 200 games
+WR with Standard-MonoW vs Standard-MonoG: 0.0 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.15 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.0 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.0 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.05 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.15 in 20 games
+WR with Standard-MonoW vs Standard-MonoG: 0.25 in 20 games
+WR with UWTempo vs Standard-MonoG: 0.025 in 200 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.04 in 200 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.02 in 200 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.0 in 20 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.045 in 200 games
+WR with Standard-MonoU vs MTGA_MonoG: NaN in 0 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.3 in 20 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.0 in 4 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.25 in 4 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.25 in 4 games
+WR with Standard-MonoU vs MTGA_MonoG: 0.265 in 200 games
+WR with UWTempo vs Standard-MonoB: 0.08 in 200 games
+WR with UWTempo vs Standard-MonoB: 0.1 in 20 games
+WR with UWTempo vs Standard-MonoB: 0.05 in 20 games
+WR with UWTempo vs MTGA_MonoG: 0.5 in 8 games
 WR with UWTempo vs Standard-MonoG: 0.07 in 200 games
 WR with UWTempo vs Standard-MonoR: NaN in 0 games
 WR with UWTempo vs Standard-MonoR: NaN in 0 games
@@ -22,8 +51,40 @@ WR with UWTempo vs Standard-MonoU: 0.5 in 4 games
 WR with UWTempo vs Standard-MonoW: 0.0 in 4 games
 WR with UWTempo vs Standard-MonoW: 0.0 in 4 games
 WR with UWTempo vs Standard-MonoW: 0.065 in 200 games
+gen0
 WR with UWTempo vs Standard-MonoW: 0.07 in 200 games
 WR with UWTempo vs Standard-MonoG: 0.075 in 200 games
 WR with UWTempo vs Standard-MonoB: 0.065 in 200 games
 WR with UWTempo vs Standard-MonoR: 0.09 in 200 games
 WR with UWTempo vs Standard-MonoW: 0.095 in 200 games
+WR with UWTempo vs Standard-MonoU: 0.275 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.12 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.035 in 200 games
+WR with UWTempo vs Standard-MonoG: 0.007874015748031496 in 127 games
+WR with UWTempo vs Standard-MonoB: 0.05 in 200 games
+WR with UWTempo vs Standard-MonoG: 0.065 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.04 in 200 games
+
+
+gen0
+WR with UWTempo vs Standard-MonoB: 0.075 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.03 in 200 games
+WR with UWTempo vs Standard-MonoG: 0.065 in 200 games
+WR with UWTempo vs Standard-MonoR: 0.135 in 200 games
+WR with UWTempo vs Standard-MonoU: 0.285 in 200 games
+gen1
+WR with UWTempo vs Standard-MonoB: 0.115 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.085 in 200 games
+WR with UWTempo vs Standard-MonoG: 0.125 in 200 games
+WR with UWTempo vs Standard-MonoR: 0.2 in 200 games
+WR with UWTempo vs Standard-MonoU: 0.2 in 200 games
+gen2
+WR with UWTempo vs Standard-MonoB: 0.095 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.11 in 200 games
+WR with UWTempo vs Standard-MonoG: 0.125 in 200 games
+WR with UWTempo vs Standard-MonoR: 0.38 in 200 games
+WR with UWTempo vs Standard-MonoU: 0.26 in 200 games
+gen3
+WR with UWTempo vs Standard-MonoB: 0.2 in 200 games
+WR with UWTempo vs Standard-MonoW: 0.17 in 200 games
+WR with UWTempo vs Standard-MonoG: 0.17 in 200 games

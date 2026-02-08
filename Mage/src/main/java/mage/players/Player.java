@@ -165,7 +165,7 @@ public interface Player extends MageItem, Copyable<Player> {
     // to handle rule changing effects (613.10)
     boolean isCanLoseLife();
 
-    boolean isMCTSComputerPlayer();
+    boolean isManualTappingAI();
 
     void setCanLoseLife(boolean canLoseLife);
 

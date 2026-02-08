@@ -13,6 +13,8 @@ import mage.players.PlayerScript;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
+
 import org.apache.commons.math3.distribution.GammaDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
 
@@ -28,7 +30,7 @@ import static java.lang.Math.*;
  */
 public class MCTSNode {
 
-    private static final Logger logger = Logger.getLogger(MCTSNode.class);
+    protected static final Logger logger = Logger.getLogger(MCTSNode.class);
 
 
     //neural network fields
@@ -36,18 +38,16 @@ public class MCTSNode {
     public double networkScore;//initial score given from value network
 
     //shared (per tree)
-    private Game rootGame; //single game is reused with different states
-    private final ComputerPlayerMCTS basePlayer;
-    private final UUID targetPlayer;
+    private final Game rootGame; //single game is reused with different states
+    protected final ComputerPlayerMCTS basePlayer;
+    protected final UUID targetPlayer;
 
     //node statistics
     private int visits = 0;
-    private int virtualVisits = 0;
     private int depth = 1;
     private long dirichletSeed = 0;
     private double prior = 1;
     private double score = 0;
-    private double virtual_score = 0;
 
     //action fields - how the node represents the state - only one is not null at a time
     private Ability priorityAction;
@@ -57,11 +57,11 @@ public class MCTSNode {
     private Boolean useAction;
 
     //structure
-    private final List<MCTSNode> children = new ArrayList<>();
-    private MCTSNode parent = null;
+    protected final List<MCTSNode> children = new ArrayList<>();
+    protected MCTSNode parent = null;
 
     //validation (these fields are populated in validateState)
-    private UUID playerId;
+    protected UUID playerId;
     private boolean terminal = false;
     private boolean winner;
     private boolean isRandomTransition = false;
@@ -91,13 +91,14 @@ public class MCTSNode {
         this.prefixScript = prefixA;
         this.opponentPrefixScript = prefixB;
     }
-
     protected MCTSNode(MCTSNode parent) {
         this.parent = parent;
         this.targetPlayer = parent.targetPlayer;
         this.basePlayer = parent.basePlayer;
         this.rootGame= parent.rootGame;
-
+    }
+    protected MCTSNode createChild() {
+        return new MCTSNode(this);
     }
     public Ability getPriorityAction() {
         return priorityAction;
@@ -124,6 +125,21 @@ public class MCTSNode {
                 return current;
             }
             queue.addAll(current.children);
+        }
+        return null;
+    }
+    public MCTSNode getMatchingStateInScope(Set<Integer> state, UUID scopePlayerId) {
+        ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
+        queue.add(this);
+        while (!queue.isEmpty()) {
+            MCTSNode current = queue.remove();
+            if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
+            if(current.stateVector.equals(state)) {
+                return current;
+            }
+            if(current.playerId.equals(scopePlayerId) || current.children.size()==1) {
+                queue.addAll(current.children);
+            }
         }
         return null;
     }
@@ -162,21 +178,48 @@ public class MCTSNode {
     }
     public double getMeanScore() {
         if (getVisits() > 0)
-            return (score+virtual_score)/((visits + virtualVisits)* 1.0);
+            return (score)/((visits)* 1.0);
         return -1;
     }
     public int getVisits() {
-        return visits + virtualVisits;
+        return visits;
     }
     public int getAverageVisits() {
         if(children.isEmpty()) return 0;
         return visits/children.size();
     }
+    MCTSNode getChildOfCommonAncestor(MCTSNode node) {
+        if(parent == null || parent ==  node) {
+            logger.warn("duplicate of parent - gameplay loop found?");
+            return this;
+        }
+        if(parent.isParentOf(node)) {
+            return this;
+        }
+        return parent.getChildOfCommonAncestor(node);
+    }
+    public int getActionIndex(Game game) {
+        ActionEncoder.ActionType actionType = parent.actionType;
+        int idx;
+        if(actionType == ActionEncoder.ActionType.PRIORITY) {
+            idx = basePlayer.actionEncoder.getActionIndex(getPriorityAction(), parent.playerId.equals(targetPlayer));
+        } else if(actionType == ActionEncoder.ActionType.CHOOSE_TARGET) {
+            idx = basePlayer.actionEncoder.getTargetIndex(game.getEntityName(targetAction, targetPlayer));
+        } else if(actionType == ActionEncoder.ActionType.CHOOSE_USE) {
+            idx = useAction ? 1 : 0;
+        } else {
+            idx = -1;
+        }
+        return idx;
+    }
     public boolean isRandomTransition() { return isRandomTransition; }
 
+    public void setParent(MCTSNode node) {
+        this.parent = node;
+    }
 
     /**
-     * @apiNote must be called directly before evaluation and expansion
+     * @apiNote must be called directly before evaluation and expansion.
      * central engine call of MCTS system. uses XMage to validate the game state at this node and populates necessary fields
      */
     public void validateState() {
@@ -372,39 +415,36 @@ public class MCTSNode {
         if(actionType == ActionEncoder.ActionType.PRIORITY) {
             for(Ability playable : player.playables) {
                 logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + playable.toString());
-                MCTSNode node = new MCTSNode(this);
+                MCTSNode node = createChild();
                 node.priorityAction = playable;
                 children.add(node);
             }
-            children.sort(Comparator.comparing(n -> n.priorityAction.toString()));
         } else if(actionType == ActionEncoder.ActionType.CHOOSE_TARGET) {
             Set<UUID> targetOptions = player.chooseTargetOptions;
             for(UUID target : targetOptions) {
                 logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + game.getEntityName(target, targetPlayer));
-                MCTSNode node = new MCTSNode(this);
+                MCTSNode node = createChild();
                 node.targetAction = target;
                 children.add(node);
             }
-            children.sort(Comparator.comparing(n -> game.getEntityName(n.targetAction, targetPlayer)));
         } else if(actionType == ActionEncoder.ActionType.MAKE_CHOICE) {
             Set<String> choiceOptions = player.choiceOptions;
             for(String choice : choiceOptions) {
                 logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + choice);
-                MCTSNode node = new MCTSNode(this);
+                MCTSNode node = createChild();
                 node.choiceAction = choice;
                 children.add(node);
             }
-            children.sort(Comparator.comparing(n -> n.choiceAction));
         } else if(actionType == ActionEncoder.ActionType.CHOOSE_NUM) {
             for (int mode = 0; mode < player.numOptionsSize; mode++) {
                 logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + mode);
-                MCTSNode node = new MCTSNode(this);
+                MCTSNode node = createChild();
                 node.amountAction = mode;
                 children.add(node);
             }
         } else if(actionType == ActionEncoder.ActionType.CHOOSE_USE) {
-            MCTSNode nodeTrue = new MCTSNode(this);
-            MCTSNode nodeFalse = new MCTSNode(this);
+            MCTSNode nodeTrue = createChild();
+            MCTSNode nodeFalse = createChild();
             nodeTrue.useAction = true;
             nodeFalse.useAction = false;
             children.add(nodeTrue);
@@ -414,21 +454,8 @@ public class MCTSNode {
         } else {
             logger.error("unknown nextAction");
         }
+        children.sort(Comparator.comparing(n -> n.getActionIndex(game)));
         return children;
-    }
-    private int nodeToIdx(MCTSNode node, ActionEncoder.ActionType actionType, Game game) {
-        int idx;
-        if(actionType == ActionEncoder.ActionType.PRIORITY) {
-            idx = basePlayer.actionEncoder.getActionIndex(node.getPriorityAction(), playerId.equals(targetPlayer));
-        } else if(actionType == ActionEncoder.ActionType.CHOOSE_TARGET) {
-            idx = basePlayer.actionEncoder.getTargetIndex(game.getEntityName(node.targetAction, targetPlayer));
-        } else if(actionType == ActionEncoder.ActionType.CHOOSE_USE) {
-            idx = node.useAction ? 1 : 0;
-        } else {
-            logger.error("unknown nextAction");
-            idx = -1;
-        }
-        return idx;
     }
     public void expand() {
 
@@ -443,6 +470,8 @@ public class MCTSNode {
             node.depth = depth + 1;
             node.prior = 1.0/children.size();
         }
+    }
+    public synchronized void setPriors() {
         if (policy != null && actionType != ActionEncoder.ActionType.MAKE_CHOICE && actionType != ActionEncoder.ActionType.CHOOSE_NUM) {
 
             double priorTemperature = ComputerPlayerMCTS.PRIOR_TEMP; // This controls 'spikiness' of prior distribution; higher means less spiky
@@ -450,14 +479,14 @@ public class MCTSNode {
             //find max logit for numeric stability
             double maxLogit = Float.NEGATIVE_INFINITY;
             for (MCTSNode node : children) {
-                int idx = nodeToIdx(node, actionType, rootGame);
+                int idx = node.getActionIndex(rootGame);
                 maxLogit = Math.max(maxLogit, policy[idx]);
             }
 
             //compute raw exps and sum
             double sumExp = 0;
             for (MCTSNode node : children) {
-                int idx = nodeToIdx(node, actionType, rootGame);
+                int idx = node.getActionIndex(rootGame);
                 double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
                 node.prior = raw;
                 sumExp += raw;
@@ -466,7 +495,10 @@ public class MCTSNode {
             // 4) normalize in place
             for (MCTSNode node : children) {
                 node.prior /= sumExp;
-                node.prior += ComputerPlayerMCTS.PRIOR_BONUS;
+                //assign small exploration bonus to non-mana abilities
+                if(node.priorityAction == null || !node.priorityAction.isManaAbility()) {
+                    node.prior += ComputerPlayerMCTS.PRIOR_BONUS;
+                }
             }
 
             long seed = this.dirichletSeed;
@@ -498,26 +530,17 @@ public class MCTSNode {
         }
     }
     public void backpropagate(double result) {
-        backpropagate(result, false);
+        backpropagate(result, 1);
     }
-    public void backpropagate(double result, boolean virtual) {
-        if(!virtual) {
-            visits++;
-            score += result;
-        } else {
-            virtualVisits++;
-            virtual_score += result;
-        }
+    public synchronized void backpropagate(double result, int n) {
+
+        visits+=n;
+        score += result;
+
         if (parent != null) {
-            parent.backpropagate(result * ComputerPlayerMCTS.BACKPROP_DISCOUNT, virtual);
+            parent.backpropagate(result * ComputerPlayerMCTS.BACKPROP_DISCOUNT, n);
         }
-    }
-    public void resetVirtual() {
-        virtualVisits = 0;
-        virtual_score = 0;
-        for(MCTSNode node : children) {
-            node.resetVirtual();
-        }
+
     }
     public MCTSNode bestChild(Game baseGame) {
         ComputerPlayerMCTS myPlayer = (ComputerPlayerMCTS) baseGame.getPlayer(playerId);
@@ -560,7 +583,8 @@ public class MCTSNode {
             double bestCount = -1;
             for (MCTSNode node : children) {
                 if (node.getVisits() > bestCount
-                        && (node.isTerminal() || node.actionType.equals(ActionEncoder.ActionType.PRIORITY) || node.containsLegalNode())) {
+                        && !node.getChildren().isEmpty()
+                        && (node.isTerminal()  || node.actionType.equals(ActionEncoder.ActionType.PRIORITY) || node.containsLegalNode())) {
                     best = node;
                     bestCount = node.getVisits();
                 }
@@ -604,22 +628,28 @@ public class MCTSNode {
     }
 
     public void emancipate() {
-        this.rootGame = this.getRoot().rootGame;//one shared game per tree, always
         if (parent != null) {
             this.parent.children.remove(this);
             this.parent = null;
         }
     }
-    public void purge(MCTSNode node) {
+    public void prune(MCTSNode node) {
         if(!children.contains(node)) {
-            logger.error("invalid purge");
+            logger.error("invalid prune");
             return;
         }
         children.remove(node);
         node.parent=null;
-        if(children.isEmpty() && parent != null) {
-            parent.purge(this);
+
+        if (!children.isEmpty() || parent == null) {
+            //correct MCTS stats
+            if(node.visits>0) {
+                backpropagate(-node.score * ComputerPlayerMCTS.BACKPROP_DISCOUNT, -node.getVisits());
+            }
+        } else {
+            parent.prune(this);
         }
+
     }
     /*
      * Shuffles each players library so that there is no knowledge of its order
@@ -649,9 +679,19 @@ public class MCTSNode {
         return terminal;
     }
     public boolean isLeaf() {
-        synchronized (children) {
-            return children.isEmpty();
+        return children.isEmpty();
+    }
+    public boolean isValidated() {
+        return terminal || !children.isEmpty();
+    }
+    boolean isParentOf(MCTSNode node) {
+        if(node.parent == null || this == node) {
+            return false;
         }
+        if(node.parent == this) {
+            return true;
+        }
+        return isParentOf(node.parent);
     }
     public boolean isLegalState() {
         if(this.terminal) return true;
@@ -672,10 +712,8 @@ public class MCTSNode {
 
     public int size() {
         int num = 1;
-        synchronized (children) {
-            for (MCTSNode child : children) {
-                num += child.size();
-            }
+        for (MCTSNode child : children) {
+            num += child.size();
         }
         return num;
     }
@@ -684,7 +722,6 @@ public class MCTSNode {
         children.clear();
         score = 0;
         visits = 0;
-        virtualVisits = 0;
         depth = 1;
     }
     /**

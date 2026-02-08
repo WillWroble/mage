@@ -16,6 +16,7 @@ import mage.player.ai.encoder.FeatureMap;
 import mage.player.ai.encoder.Features;
 import mage.player.ai.encoder.LabeledState;
 import mage.player.ai.encoder.StateEncoder;
+import mage.player.ai.RemoteModelEvaluator;
 import mage.players.Player;
 import mage.util.RandomUtil;
 import org.apache.log4j.Logger;
@@ -361,10 +362,11 @@ public class ParallelDataGenerator {
                 mcts2.noPolicyUse = !Config.INSTANCE.playerA.priors.binary;
                 mcts2.noPolicyOpponent = !Config.INSTANCE.playerA.priors.opponent;
                 mcts2.noNoise = !Config.INSTANCE.playerA.noise.enabled;
-                mcts2.allowMulligans = Config.INSTANCE.playerA.mulligans.enabled;
+                mcts2.allowMulligans = Config.INSTANCE.playerA.gameplay.mulligans;
                 mcts2.searchBudget = Config.INSTANCE.playerA.mcts.searchBudget;
                 mcts2.searchTimeout = (double) Config.INSTANCE.playerA.mcts.timeoutMs /1000;
-                if(remoteModelEvaluatorA == null) mcts2.offlineMode = true;
+                mcts2.autoTap = !Config.INSTANCE.playerA.gameplay.manualTap;
+                if(remoteModelEvaluatorA == null || Config.INSTANCE.playerA.mcts.offlineMode) mcts2.offlineMode = true;
             } else {
                 mcts2.nn = remoteModelEvaluatorB;
                 mcts2.noPolicyPriority = !Config.INSTANCE.playerB.priors.priority;
@@ -372,18 +374,20 @@ public class ParallelDataGenerator {
                 mcts2.noPolicyUse = !Config.INSTANCE.playerB.priors.binary;
                 mcts2.noPolicyOpponent = !Config.INSTANCE.playerB.priors.opponent;
                 mcts2.noNoise = !Config.INSTANCE.playerB.noise.enabled;
-                mcts2.allowMulligans = Config.INSTANCE.playerB.mulligans.enabled;
+                mcts2.allowMulligans = Config.INSTANCE.playerB.gameplay.mulligans;
                 mcts2.searchBudget = Config.INSTANCE.playerB.mcts.searchBudget;
                 mcts2.searchTimeout = (double) Config.INSTANCE.playerB.mcts.timeoutMs /1000;
-                if(remoteModelEvaluatorB == null) mcts2.offlineMode = true;
+                mcts2.autoTap = !Config.INSTANCE.playerB.gameplay.manualTap;
+                if(remoteModelEvaluatorB == null || Config.INSTANCE.playerB.mcts.offlineMode) mcts2.offlineMode = true;
             }
         } else if (player.getRealPlayer() instanceof ComputerPlayer8) {
             ComputerPlayer8 cp8 = (ComputerPlayer8) player.getRealPlayer();
             cp8.setEncoder(opponentEncoder);
+            cp8.autoTap = true;
             if(player.getName().equals("PlayerA")) {
-                cp8.allowMulligans = Config.INSTANCE.playerA.mulligans.enabled;
+                cp8.allowMulligans = Config.INSTANCE.playerA.gameplay.mulligans;
             } else {
-                cp8.allowMulligans = Config.INSTANCE.playerB.mulligans.enabled;
+                cp8.allowMulligans = Config.INSTANCE.playerB.gameplay.mulligans;
             }
         } else  {
             logger.warn("unexpected player type" + player.getRealPlayer().getClass().getName());

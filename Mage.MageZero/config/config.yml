@@ -7,29 +7,34 @@ player_a:
   type: mcts
   output_dir: data/playerA
 
-
   priors:
-    priority: false
+    priority: true
     target: false
-    binary: false
+    binary: true
     opponent: false
+    prior_temperature: 1.5 #does nothing
 
   noise:
     enabled: false
+    dirichlet_noise: 0.15 #does nothing
+    selection_temperature: 2 #does nothing
 
   mcts:
     search_budget: 1000
     timeout_ms: 4000
     td_discount: 0.95
+    offline_mode: false
 
-  mulligans:
-    enabled: False
+  gameplay:
+    mulligans_enabled: false
+    manual_tapping: true
+
 
   hidden_info:
-    see_opponent_hand: True
+    see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoW.dck
+  deckPath: decks/Standard-MonoR.dck
   type: minimax
   output_dir: data/playerB
 
@@ -38,20 +43,26 @@ player_b:
     target: false
     binary: false
     opponent: false
+    prior_temperature: 1.5 #does nothing
 
   noise:
     enabled: false
+    dirichlet_noise: 0.15 #does nothing
+    selection_temperature: 2 #does nothing
 
   mcts:
     search_budget: 1000
     timeout_ms: 4000
     td_discount: 0.95
+    offline_mode: false
 
-  mulligans:
-    enabled: false
+  gameplay:
+    mulligans_enabled: false
+    manual_tapping: true
+
 
   hidden_info:
-    see_opponent_hand: True
+    see_opponent_hand: true
 
 training:
   games: 200
@@ -64,6 +75,8 @@ server:
   opponent_port: 50053
 
 logging:
-  log_feature_hash: False
+  sparse: false #does nothing
+  all_threads: true
+  log_feature_hash: false
   save_final_wr: true
-  show_wr: true #does nothing
+  show_mcts_info: true #does nothing

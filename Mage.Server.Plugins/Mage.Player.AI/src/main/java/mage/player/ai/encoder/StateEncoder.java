@@ -472,10 +472,10 @@ public class StateEncoder {
             f.addFeature(myPlayer.getPlayerHistory().useSequence.peekLast().toString());
         }
         if(!myPlayer.getPlayerHistory().targetSequence.isEmpty()) {
-            f.addFeature(game.getEntityName(myPlayer.getPlayerHistory().targetSequence.peekLast(), playerId));
+            //f.addFeature(game.getEntityName(myPlayer.getPlayerHistory().targetSequence.peekLast(), playerId));
         }
         if(!myPlayer.getPlayerHistory().choiceSequence.isEmpty()) {
-            f.addFeature(myPlayer.getPlayerHistory().choiceSequence.peekLast().toString());
+            //f.addFeature(myPlayer.getPlayerHistory().choiceSequence.peekLast().toString());
         }
         if(!myPlayer.getPlayerHistory().numSequence.isEmpty()) {
             f.addFeature(myPlayer.getPlayerHistory().numSequence.peekLast().toString());
@@ -493,6 +493,12 @@ public class StateEncoder {
         for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
             chosenTargetsFeatures.addFeature(game.getEntityName(targetID, playerId));
         }
+        //current choices selected for when it's in the middle selecting multiple choices
+        Features choiceFeatures = f.getSubFeatures("ChosenChoices", false);
+        for(String choice : myPlayer.getPlayerHistory().choiceSequence) {
+            choiceFeatures.addFeature(choice);
+        }
+
         if(game.isActivePlayer(playerId)) f.addFeature("IsActivePlayer");
         if(decisionPlayerId.equals(playerId)) f.addFeature("IsDecisionPlayer");
         f.addNumericFeature("LifeTotal", myPlayer.getLife());

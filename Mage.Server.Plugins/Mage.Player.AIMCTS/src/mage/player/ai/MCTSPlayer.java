@@ -109,7 +109,6 @@ public class MCTSPlayer extends ComputerPlayer {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
         if(!actionScript.prioritySequence.isEmpty()) {
             game.getState().setPriorityPlayerId(playerId);
-            //game.firePriorityEvent(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
             boolean success = activateAbility(ability, game);
             if(!success && !game.isPaused()) {//if decision costs need to be resolved let them simulate out
@@ -121,7 +120,7 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         playables = getPlayableAbilities(game);
-        if(playables.size() == 1 && !game.isCheckPoint(playerId)) {//forced checkpoint at start
+        if(playables.size() == 1 && !game.isCheckPoint(playerId)) {
             pass(game);
             return false;
         }
@@ -145,7 +144,12 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public boolean playManaHandling (Ability ability, ManaCost unpaid, final Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
-        boolean out = autoPayFromPool(ability, unpaid, game);
+        boolean out;
+        if(autoTap) {
+            out = super.playManaHandling(ability, unpaid, game);
+        } else {
+            out = autoPayFromPool(ability, unpaid, game);
+        }
         if(!out) {
             illegalGameState(game);
             return false;
@@ -306,8 +310,8 @@ public class MCTSPlayer extends ComputerPlayer {
         return 0;
     }
     @Override
-    public boolean isMCTSComputerPlayer() {
-        return true;
+    public boolean isManualTappingAI() {
+        return !autoTap;
     }
     @Override
     public Mode chooseMode(Modes modes, Ability source, Game game) {
@@ -320,6 +324,17 @@ public class MCTSPlayer extends ComputerPlayer {
         if(modes.getMinModes() == 0) modeOptions.add(null);
         int selected = makeChoiceAmount(0, modeOptions.size()-1, game, source, false);
         return modeOptions.get(selected);
+    }
+    @Override
+    protected List<ActivatedAbility> getPlayableAbilities(Game originalGame) {
+        if(autoTap) {
+            List<ActivatedAbility> out = getPlayable(originalGame, true);
+            out = out.stream().filter(a -> !a.isManaAbility()).collect(Collectors.toList());
+            out.add(new PassAbility());
+            return out;
+        } else {
+            return super.getPlayableAbilities(originalGame);
+        }
     }
     @Override
     public void illegalGameState(Game game) {

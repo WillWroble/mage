@@ -1646,7 +1646,7 @@ public abstract class PlayerImpl implements Player, Serializable {
             return true;
         }
         //never log mana abilities outside MCTS since other AIs use don't use manual tapping
-        boolean isNonMCTSManaAbility = !isMCTSComputerPlayer() && ability instanceof ManaAbility;
+        boolean isNonMCTSManaAbility = !isManualTappingAI() && ability instanceof ManaAbility;
         //needs to happen after pass since pass() logs ability separately
         if(!(ability instanceof SpecialAction) && !game.isPaused() && !game.checkIfGameIsOver() && !isNonMCTSManaAbility) {
             playerHistory.prioritySequence.add(ability.copy());
@@ -5707,7 +5707,7 @@ public abstract class PlayerImpl implements Player, Serializable {
     }
 
     @Override
-    public boolean isMCTSComputerPlayer() {
+    public boolean isManualTappingAI() {
         return false;
     }
 

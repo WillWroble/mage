@@ -323,9 +323,16 @@ public abstract class GameImpl implements Game {
     /**
      * determine whether this state should be used as an anchor for MCTS Nodes
      */
-    //TODO: implement sparse checkpoint mode
     public boolean isCheckPoint(UUID playerId) {
-        return true;
+        if(getPlayer(playerId).isManualTappingAI() || getOpponent(playerId).isManualTappingAI()) {
+            return true; //every priority is a checkpoint for manual-tapping games
+        }
+        boolean isStarting = getTurnNum()==1 && getTurnStepType().equals(PhaseStep.UPKEEP);
+        //forced checkpoint before combat decisions
+        boolean isPreAttack = getTurnStepType().equals(PhaseStep.BEGIN_COMBAT);
+        boolean isPreBlock = getTurnStepType().equals(PhaseStep.DECLARE_ATTACKERS);
+        boolean isPostBlock = getTurnStepType().equals(PhaseStep.DECLARE_BLOCKERS);
+        return  isStarting || isPreAttack ||  isPreBlock || isPostBlock;
     }
     @Override
     public boolean isSimulation() {

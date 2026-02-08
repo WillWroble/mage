@@ -56,7 +56,7 @@ public class Config {
         public final PriorsConfig priors;
         public final NoiseConfig noise;
         public final MctsConfig mcts;
-        public final MulligansConfig mulligans;
+        public final GameplayConfig gameplay;
         public final HiddenInfoConfig hiddenInfo;
 
         @SuppressWarnings("unchecked")
@@ -67,7 +67,7 @@ public class Config {
             this.priors = new PriorsConfig((Map<String, Object>) raw.getOrDefault("priors", Collections.emptyMap()));
             this.noise = new NoiseConfig((Map<String, Object>) raw.getOrDefault("noise", Collections.emptyMap()));
             this.mcts = new MctsConfig((Map<String, Object>) raw.getOrDefault("mcts", Collections.emptyMap()));
-            this.mulligans = new MulligansConfig((Map<String, Object>) raw.getOrDefault("mulligans", Collections.emptyMap()));
+            this.gameplay = new GameplayConfig((Map<String, Object>) raw.getOrDefault("gameplay", Collections.emptyMap()));
             this.hiddenInfo = new HiddenInfoConfig((Map<String, Object>) raw.getOrDefault("hiddenInfo", Collections.emptyMap()));
         }
     }
@@ -98,19 +98,23 @@ public class Config {
         public final int searchBudget;
         public final int timeoutMs;
         public final double tdDiscount;
+        public final boolean offlineMode;
 
         public MctsConfig(Map<String, Object> raw) {
             this.searchBudget = ((Number) raw.getOrDefault("search_budget", 300)).intValue();
             this.timeoutMs = ((Number) raw.getOrDefault("timeout_ms", 4000)).intValue();
             this.tdDiscount = ((Number) raw.getOrDefault("td_discount", 0.95)).doubleValue();
+            this.offlineMode = (boolean) raw.getOrDefault("offline_mode", false);
         }
     }
 
-    public static class MulligansConfig {
-        public final boolean enabled;
+    public static class GameplayConfig {
+        public final boolean mulligans;
+        public final boolean manualTap;
 
-        public MulligansConfig(Map<String, Object> raw) {
-            this.enabled = (boolean) raw.getOrDefault("enabled", true);
+        public GameplayConfig(Map<String, Object> raw) {
+            this.mulligans = (boolean) raw.getOrDefault("mulligans_enabled", true);
+            this.manualTap = (boolean) raw.getOrDefault("manual_tapping", true);
         }
     }
     public static class HiddenInfoConfig {

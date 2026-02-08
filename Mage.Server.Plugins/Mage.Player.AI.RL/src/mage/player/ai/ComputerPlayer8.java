@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * minimax player designed for being the opponent in RL vs minimax games.
@@ -28,6 +29,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
 
     public ComputerPlayer8(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
+        autoTap = true;
     }
 
     public void setEncoder(StateEncoder enc) {
@@ -54,6 +56,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         game.firePriorityEvent(playerId);
 
         List<ActivatedAbility> playableAbilities = getPlayable(game, true);
+        playableAbilities = playableAbilities.stream().filter(a -> !a.isManaAbility()).collect(Collectors.toList());
 
         if(playableAbilities.isEmpty() && !game.isCheckPoint(playerId)) {//just pass when only option
             pass(game);
@@ -144,12 +147,12 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 Set<Integer> stateVector = encoder.processState(game, playerId);
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
-                    MCTSNode root = mcts2.root;
-                    if(root != null) root = root.getMatchingState(stateVector);
+                    MCTSNode2 root = mcts2.root;
+                    if(root != null) root = (MCTSNode2) root.getMatchingState(stateVector);
                     if (root != null) {
                         log.info("found matching root with {} visits", root.getVisits());
                         root.emancipate();
-                        int[] visits = mcts2.getActionVec(root, false);
+                        int[] visits = mcts2.getActionVec(root, game);
                         visits[actionEncoder.getActionIndex(ability, false)] += 100; //add 100 virtual visits of the actual action to the MCTS distribution
                         encoder.addLabeledState(root.stateVector, visits, root.getMeanScore(), ActionEncoder.ActionType.PRIORITY, name.equals("PlayerA"));
                         //update root for the mcts player too
