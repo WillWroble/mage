@@ -12,6 +12,7 @@ public class Config {
     public static Config INSTANCE;
 
     public final String goesFirst;
+    public String gameMode;
     public final PlayerConfig playerA;
     public final PlayerConfig playerB;
     public final TrainingConfig training;
@@ -42,6 +43,7 @@ public class Config {
     @SuppressWarnings("unchecked")
     private Config(Map<String, Object> raw) {
         this.goesFirst = (String) raw.getOrDefault("goes_first", "random");
+        this.gameMode= (String) raw.getOrDefault("game_mode", "normal");
         this.playerA = new PlayerConfig((Map<String, Object>) raw.get("player_a"));
         this.playerB = new PlayerConfig((Map<String, Object>) raw.get("player_b"));
         this.training = new TrainingConfig((Map<String, Object>) raw.get("training"));

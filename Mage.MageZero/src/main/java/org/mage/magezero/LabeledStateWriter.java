@@ -36,6 +36,7 @@ public final class LabeledStateWriter implements Closeable, Flushable {
     private final IHDF5Writer writer;
 
     private long nRows = 0; // N
+    private long nGames = 0; // G
     private long nNnz  = 0; // total entries in /indices
 
     public LabeledStateWriter(String path) throws IOException {
@@ -69,6 +70,14 @@ public final class LabeledStateWriter implements Closeable, Flushable {
                     HDF5IntStorageFeatures.INT_NO_COMPRESSION
             );
             writer.int64().writeArrayBlockWithOffset("/offsets", new long[]{0L}, 1, 0L);
+            // game_offsets: 1D int64, extendable; row index where each game starts, seeded with 0
+            writer.int64().createArray(
+                    "/game_offsets",
+                    /*initialSize*/1L,
+                    /*blockSize*/512,
+                    HDF5IntStorageFeatures.INT_NO_COMPRESSION
+            );
+            writer.int64().writeArrayBlockWithOffset("/game_offsets", new long[]{0L}, 1, 0L);
 
             // row: 2D float32 [N, actionDim+4], extendable rows, row-major chunks, uncompressed
             int rowWidth = actionDim + 4;
@@ -129,7 +138,14 @@ public final class LabeledStateWriter implements Closeable, Flushable {
             throw new IOException("HDF5 append failed", e);
         }
     }
-
+    public synchronized void endGame() throws IOException {
+        try {
+            writer.int64().writeArrayBlockWithOffset("/game_offsets", new long[]{ nRows }, 1, nGames + 1);
+            nGames++;
+        } catch (Exception e) {
+            throw new IOException("HDF5 game_offsets append failed", e);
+        }
+    }
     @Override
     public synchronized void flush() throws IOException {
         try { writer.file().flush(); }

@@ -69,7 +69,7 @@ public class MCTSNode {
     Set<Integer> stateVector; //encoder derived state vector (used for ML and validation)
     String stateString;
     ActionEncoder.ActionType actionType;
-    private GameState state; //the saved logical game state of this node. Should always be a stable priority window
+    public GameState state; //the saved logical game state of this node. Should always be a stable priority window
     //prefix scripts represent the sequence of actions that need to be taken since the last priority to represent this microstate
     private PlayerScript prefixScript = new PlayerScript();
     private PlayerScript opponentPrefixScript = new PlayerScript();
@@ -117,13 +117,20 @@ public class MCTSNode {
     public int getAmountAction() {
         return  amountAction;
     }
+
+    /**
+     *
+     * @param state
+     * @param stateString null for soft match string for exact match
+     * @return
+     */
     public MCTSNode getMatchingState(Set<Integer> state, String stateString) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.stateVector.equals(state)) {
+            if(current.stateVector.equals(state) && stateString.equals(current.stateString)) {
                 return current;
             }
             queue.addAll(current.children);
@@ -279,6 +286,7 @@ public class MCTSNode {
                 this.state = rootGame.getState();
             } else {//micro point, use previous state value
                 this.state = parent.state;
+                //this.state.gameLocalRandom = RandomUtil.deepCopy(rootGame.getLocalRandom());
             }
         }
     }

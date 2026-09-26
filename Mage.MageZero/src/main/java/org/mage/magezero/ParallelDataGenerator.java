@@ -208,6 +208,8 @@ public class ParallelDataGenerator {
                     if (batch != null) {
                         for (LabeledState s : batch.getStatesA()) fwA.writeRecord(s);
                         for (LabeledState s : batch.getStatesB()) fwB.writeRecord(s);
+                        fwA.endGame();
+                        fwB.endGame();
                         fwA.flush();
                         fwB.flush();
                     }
@@ -309,7 +311,11 @@ public class ParallelDataGenerator {
             // All game objects are local to this thread to prevent race conditions.
             MatchOptions matchOptions = new MatchOptions("test match", "test game type", false);
             Match localMatch = new TwoPlayerMatch(matchOptions);
-            game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
+            if(Config.INSTANCE.gameMode.equals("commander")) {
+                game = new CommanderDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 40, 7);
+            } else {
+                game = new TwoPlayerDuel(MultiplayerAttackOption.LEFT, RangeOfInfluence.ONE, MulliganType.GAME_DEFAULT.getMulligan(0), 60, 20, 7);
+            }
             Player playerA = createLocalPlayer(game, "PlayerA", Config.INSTANCE.playerA.deckPath, localMatch);
             Player playerB = createLocalPlayer(game, "PlayerB", Config.INSTANCE.playerB.deckPath, localMatch);
 
@@ -439,14 +445,9 @@ public class ParallelDataGenerator {
     public static String extractDeckName(String deckPath) {
         // Handle both forward and backslashes
         int lastSlash = Math.max(deckPath.lastIndexOf('\\'), deckPath.lastIndexOf('/'));
-        String fileName = deckPath.substring(lastSlash + 1);
+        int lastDot = deckPath.lastIndexOf('.');
 
-        // Remove the .dck extension if present
-        if (fileName.toLowerCase().endsWith(".dck")) {
-            fileName = fileName.substring(0, fileName.length() - 4);
-        }
-
-        return fileName;
+        return deckPath.substring(lastSlash+1, lastDot > -1 ? lastDot : deckPath.length());
     }
     void saveFeatureMap(FeatureMap fm, String filePath) {
         FeatureMap baseMap = new FeatureMap();

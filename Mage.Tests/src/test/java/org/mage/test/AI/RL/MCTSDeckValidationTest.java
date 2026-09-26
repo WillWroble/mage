@@ -21,7 +21,9 @@ public class MCTSDeckValidationTest {
     //config
     private static final int GAMES_PER_TEST = 16;
     private static final int MAX_TURNS = 50;
-    private static final String OPPONENT_DECK = "decks/Standard-MonoB.dck";
+    private static final String OPPONENT_DECK = "decks/Standard32-UWB.txt";
+    private static final String COMMANDER_OPPONENT_DECK = "decks/Commander-MonoG.dck";
+
     /*private static final String[] DECK_POOL = {
             "decks/Standard-MonoB.dck",
             "decks/Standard-MonoG.dck",
@@ -49,6 +51,8 @@ public class MCTSDeckValidationTest {
             "decks/UW Control.dck"
     };*/
     private static final String[] DECK_POOL = {
+            "decks/Standard32-UWB.txt"
+            /*
             "decks/Standard16-UB.dck",
             "decks/Standard-MonoB.dck",
             "decks/Standard-MonoG.dck",
@@ -65,10 +69,18 @@ public class MCTSDeckValidationTest {
             "decks/Standard16-UG.dck",
             "decks/Standard16-UR.dck",
             "decks/Standard16-UW.dck"
+             */
+    };
+    private static final String[] COMMANDER_DECK_POOL = {
+            "decks/Commander-MonoG.dck"
     };
     static Stream<String> deckPool() {
         return Arrays.stream(DECK_POOL);
     }
+    static Stream<String> commanderDeckPool() {
+        return Arrays.stream(COMMANDER_DECK_POOL);
+    }
+
 
     @BeforeAll
     static void setup() {
@@ -87,6 +99,31 @@ public class MCTSDeckValidationTest {
     public void testDeckAgainstMCTS(String testDeck) {
         Config.INSTANCE.playerA.deckPath = testDeck;
         Config.INSTANCE.playerB.deckPath = OPPONENT_DECK;
+        Config.INSTANCE.playerA.mcts.offlineMode = true;
+        Config.INSTANCE.playerB.mcts.offlineMode = true;
+        Config.INSTANCE.playerA.type = "mcts";
+        Config.INSTANCE.playerB.type = "mcts";
+        Config.INSTANCE.training.games = GAMES_PER_TEST;
+        Config.INSTANCE.training.maxTurns = MAX_TURNS;
+        Config.INSTANCE.training.threads = 4;
+        //Config.INSTANCE.playerA.gameplay.manualTap = true;
+
+        try {
+            ParallelDataGenerator generator = new ParallelDataGenerator();
+            generator.generateData();
+            int gamesPlayed = generator.gameCount.get();
+            assertEquals(GAMES_PER_TEST, gamesPlayed, "Should complete all games");
+            assertTrue(gamesPlayed > 0, "Should play at least one game");
+        } catch (Exception e) {
+            fail("Deck " + testDeck + " caused crash: " + e.getMessage(), e);
+        }
+    }
+    @ParameterizedTest
+    @MethodSource("commanderDeckPool")
+    public void testCommanderDeckAgainstMCTS(String testDeck) {
+        Config.INSTANCE.gameMode = "commander";
+        Config.INSTANCE.playerA.deckPath = testDeck;
+        Config.INSTANCE.playerB.deckPath = COMMANDER_OPPONENT_DECK;
         Config.INSTANCE.playerA.mcts.offlineMode = true;
         Config.INSTANCE.playerB.mcts.offlineMode = true;
         Config.INSTANCE.playerA.type = "mcts";

@@ -1,6 +1,8 @@
 # default-config.yaml
 
 goes_first: player_a  # player_a, player_b, random
+game_mode: normal # normal, commander
+
 
 player_a:
   deckPath: decks/UWTempo.dck
@@ -30,7 +32,7 @@ player_a:
     prune_duplicate_states: true
 
   gameplay:
-    mulligans_enabled: false
+    mulligans_enabled: true
     manual_tapping: false
 
 
@@ -65,7 +67,7 @@ player_b:
     prune_duplicate_states: true
 
   gameplay:
-    mulligans_enabled: false
+    mulligans_enabled: true
     manual_tapping: false
 
 

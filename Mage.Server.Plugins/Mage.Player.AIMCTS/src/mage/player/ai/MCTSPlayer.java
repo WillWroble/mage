@@ -193,11 +193,13 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         if (!actionScript.targetSequence.isEmpty()) {
             UUID choice = actionScript.targetSequence.pollFirst();
-            getPlayerHistory().targetSequence.add(choice);
             if(!choice.equals(STOP_CHOOSING)) {
                 target.addTarget(choice, source, game);
-                //choose another?
-                makeChoice(outcome, target, source, game, fromCards);
+                if(target.contains(choice)) {
+                    //choose another?
+                    getPlayerHistory().targetSequence.add(choice);
+                    makeChoice(outcome, target, source, game, fromCards);
+                }
             }
             return target.isChosen(game) && !target.getTargets().isEmpty();
         }
@@ -205,8 +207,11 @@ public class MCTSPlayer extends ComputerPlayer {
             //if only one possible just choose it and leave
             UUID id = possible.iterator().next();
             target.addTarget(id, source, game); //id can never be STOP_CHOOSING here
-            getPlayerHistory().targetSequence.add(id);
-            return true;
+            if(target.contains(id)) {
+                getPlayerHistory().targetSequence.add(id);
+                return true;
+            }
+            return  false;
         }
         StringBuilder sb = new StringBuilder();
         chooseTargetOptions = possible;
@@ -321,9 +326,10 @@ public class MCTSPlayer extends ComputerPlayer {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
-        //if(modes.getMinModes() == 0)
-        if(!modeOptions.contains(null)) {
-            modeOptions.add(0, null);
+        if(modes.getMinModes() <= modes.getSelectedModes().size()) {
+            if (!modeOptions.contains(null)) {
+                modeOptions.add(0, null);
+            }
         }
         if (modeOptions.isEmpty()) {
             //illegalGameState(game);

@@ -151,4 +151,15 @@ public final class RandomUtil {
             throw new RuntimeException("Failed to deep copy Random object", e);
         }
     }
+    public static byte[] serialize(Random original) {
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(bos);
+            oos.writeObject(original);
+            oos.flush();
+            return bos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize Random", e);
+        }
+    }
 }

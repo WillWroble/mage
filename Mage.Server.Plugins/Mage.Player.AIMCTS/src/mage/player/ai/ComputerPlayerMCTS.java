@@ -237,8 +237,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             //if only one possible just choose it and leave
             UUID id = possible.iterator().next();
             target.addTarget(id, source, game);
-            getPlayerHistory().targetSequence.add(id);
-            return true;
+            if(target.contains(id)) {
+                getPlayerHistory().targetSequence.add(id);
+                return true;
+            }
+            return false;
         }
 
         root = getNextAction(game, ActionEncoder.ActionType.CHOOSE_TARGET);
@@ -251,11 +254,13 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             return false;
         }
         logger.info(String.format("Targeting %s", game.getEntityName(targetId, playerId)));
-        getPlayerHistory().targetSequence.add(targetId);
 
         if(!targetId.equals(STOP_CHOOSING)) {
             target.addTarget(targetId, source, game);
-            makeChoice(outcome, target, source, game, fromCards);
+            if(target.contains(targetId)) {
+                getPlayerHistory().targetSequence.add(targetId);
+                makeChoice(outcome, target, source, game, fromCards);
+            }
         }
 
         return target.isChosen(game) && !target.getTargets().isEmpty();
@@ -320,9 +325,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         List<Mode> modeOptions = modes.getAvailableModes(source, game).stream()
                 .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
                 .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
-        //if(modes.getMinModes() == 0)
-        if(!modeOptions.contains(null)) {
-            modeOptions.add(0, null);
+        if(modes.getMinModes() <= modes.getSelectedModes().size()) {
+            if (!modeOptions.contains(null)) {
+                modeOptions.add(0, null);
+            }
         }
         int chosenMode = makeChoiceAmount(0, modeOptions.size()-1, game, source, false);
         return modeOptions.get(chosenMode);

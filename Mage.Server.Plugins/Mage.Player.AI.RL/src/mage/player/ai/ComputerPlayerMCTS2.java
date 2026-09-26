@@ -337,6 +337,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         if(actionVec != null) stateEncoder.addLabeledState(root.stateVector, actionVec, root.getMeanScore(), action, true);
 
+
         return best;
 
     }

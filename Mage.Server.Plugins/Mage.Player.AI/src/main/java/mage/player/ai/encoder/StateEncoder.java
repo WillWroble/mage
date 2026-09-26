@@ -201,7 +201,14 @@ public class StateEncoder {
             Features permAbilities = f.getSubFeatures("DynamicPermAbilities", false);
             for(Ability a : abilities) {
                 Features permAbility =  permAbilities.getSubFeatures(a.getRule());
-                processAbility(a, game, permAbility);
+                if (a instanceof TriggeredAbility) {
+                    processTriggeredAbility((TriggeredAbility) a, game, permAbility);
+                } else if (a instanceof ActivatedAbility) {
+                    processActivatedAbility((ActivatedAbility) a, game, permAbility);
+                } else {
+                    processAbility(a, game, permAbility);
+                }
+                //processAbility(a, game, permAbility);
             }
         }
 
@@ -249,8 +256,11 @@ public class StateEncoder {
         List<StackObject> targetingObjects = getSpellsTargetingPermanent(p, game, stackIndices);
         if(!targetingObjects.isEmpty()) {
             Features targetingFeatures = f.getSubFeatures("TargetedBy", false);
-            for (StackObject so : targetingObjects) {
-                targetingFeatures.addFeature(cleanString(so.toString()));
+            for (int i = 0; i < targetingObjects.size(); i++) {
+                StackObject so = targetingObjects.get(i);
+                Features soFeatures = targetingFeatures.getSubFeatures(cleanString(so.toString()));
+                soFeatures.addNumericFeature("StackDepth", stackIndices.get(i));
+
                 //Features targetingObjectFeatures = targetingFeatures.getSubFeatures(cleanString(so.toString()));
                 //processStackObject(so, game, playerId, targetingObjectFeatures);
             }
@@ -691,8 +701,7 @@ public class StateEncoder {
         int index = 1;
         if (permanent == null) return result;
 
-        for (Iterator<StackObject> it = game.getStack().descendingIterator(); it.hasNext(); ) {
-            StackObject so = it.next();
+        for (StackObject so : game.getStack()) {
             Ability sa = so.getStackAbility();
             if (sa == null) continue;
 

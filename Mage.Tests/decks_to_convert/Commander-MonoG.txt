@@ -1,0 +1,71 @@
+1 Aerie Ouphes
+1 Aggressive Instinct
+1 Ainok Guide
+1 Ancient Ooze
+1 Annoyed Altisaur
+1 Arbor Elf
+1 Bayou Dragonfly
+1 Beneath the Sands
+1 Bramble Wurm
+1 Brindle Boar
+1 Craw Wurm
+1 Decimator of the Provinces
+1 Desert Twister
+1 Elvish Aberration
+1 Elvish Archers
+1 Elvish Mystic
+1 Elvish Pioneer
+1 Explore
+31 Forest
+1 Forgotten Lore
+1 Foundation Breaker
+1 Fungal Rebirth
+1 Fyndhorn Elves
+1 Gaea's Anthem
+1 Giant Growth
+1 Giant Warthog
+1 Glorious Sunrise
+1 Grizzly Bears
+1 Harmonize
+1 Hunter's Mark
+1 Hurricane
+1 Infestation Expert
+1 Into the Wilds
+1 Kalonian Tusker
+1 Kamahl's Will
+1 Kazandu Mammoth
+1 Kazandu Nectarpot
+1 Khalni Ambush
+1 Khalni Heart Expedition
+1 Krosan Colossus
+1 Krosan Tusker
+1 Leatherback Baloth
+1 Lhurgoyf
+1 Llanowar Elves
+1 Mage Duel
+1 Myriad Landscape
+1 Naturalize
+1 Nature's Claim
+1 Nessian Boar
+1 Opal Palace
+1 Overrun
+1 Overwhelming Stampede
+1 Panglacial Wurm
+1 Pheres-Band Brawler
+1 Prey Upon
+1 Rampant Growth
+1 Reclaim
+1 Reclamation Sage
+1 Regrowth
+1 Relic of Progenitus
+1 Scavenging Ooze
+1 Seal of Primordium
+1 Silvos, Rogue Elemental
+1 Stampede
+1 Thorn Elemental
+1 Untamed Wilds
+1 Wave of Vitriol
+1 Wild Growth
+
+1 Anara, Wolvid Familiar
+1 Halana, Kessig Ranger

@@ -20,7 +20,7 @@ import java.util.UUID;
  */
 public class Features implements Serializable {
 
-    private static final int  TABLE_SIZE        = 2_000_000;                // hash bins
+    private static final int  TABLE_SIZE        = Integer.MAX_VALUE;                // hash bins
     private static final long GLOBAL_SEED       = 0x9E3779B185EBCA87L;      // fixed reproducible seed
     private static final int[] NUMERIC_BREAKPOINTS = {32, 64, 128, 256, 512};
 
