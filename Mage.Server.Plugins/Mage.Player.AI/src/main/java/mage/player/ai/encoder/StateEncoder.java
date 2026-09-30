@@ -616,14 +616,6 @@ public class StateEncoder {
         //empty target flag
         addNode(FeatureGraph.Node.Type.CARD, "StopChoosing", STOP_CHOOSING, GAME_ROOT_ID);
 
-        //additional options
-        if(options != null) {
-            for (UUID c : options) {
-                Card card = game.getCard(c);
-                addNode(FeatureGraph.Node.Type.CARD, card.getName(), c, GAME_ROOT_ID, "OptionPile");
-            }
-        }
-
 
         //exiled
         addNode(FeatureGraph.Node.Type.ZONE, "Exile", EXILE_ID, GAME_ROOT_ID);
@@ -641,6 +633,16 @@ public class StateEncoder {
         //stack
         addNode(FeatureGraph.Node.Type.ZONE, "Stack", STACK_ID, GAME_ROOT_ID);
         processStack(game.getStack(), game, myPlayerId, STACK_ID);
+
+        //additional options
+        if(options != null) {
+            for (UUID c : options) {
+                Card card = game.getCard(c);
+                if (addNode(FeatureGraph.Node.Type.CARD, card.getName(), c, GAME_ROOT_ID, "OptionPile")) {
+                    processCard(card, game, c);
+                }
+            }
+        }
 
 
         return new FeatureGraph(featureGraph);
