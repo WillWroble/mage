@@ -9,6 +9,8 @@ import mage.cards.Card;
 import mage.game.Game;
 import mage.game.GameState;
 import mage.player.ai.encoder.ActionEncoder;
+import mage.player.ai.encoder.FeatureGraph;
+import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.util.RandomUtil;
@@ -17,8 +19,6 @@ import java.util.Random;
 
 import org.apache.commons.math3.distribution.GammaDistribution;
 import org.apache.commons.math3.random.JDKRandomGenerator;
-
-import static java.lang.Math.*;
 
 /**
  *
@@ -34,7 +34,7 @@ public class MCTSNode {
 
 
     //neural network fields
-    public float[] policy = null;
+    public Map<UUID, Float> policy = null;
     public double networkScore;//initial score given from value network
 
     //shared (per tree)
@@ -66,7 +66,7 @@ public class MCTSNode {
     private boolean terminal = false;
     private boolean winner;
     private boolean isRandomTransition = false;
-    Set<Integer> stateVector; //encoder derived state vector (used for ML and validation)
+    FeatureGraph featureGraph; //encoder derived state vector (used for ML and validation)
     String stateString;
     ActionEncoder.ActionType actionType;
     public GameState state; //the saved logical game state of this node. Should always be a stable priority window
@@ -124,26 +124,33 @@ public class MCTSNode {
      * @param stateString null for soft match string for exact match
      * @return
      */
-    public MCTSNode getMatchingState(Set<Integer> state, String stateString) {
+    public MCTSNode getMatchingState(FeatureGraph state, String stateString) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.stateVector.equals(state) && stateString.equals(current.stateString)) {
+            if(current.featureGraph.getStateHash() == state.getStateHash() && stateString.equals(current.stateString)) {
                 return current;
             }
             queue.addAll(current.children);
         }
         return null;
     }
-    public MCTSNode getMatchingStateInScope(Set<Integer> state, UUID scopePlayerId) {
+
+    /**
+     * bounds search to states within As direct range of influence.
+     * @param state
+     * @param scopePlayerId
+     * @return
+     */
+    public MCTSNode getMatchingStateInScope(FeatureGraph state, UUID scopePlayerId) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.stateVector.equals(state)) {
+            if(current.featureGraph.getStateHash() == state.getStateHash()) {
                 return current;
             }
             if(current.playerId.equals(scopePlayerId) || current.children.size()==1) {
@@ -207,23 +214,21 @@ public class MCTSNode {
         }
         return parent.getChildOfCommonAncestor(node);
     }
-    public int getActionIndex(Game game) {
+    public UUID getActionId(Game game) {
         ActionEncoder.ActionType actionType = parent.actionType;
-        int idx;
+        UUID id = null;
         if(actionType == ActionEncoder.ActionType.PRIORITY) {
-            idx = basePlayer.actionEncoder.getActionIndex(getPriorityAction(), parent.playerId.equals(targetPlayer));
+            id = getPriorityAction().getId();
         } else if(actionType == ActionEncoder.ActionType.CHOOSE_TARGET) {
-            idx = basePlayer.actionEncoder.getTargetIndex(game.getEntityName(targetAction, targetPlayer));
+            id = targetAction;
         } else if(actionType == ActionEncoder.ActionType.CHOOSE_USE) {
-            idx = useAction ? 1 : 0;
-        } else {
-            idx = -1;
+            id = useAction ? FeatureGraph.USE_TRUE_ID : FeatureGraph.USE_FALSE_ID;
         }
-        return idx;
+        return id;
     }
     public String getOrderString(Game game) {
         StringBuilder sb = new StringBuilder();
-        sb.append(getActionIndex(game));
+        sb.append(getActionId(game));
         if(priorityAction != null) {
             sb.append(priorityAction.getSourceId());
         }
@@ -279,7 +284,7 @@ public class MCTSNode {
         if(actingPlayer.scriptFailed) return; //dont calc state value and vector for failed scripts
 
         actionType = actingPlayer.getNextAction();
-        stateVector = actingPlayer.getStateVector();
+        featureGraph = actingPlayer.getFeatureGraph();
         stateString = rootGame.getState().getValue(rootGame, targetPlayer);
         if(parent != null) {
             if (actingPlayer.getNextAction() == ActionEncoder.ActionType.PRIORITY) {//priority point, use current state value
@@ -508,15 +513,15 @@ public class MCTSNode {
             //find max logit for numeric stability
             double maxLogit = Float.NEGATIVE_INFINITY;
             for (MCTSNode node : children) {
-                int idx = node.getActionIndex(rootGame);
-                maxLogit = Math.max(maxLogit, policy[idx]);
+                UUID id = node.getActionId(rootGame);
+                maxLogit = Math.max(maxLogit, policy.get(id));
             }
 
             //compute raw exps and sum
             double sumExp = 0;
             for (MCTSNode node : children) {
-                int idx = node.getActionIndex(rootGame);
-                double raw = Math.exp((policy[idx] - maxLogit)/priorTemperature);
+                UUID id = node.getActionId(rootGame);
+                double raw = Math.exp((policy.get(id) - maxLogit)/priorTemperature);
                 node.prior = raw;
                 sumExp += raw;
             }
@@ -607,21 +612,6 @@ public class MCTSNode {
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.amountAction, node.getMeanScore(), node.getVisits()));
             } else if(node.priorityAction != null){
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.priorityAction, node.getMeanScore(), node.getVisits()));
-                if(actionNames.containsKey(node.priorityAction.toString()) && actionNames.get(node.priorityAction.toString()) != null && actionNames.get(node.priorityAction.toString()).stateVector != null) {
-                    logger.warn("FOUND DUPLICATE ACTION " + node.priorityAction.toString());
-                    if(node.stateVector != null) {
-                        HashSet<Integer> intersection = new HashSet<>(actionNames.get(node.priorityAction.toString()).stateVector);
-                        intersection.retainAll(node.stateVector);
-                        HashSet<Integer> onlyA = new HashSet<>(actionNames.get(node.priorityAction.toString()).stateVector);
-                        onlyA.removeAll(intersection);
-                        HashSet<Integer> onlyB = new HashSet<>(node.stateVector);
-                        onlyB.removeAll(intersection);
-                        logger.warn("ONLY IN A: " + onlyA);
-                        logger.warn("ONLY IN B: " + onlyB);
-                    }
-                } else {
-                    actionNames.put(node.priorityAction.toString(), node);
-                }
             } else {
                 logger.error("no action in node");
             }

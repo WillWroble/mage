@@ -49,37 +49,27 @@ public class MCTSNode2 extends MCTSNode {
         while (((ComputerPlayerMCTS2)basePlayer).pendingNodes.get() > ComputerPlayerMCTS2.MAX_PENDING) {
             Thread.yield();
         }
-        long[] nnIndices = new long[stateVector.size()];
-        int k = 0;
-        for (int i : stateVector)  {
-            nnIndices[k++] = i;
-        }
-
-        ((ComputerPlayerMCTS2) basePlayer).nn.inferAsync(nnIndices)
+        ((ComputerPlayerMCTS2) basePlayer).nn.inferAsync(featureGraph)
                 .thenAccept(out -> {
                     synchronized (basePlayer) {
                         // This runs on the HTTP executor thread when inference completes
                         switch (actionType) {
                             case PRIORITY:
                                 if(basePlayer.noPolicyPriority) break;
-                                if (targetPlayer.equals(playerId)) {
-                                    policy = out.policy_player;
-                                } else {
-                                    if (!basePlayer.noPolicyOpponent) {
-                                        policy = out.policy_opponent;
-                                    }
+                                if (targetPlayer.equals(playerId) || !basePlayer.noPolicyOpponent) {
+                                    policy = out.policyPriority;
                                 }
                                 break;
                             case CHOOSE_TARGET:
                                 if(basePlayer.noPolicyTarget) break;
                                 if (targetPlayer.equals(playerId) || !basePlayer.noPolicyOpponent) {
-                                    policy = out.policy_target;
+                                    policy = out.policyTarget;
                                 }
                                 break;
                             case CHOOSE_USE:
                                 if(basePlayer.noPolicyUse) break;
                                 if (targetPlayer.equals(playerId) || !basePlayer.noPolicyOpponent) {
-                                    policy = out.policy_binary;
+                                    policy = out.policyUse;
                                 }
                                 break;
                             default:

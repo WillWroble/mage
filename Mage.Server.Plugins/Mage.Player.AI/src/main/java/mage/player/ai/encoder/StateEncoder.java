@@ -1,15 +1,13 @@
 package mage.player.ai.encoder;
 
 import mage.ConditionalMana;
-import mage.MageObject;
 import mage.Mana;
 import mage.abilities.*;
+import mage.abilities.common.PassAbility;
 import mage.abilities.costs.Cost;
 import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.costs.mana.ManaCosts;
-import mage.abilities.effects.ContinuousEffect;
-import mage.abilities.effects.ContinuousEffectsList;
 import mage.abilities.effects.Effect;
 import mage.abilities.keyword.KickerAbility;
 import mage.cards.Card;
@@ -43,30 +41,37 @@ import mage.watchers.common.PlayerGainedLifeWatcher;
 import mage.watchers.common.PlayerLostLifeWatcher;
 import org.apache.log4j.Logger;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
-import java.util.stream.Collectors;
+
+import static mage.player.ai.encoder.FeatureGraph.*;
+import static mage.target.TargetImpl.STOP_CHOOSING;
 
 /**
  * Global sparse state hasher for deep learning and MCTS validation
  * @author WillWroble
  *
  */
+
 public class StateEncoder {
     public FeatureMap featureMap = new FeatureMap();
     protected static Logger logger = Logger.getLogger(StateEncoder.class);
     public boolean perfectInfo = true;
-    private final Features features;
-    public Set<Integer> featureVector = new HashSet<>();
+    public FeatureGraph featureGraph = new FeatureGraph();
     private UUID opponentId;
     private UUID myPlayerId;
 
     public List<LabeledState>  labeledStates = new ArrayList<>();
 
 
-    public StateEncoder() {
-        features = new Features();
-        features.setEncoder(this);
-    }
+
+
+    private static final int  TABLE_SIZE        = Integer.MAX_VALUE;                // hash bins
+    private static final long GLOBAL_SEED       = 0x9E3779B185EBCA87L;      // fixed reproducible seed
+
+
+
     public void setAgent(UUID me) {
         myPlayerId = me;
     }
@@ -76,408 +81,375 @@ public class StateEncoder {
     public synchronized UUID getMyPlayerId() {return myPlayerId;}
 
 
-    private void processManaCosts(ManaCosts<ManaCost> manaCost, Game game, Features f, String suffix) {
-        f.addNumericFeature("ManaValue" + suffix, manaCost.manaValue());
+    private void processManaCosts(ManaCosts<ManaCost> manaCost, UUID parentId) {
+        addNumericFeature("ManaValue", manaCost.manaValue(), parentId);
         for(ManaCost mc : manaCost) {
-            f.addFeature(mc.getText() + suffix);
+            addFeature(mc.getText(), parentId);
         }
     }
-    private void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, Game game, Features f) {
+    private void processCosts(Costs<Cost> costs, ManaCosts<ManaCost> manaCosts, UUID parentId) {
 
-        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, game, f, "_dynamic");
+        if(manaCosts != null && !manaCosts.isEmpty()) processManaCosts(manaCosts, parentId);
         if(costs == null || costs.isEmpty()) return;
         for(Cost cc : costs) {
-            f.addFeature(cc.getText());
+            addFeature(cc.getText(), parentId);
         }
     }
-    private void processAbility(Ability a, Game game, Features f) {
+    private void processAbility(Ability a, Game game, UUID parentId) {
 
         Costs<Cost> c = a.getCosts();
         ManaCosts<ManaCost> mcs = a.getManaCostsToPay();
         if(!c.isEmpty() || !mcs.isEmpty()) {
-            processCosts(c, mcs, game, f);
+            processCosts(c, mcs, parentId);
         }
         for(Mode m : a.getModes().getAvailableModes(a, game)) {
             for(Effect e : m.getEffects()) {
-                f.parent.addFeature(cleanString(e.getText(m)));//only add feature for abstraction (isn't dynamic)
+                addFeature(cleanString(e.getText(m)), parentId);
             }
         }
         //process watchers
         for (Watcher w : a.getWatchers()) {
-            if(w.conditionMet()) f.addFeature(w.getKey(), false);
+            if(w.conditionMet()) addFeature(w.getKey(), parentId);
         }
     }
-    private void processActivatedAbility(ActivatedAbility aa, Game game, Features f) {
+    private void processActivatedAbility(ActivatedAbility aa, Game game, UUID parentId) {
 
-        processAbility(aa, game, f);
-        if(aa.isManaAbility()) f.addFeature("ManaAbility");
+        processAbility(aa, game, parentId);
+        if(aa.isManaAbility()) addFeature("ManaAbility", parentId);
         try {
             UUID controllerId = aa.getControllerId();
             if (controllerId != null && aa.copy().canActivate(controllerId, game).canActivate()) {
-                f.addFeature("CanActivate");
+                addFeature("CanActivate", parentId);
             }
         } catch (Exception e) {
             logger.warn("failed activation check in encoder: " + aa);
         }
     }
-    private void processTriggeredAbility(TriggeredAbility ta, Game game, Features f) {
+    private void processTriggeredAbility(TriggeredAbility ta, Game game, UUID parentId) {
 
-        processAbility(ta, game, f);
+        processAbility(ta, game, parentId);
 
-        if(!ta.checkTriggeredLimit(game)) f.addFeature("ReachedTriggerLimit");
-        if(ta.checkUsedAlready(game)) f.addFeature("UsedAlready");//use ta.checkUsedAlready(game)
-        if(ta.getTriggerEvent() != null) f.addFeature(ta.getTriggerEvent().getType().name());
+        if(!ta.checkTriggeredLimit(game)) addFeature("ReachedTriggerLimit", parentId);
+        if(ta.checkUsedAlready(game)) addFeature("UsedAlready", parentId);
+        if(ta.getTriggerEvent() != null) addFeature(ta.getTriggerEvent().getType().name(), parentId);
 
     }
     //encodes only static features of card, see permanents for dynamic feature encoding
-    //since all features here are static, they are only encoded for abstraction so just add features directly to parent
-    private void processCard(Card c, Game game, Features f) {
-
+    private void processCard(Card c, Game game, UUID parentId) {
 
         //process counters (suspend is the only non-permanent dynamic feature I can think of)
         Counters counters = c.getCounters(game);
         for (String counterName : counters.keySet()) {
-            f.addNumericFeature(counterName, counters.get(counterName).getCount());
+            addNumericFeature(counterName, counters.get(counterName).getCount(), parentId);
         }
-
-        if(!f.passToParent) return;
-
-        f = f.parent;
-
-
-        f.addFeature("Card");//raw universal type of card added for counting purposes
-
+        //static attribute of card, TYPE.PERM is for actual permanents on the battlefield
         if(c.isPermanent()) {
-            f.addFeature("Permanent");
+            addFeature("PermanentType", parentId, "static");
         }
         //add types
         for (CardType ct : c.getCardType()) {
-            f.addFeature(ct.name());
+            addFeature(ct.name(), parentId, "static");
         }
         //add color
-        if(c.getColor().isRed()) f.addFeature("RedCard");
-        if(c.getColor().isWhite()) f.addFeature("WhiteCard");
-        if(c.getColor().isBlack()) f.addFeature("BlackCard");
-        if(c.getColor().isGreen()) f.addFeature("GreenCard");
-        if(c.getColor().isBlue()) f.addFeature("BlueCard");
-        if(c.getColor().isColorless()) f.addFeature("ColorlessCard");
-        if(c.getColor().isMulticolored()) f.addFeature("MultiColored");
+        if(c.getColor().isRed()) addFeature("RedCard", parentId);
+        if(c.getColor().isWhite()) addFeature("WhiteCard", parentId);
+        if(c.getColor().isBlack()) addFeature("BlackCard", parentId);
+        if(c.getColor().isGreen()) addFeature("GreenCard", parentId);
+        if(c.getColor().isBlue()) addFeature("BlueCard", parentId);
+        if(c.getColor().isColorless()) addFeature("ColorlessCard", parentId);
+        if(c.getColor().isMulticolored()) addFeature("MultiColored", parentId);
 
         //add subtypes
         for (SubType st : c.getSubtype()) {
-            if(!st.name().isEmpty()) f.addFeature(st.name());
+            if(!st.name().isEmpty()) addFeature(st.name(), parentId,  "static");
         }
         ManaCosts<ManaCost> mc = c.getManaCost();
-        processManaCosts(mc, game, f, "");
-
-
+        processManaCosts(mc, parentId);
 
     }
 
-    private void processPermBattlefield(Permanent p, Game game, UUID playerId, Features f) {
+    private void processPermBattlefield(Permanent p, Game game, UUID playerId, UUID parentId) {
+        //process as card
+        processCardInZone(p, Zone.BATTLEFIELD, game, parentId);
 
-        if(p instanceof PermanentCard) processCardInZone(((PermanentCard) p).getCard(), Zone.BATTLEFIELD, game, f);
+        addFeature(p.getMainCard().getName(), parentId,  "static");
         //is tapped?
-        if(p.isTapped()) f.addFeature("Tapped");
+        if(p.isTapped()) addFeature("Tapped", parentId);
 
         //dynamic effects
         for (CardType ct : p.getCardType(game)) {
-            f.addFeature(ct.name()+"_dynamic");
+            addFeature(ct.name(), parentId);
         }
         for (SubType st : p.getSubtype(game)) {
-            f.addFeature(st.name()+"_dynamic");
+            addFeature(st.name(),  parentId);
         }
-        if(p.getColor(game).isRed()) f.addFeature("RedCard_dynamic");
-        if(p.getColor(game).isWhite()) f.addFeature("WhiteCard_dynamic");
-        if(p.getColor(game).isBlack()) f.addFeature("BlackCard_dynamic");
-        if(p.getColor(game).isGreen()) f.addFeature("GreenCard_dynamic");
-        if(p.getColor(game).isBlue()) f.addFeature("BlueCard_dynamic");
-        if(p.getColor(game).isColorless()) f.addFeature("ColorlessCard_dynamic");
-        if(p.getColor(game).isMulticolored()) f.addFeature("MultiColored_dynamic");
+        if(p.getMainCard().getColor().isRed()) addFeature("RedCard", parentId, "static");
+        if(p.getMainCard().getColor().isWhite()) addFeature("WhiteCard", parentId, "static");
+        if(p.getMainCard().getColor().isBlack()) addFeature("BlackCard", parentId, "static");
+        if(p.getMainCard().getColor().isGreen()) addFeature("GreenCard", parentId, "static");
+        if(p.getMainCard().getColor().isBlue()) addFeature("BlueCard", parentId, "static");
+        if(p.getMainCard().getColor().isColorless()) addFeature("ColorlessCard", parentId, "static");
+        if(p.getMainCard().getColor().isMulticolored()) addFeature("MultiColored", parentId, "static");
 
         //dynamic abilities
         List<Ability> abilities = p.getAbilities(game);
         if(!abilities.isEmpty()) {
-            Features permAbilities = f.getSubFeatures("DynamicPermAbilities", false);
             for(Ability a : abilities) {
-                Features permAbility =  permAbilities.getSubFeatures(a.getRule());
-                if (a instanceof TriggeredAbility) {
-                    processTriggeredAbility((TriggeredAbility) a, game, permAbility);
-                } else if (a instanceof ActivatedAbility) {
-                    processActivatedAbility((ActivatedAbility) a, game, permAbility);
-                } else {
-                    processAbility(a, game, permAbility);
+                if(addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId)) {
+                    if (a instanceof TriggeredAbility) {
+                        processTriggeredAbility((TriggeredAbility) a, game, a.getId());
+                    } else if (a instanceof ActivatedAbility) {
+                        processActivatedAbility((ActivatedAbility) a, game, a.getId());
+                    } else {
+                        processAbility(a, game, a.getId());
+                    }
                 }
-                //processAbility(a, game, permAbility);
             }
         }
 
         //process attachments
         List<UUID> attachments = p.getAttachments();
         if(attachments != null && !attachments.isEmpty()) {
-            Features attachedFeatures = f.getSubFeatures("attached", false);
             for (UUID id : attachments) {
                 Permanent attachment = game.getPermanent(id);
                 if(attachment == null) continue;
-                //don't pass pooled attachment features up, or they will be counted twice
-                Features attachmentFeatures = attachedFeatures.getSubFeatures(attachment.getName());
-                processPermBattlefield(attachment, game, playerId, attachmentFeatures);
-
+                //perms will always be filled in normal iteration
+                addNode(FeatureGraph.Node.Type.PERMANENT, attachment.getName(), id, parentId, "attachment");
             }
         }
         //process imprinted
         List<UUID> imprinted = p.getImprinted();
         if(imprinted != null && !imprinted.isEmpty()) {
-            Features imprintedFeatures = f.getSubFeatures("imprinted", false);
             for (UUID id : imprinted) {
                 Card imprintedCard = game.getCard(id);
                 if(imprintedCard == null) continue;
-                Features imprintedCardFeatures = imprintedFeatures.getSubFeatures(imprintedCard.getName());
-                processCard(imprintedCard, game, imprintedCardFeatures);
-
+                addNode(FeatureGraph.Node.Type.CARD, imprintedCard.getName(), id, parentId, "imprinted");
             }
         }
         //paired
         Card pairedCard = (Card) p.getPairedCard();
         if(pairedCard != null) {
-            Features pairedFeatures = f.getSubFeatures("paired", false);
-            processCard(pairedCard, game, pairedFeatures);
+            addNode(FeatureGraph.Node.Type.CARD, pairedCard.getName(), pairedCard.getId(), parentId, "paired");
         }
         //process special exile zone (oblivion ring effect)
         UUID exileId = CardUtil.getExileZoneId(game, p.getId(), p.getZoneChangeCounter(game));
         ExileZone exileZone = game.getExile().getExileZone(exileId);
 
         if (exileZone != null) {
-            Features exileZoneFeatures = f.getSubFeatures(cleanString(exileZone.getName()), false);
-            processExileZone(exileZone, game, exileZoneFeatures);
-        }
-        // stack objects targeting this
-        List<Integer> stackIndices = new ArrayList<>();
-        List<StackObject> targetingObjects = getSpellsTargetingPermanent(p, game, stackIndices);
-        if(!targetingObjects.isEmpty()) {
-            Features targetingFeatures = f.getSubFeatures("TargetedBy", false);
-            for (int i = 0; i < targetingObjects.size(); i++) {
-                StackObject so = targetingObjects.get(i);
-                Features soFeatures = targetingFeatures.getSubFeatures(cleanString(so.toString()));
-                soFeatures.addNumericFeature("StackDepth", stackIndices.get(i));
-
-                //Features targetingObjectFeatures = targetingFeatures.getSubFeatures(cleanString(so.toString()));
-                //processStackObject(so, game, playerId, targetingObjectFeatures);
+            if (addNode(FeatureGraph.Node.Type.ZONE, cleanString(exileZone.getName()), exileZone.getId(), parentId, "exiled")) {
+                processExileZone(exileZone, game, exileZone.getId());
             }
         }
-
 
 
         //TODO soulbond, banding
 
 
         //unique flags
-        if(p.isFlipped()) f.addFeature("flipped");
-        if(p.isHarnessed()) f.addFeature("harnessed");
-        if(p.isSolved()) f.addFeature("solved");
-        if(p.isSuspected()) f.addFeature("suspected");
-        if(p.isRingBearer()) f.addFeature("RingBearer");
-        if(p.isRenowned()) f.addFeature("Renowned");
-        if(p.isMonstrous()) f.addFeature("Monstrous");
-        if(p.isCloaked()) f.addFeature("Cloaked");
-        if(p.isDisguised()) f.addFeature("disguised");
-        if(p.isMorphed()) f.addFeature("morphed");
-        if(p.isLeftDoorUnlocked()) f.addFeature("Room-LeftDoor");
-        if(p.isRightDoorUnlocked()) f.addFeature("Room-RightDoor");
+        if(p.isFlipped()) addFeature("flipped", parentId);
+        if(p.isHarnessed()) addFeature("harnessed", parentId);
+        if(p.isSolved()) addFeature("solved", parentId);
+        if(p.isSuspected()) addFeature("suspected", parentId);
+        if(p.isRingBearer()) addFeature("RingBearer", parentId);
+        if(p.isRenowned()) addFeature("Renowned", parentId);
+        if(p.isMonstrous()) addFeature("Monstrous", parentId);
+        if(p.isCloaked()) addFeature("Cloaked", parentId);
+        if(p.isDisguised()) addFeature("disguised", parentId);
+        if(p.isMorphed()) addFeature("morphed", parentId);
+        if(p.isLeftDoorUnlocked()) addFeature("Room-LeftDoor", parentId);
+        if(p.isRightDoorUnlocked()) addFeature("Room-RightDoor",parentId);
 
 
         if(p.isCreature(game)) {
-            if(p.hasSummoningSickness()) f.addFeature("SummoningSick");
-            if(p.canAttack(game.getOpponent(playerId).getId(), game)) f.addFeature("CanAttack"); //use p.canAttack()
-            if(p.canBlockAny(game)) f.addFeature("CanBlock");
-            //if(p.hasSummoningSickness()) f.addFeature("SummoningSickness");
+            if(p.hasSummoningSickness()) addFeature("SummoningSick", parentId);
+            if(p.canAttack(game.getOpponent(playerId).getId(), game)) addFeature("CanAttack", parentId); //use p.canAttack()
+            if(p.canBlockAny(game)) addFeature("CanBlock", parentId);
+            //if(p.hasSummoningSickness()) addFeature("SummoningSickness");
             if(p.isAttacking()) {
-                f.addFeature("Attacking");
+                addFeature("Attacking", parentId);
                 for(UUID blockerId : game.getCombat().findGroup(p.getId()).getBlockers()) {
                     Permanent blocker  = game.getPermanent(blockerId);
-                    f.addFeature(blocker.getName() + " Blocking");
+                    addNode(FeatureGraph.Node.Type.PERMANENT, blocker.getName(), blocker.getId(), parentId, "blocker");
                 }
             }
-            f.addNumericFeature("Damage", p.getDamage());
-            f.addNumericFeature("Power", p.getPower().getValue());
-            f.addNumericFeature("Toughness", p.getToughness().getValue());
+            addNumericFeature("Damage", p.getDamage(), parentId);
+            addNumericFeature("Power", p.getPower().getValue(), parentId);
+            addNumericFeature("Toughness", p.getToughness().getValue(), parentId);
         }
     }
-    private void processCardInZone(Card c, Zone z, Game game, Features f) {
+    private void processCardInZone(Card c, Zone z, Game game, UUID parentId) {
 
         //process as card (static features)
-        processCard(c, game, f);
+        processCard(c, game, parentId);
 
 
         Abilities<Ability> allAbilities = c.getAbilities(game);
         //static abilities
         for (StaticAbility sa : allAbilities.getStaticAbilities(z)) {
-            Features saFeatures = f.getSubFeatures(sa.getRule());
-            processAbility(sa, game, saFeatures);
+            addNode(FeatureGraph.Node.Type.ABILITY, sa.getRule(), sa.getId(), parentId);
+            processAbility(sa, game, sa.getId());
         }
         //activated abilities
         for(ActivatedAbility aa : allAbilities.getActivatedAbilities(z)) {
-            Features aaFeatures = f.getSubFeatures(aa.getRule());
-            processActivatedAbility(aa, game, aaFeatures);
+            addNode(FeatureGraph.Node.Type.ABILITY, aa.getRule(), aa.getId(), parentId);
+            processActivatedAbility(aa, game, aa.getId());
         }
         //triggered abilities
         for(TriggeredAbility ta : allAbilities.getTriggeredAbilities(z)) {
-            Features taFeatures = f.getSubFeatures(ta.getRule());
-            processTriggeredAbility(ta, game, taFeatures);
+            addNode(FeatureGraph.Node.Type.ABILITY, ta.getRule(), ta.getId(), parentId);
+            processTriggeredAbility(ta, game, ta.getId());
 
         }
     }
-    private void processBattlefield(Battlefield bf, Game game, Features f, UUID playerId) {
-        //sort for deterministic traversal
-        TreeMap<String, Permanent> sortedPerms = new TreeMap<>();
-        for(Permanent p : bf.getAllActivePermanents(playerId)) {
-            sortedPerms.put(p.getValue(game, playerId), p);
-        }
-        for (Permanent p : sortedPerms.values()) {
-            Features permFeatures = f.getSubFeatures(p.getName());
-            processPermBattlefield(p, game, playerId, permFeatures);
+    private void processBattlefield(Battlefield bf, Game game, UUID playerId, UUID parentId) {
+        List<Permanent> permanents = bf.getAllActivePermanents(playerId);
+        addNumericFeature("BattlefieldSize", permanents.size(), parentId);
+        for (Permanent p : permanents) {
+            addNode(FeatureGraph.Node.Type.PERMANENT, p.getName(), p.getId(), parentId);
+            processPermBattlefield(p, game, playerId, p.getId());
         }
     }
-    private void processGraveyard(Graveyard gy, Game game, Features f) {
+    private void processGraveyard(Graveyard gy, Game game, UUID parentId) {
+        addNumericFeature("GraveyardSize", gy.getCards(game).size(), parentId);
         for (Card c : gy.getCardsSorted(game)) {
-            Features graveCardFeatures = f.getSubFeatures(c.getName(), true, c.getId());
-            processCardInZone(c, Zone.GRAVEYARD, game, graveCardFeatures);
+            addNode(FeatureGraph.Node.Type.CARD, c.getName(), c.getId(), parentId);
+            processCardInZone(c, Zone.GRAVEYARD, game, c.getId());
         }
     }
-    private void processHand(Cards hand, Game game, Features f) {
+    private void processHand(Cards hand, Game game, UUID parentId) {
         for (Card c : hand.getCardsSorted(game)) {
-            Features handCardFeatures = f.getSubFeatures(c.getName(), true, c.getId());
-            processCardInZone(c, Zone.HAND, game, handCardFeatures);
+            addNode(FeatureGraph.Node.Type.CARD, c.getName(), c.getId(), parentId);
+            processCardInZone(c, Zone.HAND, game, c.getId());
         }
     }
-    private void processStackObject(StackObject so, Game game, UUID playerId, Features f) {
-
-        if(so.getControllerId().equals(playerId)) f.addFeature("isController");
+    private void processTarget(UUID target, Game game, UUID playerId, UUID parentId, String edge) {
+        if(game.getPermanent(target) != null) {
+            addNode(FeatureGraph.Node.Type.PERMANENT, game.getEntityName(target, playerId), target, parentId, edge);
+        } else if (game.getPlayer(target) != null) {
+            addNode(FeatureGraph.Node.Type.PLAYER, game.getEntityName(target, playerId), target, parentId, edge);
+        } else if (game.getStack().getStackObject(target) != null) {
+            addNode(FeatureGraph.Node.Type.STACK_OBJECT, cleanString(game.getStack().getStackObject(target).toString()), target, parentId, edge);
+        } else if (game.getCard(target) != null) {
+            addNode(FeatureGraph.Node.Type.CARD, game.getEntityName(target, playerId), target, parentId, edge);
+        } else {
+            logger.warn("unknown target type");
+        }
+    }
+    private void processStackObject(StackObject so, Game game, UUID playerId, UUID parentId) {
+        if(so.getControllerId().equals(playerId)) addFeature("isController", parentId);
         Ability sa = so.getStackAbility();
-        //abstract only since non-dynamic
-        f.parent.addFeature(sa.getRule());
+        Card sourceCard = game.getCard(sa.getSourceId());
+        if(sourceCard != null) {
+            //process as card
+            if (addNode(Node.Type.CARD, sourceCard.getName(), sourceCard.getId(), parentId)) {
+                processCardInZone(sourceCard, Zone.STACK, game, sourceCard.getId());
+            }
+        }
+        addFeature(sa.getRule(), parentId);
 
         Targets myTargets = sa.getTargets();
         if(!myTargets.isEmpty()) {
-            Features targetsFeatures = f.getSubFeatures("targets", false);
+            int i = 0;
             for (Target target : myTargets) {
                 for (UUID id : target.getTargets()) {
-                    Features targetFeatures = targetsFeatures.getSubFeatures(game.getEntityName(id, playerId));
-                    //Features targetFeatures = targetsFeatures.getSubFeatures(features.getNameFromUUID(id));
-                    Card c = game.getCard(id);
-                    if (c != null) {
-                        processCard(c, game, targetFeatures);
-                    }
+                    processTarget(id, game, playerId, parentId, "TARGET@"+ i);
                 }
+                i++;
             }
         }
         //kicker
         int totalKicks = KickerAbility.getKickedCounter(game, sa);
-        f.addNumericFeature("Kicks", totalKicks, false);
+        addNumericFeature("Kicks", totalKicks, parentId);
         //cost tags
         Map<String, Object> tags = CardUtil.getSourceCostsTagsMap(game, sa);
         if (tags != null && !tags.isEmpty()) {
             for(String tag : tags.keySet()) {
                 Object v = tags.get(tag);
-                f.addNumericFeature(tag + "_CostTag", (v instanceof Integer) ? (Integer) v : 1);
+                addNumericFeature(tag + "_CostTag", (v instanceof Integer) ? (Integer) v : 1, parentId);
             }
         }
         //modes
         List<UUID> selectedModes = sa.getModes().getSelectedModes();
         if (selectedModes != null && !selectedModes.isEmpty() && sa.getModes().size()>1) {
-            Features modesFeatures = f.getSubFeatures("modes", false);
             //selected modes
             for(UUID id : selectedModes) {
                 Mode m = sa.getModes().get(id);
                 for(Effect e : m.getEffects()) {
-                    modesFeatures.addFeature(cleanString(e.getText(m)));
+                    addFeature(cleanString(e.getText(m)), parentId);
                 }
             }
         }
         //variable cost
         int xValue = CardUtil.getSourceCostsTag(game, sa, "X", 0);
-        f.addNumericFeature("XValue", xValue, false);
+        addNumericFeature("XValue", xValue, parentId);
 
-        if(sa instanceof TriggeredAbility) {
-            processTriggeredAbility((TriggeredAbility) sa, game, f);
-        } else {
-            processActivatedAbility((ActivatedAbility)sa, game, f);
-            if(sa instanceof SpellAbility) {
-                MageObject source = game.getObject(so.getSourceId());
-                for (Ability a : source.getAbilities().getStaticAbilities(Zone.STACK)) {
-                    f.addFeature(a.toString());
-                }
-            }
-        }
     }
-    private void processStack(SpellStack stack, Game game, UUID playerId, Features f) {
+    private void processStack(SpellStack stack, Game game, UUID playerId, UUID parentId) {
+        addNumericFeature("StackSize", stack.size(), parentId);
         Iterator<StackObject> itr = stack.iterator();
         StackObject so;
         int depth=0;
         while(itr.hasNext()) {
             depth++;
             so = itr.next();
-            Features soFeatures = f.getSubFeatures(cleanString(so.toString()));
-            soFeatures.addNumericFeature("Depth", depth, false);
-            processStackObject(so, game, playerId, soFeatures);
+            addNode(FeatureGraph.Node.Type.STACK_OBJECT, cleanString(so.toString()), so.getId(), parentId);
+            addNumericFeature("Depth", depth, so.getId());
+            processStackObject(so, game, playerId, so.getId());
         }
     }
-    private void processExileZone(ExileZone exileZone, Game game, Features f) {
+    private void processExileZone(ExileZone exileZone, Game game, UUID parentId) {
         for (Card c : exileZone.getCardsSorted(game)) {
-            Features exileCardFeatures = f.getSubFeatures(c.getName());
-            processCardInZone(c, Zone.EXILED, game, exileCardFeatures);
+            addNode(FeatureGraph.Node.Type.CARD, c.getName(), c.getId(), parentId);
+            processCardInZone(c, Zone.EXILED, game, c.getId());
         }
     }
-    private void processExile(Exile exile, Game game, Features f) {
+    private void processExile(Exile exile, Game game, UUID parentId) {
 
         for (ExileZone ez : exile.getExileZones()) {
-            Features exileZoneFeatures = f.getSubFeatures(cleanString(ez.getName()));
-            processExileZone(ez, game, exileZoneFeatures);
+            addNode(FeatureGraph.Node.Type.ZONE, cleanString(ez.getName()),  ez.getId(), parentId);
+            processExileZone(ez, game, ez.getId());
         }
     }
-    private void processMana(Mana mana, Game game, Features f) {
-        f.addNumericFeature("GreenMana", mana.getGreen());
-        f.addNumericFeature("RedMana", mana.getRed());
-        f.addNumericFeature("BlueMana", mana.getBlue());
-        f.addNumericFeature("WhiteMana", mana.getWhite());
-        f.addNumericFeature("BlackMana", mana.getBlack());
-        f.addNumericFeature("ColorlessMana", mana.getColorless());
+    private void processMana(Mana mana, Game game, String condition, UUID parentId) {
+        addNumericFeature("GreenMana"+condition, mana.getGreen(), parentId);
+        addNumericFeature("RedMana"+condition, mana.getRed(), parentId);
+        addNumericFeature("BlueMana"+condition, mana.getBlue(), parentId);
+        addNumericFeature("WhiteMana"+condition, mana.getWhite(), parentId);
+        addNumericFeature("BlackMana"+condition, mana.getBlack(), parentId);
+        addNumericFeature("ColorlessMana"+condition, mana.getColorless(), parentId);
     }
-    private void processManaPool(ManaPool mp, Game game,  Features f) {
-        processMana(mp.getMana(), game, f);
+    private void processManaPool(ManaPool mp, Game game, UUID parentId) {
+        processMana(mp.getMana(), game, "", parentId);
 
         List<ConditionalMana> conditionalMana = mp.getConditionalMana();
         if(conditionalMana != null && !conditionalMana.isEmpty()) {
-            Features conditionalManaFeatures = f.getSubFeatures("ConditionalMana", false);
             for(ConditionalMana condMana : conditionalMana) {
-                Features cmFeatures = conditionalManaFeatures.getSubFeatures(condMana.getConditionString());
-                processMana(condMana, game, cmFeatures);
+                processMana(condMana, game, "_" + condMana.getConditionString(), parentId);
             }
         }
     }
-    private void processCommandZone(Game game, UUID playerId, Features f) {
+    private void processCommandZone(Game game, UUID playerId, UUID parentId) {
         // Command zone
         for (CommandObject co : game.getState().getCommand()) {
             if (co instanceof Emblem) {
                 Emblem emblem = (Emblem) co;
                 if (playerId.equals(emblem.getControllerId())) {
-                    Features emblemFeatures = f.getSubFeatures(emblem.getName());
-                    emblemFeatures.addFeature("Emblem");
                     // Emblems mainly have continuous/static abilities
                     for (Ability a : emblem.getAbilities()) {
-                        Features aFeatures = emblemFeatures.getSubFeatures(a.getRule());
-                        processAbility(a, game, aFeatures);
+                        addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId);
+                        processAbility(a, game, a.getId());
                     }
                 }
             }
             if(co instanceof Commander) {
                 Commander commander = (Commander) co;
-                Features commanderFeatures = f.getSubFeatures("Commander");
-                commanderFeatures.addFeature(commander.getName());
-                processCard(commander.getSourceObject(), game, commanderFeatures);
-                for (Ability a : commander.getAbilities()) {
-                    Features aFeatures = commanderFeatures.getSubFeatures(a.getRule());
-                    processAbility(a, game, aFeatures);
+                if (playerId.equals(commander.getControllerId())) {
+                    addNode(FeatureGraph.Node.Type.CARD, commander.getName(), commander.getId(), parentId);
+                    processCard(commander.getSourceObject(), game, commander.getId());
+                    for (Ability a : commander.getAbilities()) {
+                        addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId);
+                        processAbility(a, game, a.getId());
+                    }
                 }
             }
         }
@@ -485,134 +457,130 @@ public class StateEncoder {
         // Helper emblems (some emblems can be mirrored here)
         for (Emblem emblem : game.getState().getHelperEmblems()) {
             if (playerId.equals(emblem.getControllerId())) {
-                Features eFeatures = f.getSubFeatures(emblem.getName());
-                eFeatures.addFeature("Emblem");
                 for (Ability a : emblem.getAbilities()) {
-                    Features aFeatures = eFeatures.getSubFeatures(a.getRule());
-                    processAbility(a, game, aFeatures);
+                    if(addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId)) {
+                        processAbility(a, game, a.getId());
+                    }
                 }
             }
         }
         //TODO: companions
     }
-    private void processWatchers(Game game, UUID playerId, Features f) {
+    private void processWatchers(Game game, UUID playerId, UUID parentId) {
         // Storm / spells cast counts
         CastSpellLastTurnWatcher stormW = game.getState().getWatcher(CastSpellLastTurnWatcher.class);
         if (stormW != null) {
-            f.addNumericFeature("SpellsCastThisTurn", stormW.getAmountOfSpellsPlayerCastOnCurrentTurn(playerId));
+            addNumericFeature("SpellsCastThisTurn", stormW.getAmountOfSpellsPlayerCastOnCurrentTurn(playerId), parentId);
         }
         // Life gained this turn
         PlayerGainedLifeWatcher lifeW = game.getState().getWatcher(PlayerGainedLifeWatcher.class);
         if (lifeW != null) {
-            f.addNumericFeature("LifeGainedThisTurn", lifeW.getLifeGained(playerId));
+            addNumericFeature("LifeGainedThisTurn", lifeW.getLifeGained(playerId), parentId);
         }
         // Life lost this turn
         PlayerLostLifeWatcher lossW = game.getState().getWatcher(PlayerLostLifeWatcher.class);
         if (lossW != null) {
-            f.addNumericFeature("LifeLostThisTurn", lossW.getLifeLost(playerId));
+            addNumericFeature("LifeLostThisTurn", lossW.getLifeLost(playerId), parentId);
         }
         // Tokens created this turn
         CreatedTokenWatcher tokenW = game.getState().getWatcher(CreatedTokenWatcher.class);
         if (tokenW != null) {
-            f.addNumericFeature("TokensCreatedThisTurn", CreatedTokenWatcher.getPlayerCount(playerId, game));
+            addNumericFeature("TokensCreatedThisTurn", CreatedTokenWatcher.getPlayerCount(playerId, game), parentId);
         }
     }
-    private void processMicroDecisions(Game game, UUID playerId, Features f) {
+    private void processMicroDecisions(Game game, UUID playerId, UUID parentId) {
         Player myPlayer = game.getPlayer(playerId);
+        int i = 0;
         //current targets selected for when it's in the middle selecting multiple targets
-        Features chosenTargetsFeatures = f.getSubFeatures("ChosenTargets", false);
         for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
-            chosenTargetsFeatures = chosenTargetsFeatures.getSubFeatures(game.getEntityName(targetID, playerId));
+            processTarget(targetID, game, playerId, parentId, "TARGET@"+i);
+            i++;
         }
         //current choices selected for when it's in the middle selecting multiple choices
-        Features choiceFeatures = f.getSubFeatures("ChosenChoices", false);
+        i = 0;
         for(String choice : myPlayer.getPlayerHistory().choiceSequence) {
-            choiceFeatures = choiceFeatures.getSubFeatures(choice);
+            addNumericFeature(choice, i++, parentId);
         }
         //current choices selected for when it's in the middle selecting multiple choices
-        Features useFeatures = f.getSubFeatures("UseChoices", false);
+        i = 0;
         for(Boolean use : myPlayer.getPlayerHistory().useSequence) {
-            useFeatures = useFeatures.getSubFeatures(use.toString());
+            addNumericFeature(use.toString(), i++, parentId);
         }
         //current choices selected for when it's in the middle selecting multiple choices
-        Features amountFeatures = f.getSubFeatures("AmountChoices", false);
+        i = 0;
         for(Integer num : myPlayer.getPlayerHistory().numSequence) {
-            amountFeatures = amountFeatures.getSubFeatures(num.toString());
+            addNumericFeature(num.toString(),  i++, parentId);
         }
     }
-    private void processPlayer(Game game, UUID playerId, UUID decisionPlayerId, Features f) {
+    private void processPlayer(Game game, UUID playerId, UUID decisionPlayerId, UUID parentId) {
         Player myPlayer = game.getPlayer(playerId);
 
-        if(myPlayer.isInPayManaMode()) f.addFeature("InPayManaMode", false);
-        if(((PlayerImpl)myPlayer).isActivating) f.addFeature("Activating", false);
+        if(myPlayer.isInPayManaMode()) addFeature("InPayManaMode", parentId);
+        if(((PlayerImpl)myPlayer).isActivating) addFeature("Activating", parentId);
 
         //micro decision state
-        processMicroDecisions(game, playerId, f);
+        processMicroDecisions(game, playerId, parentId);
+
+        //pass ability (for policy net)
+        addNode(FeatureGraph.Node.Type.ABILITY, "PassAbility", PASS_ABILITY_ID, parentId);
 
 
+        if(game.isActivePlayer(playerId)) addFeature("IsActivePlayer", parentId);
+        if(decisionPlayerId.equals(playerId)) addFeature("IsDecisionPlayer", parentId);
+        addNumericFeature("LifeTotal", myPlayer.getLife(), parentId);
+        if(myPlayer.canPlayLand()) addFeature("CanPlayLand", parentId);
 
-
-        if(game.isActivePlayer(playerId)) f.addFeature("IsActivePlayer");
-        if(decisionPlayerId.equals(playerId)) f.addFeature("IsDecisionPlayer");
-        f.addNumericFeature("LifeTotal", myPlayer.getLife());
-        if(myPlayer.canPlayLand()) f.addFeature("CanPlayLand");
-        if(game.hasDayNight()) {
-            if(game.checkDayNight(true)) {
-                f.addFeature("DayTime");
-            }
-            if(game.checkDayNight(false)) {
-                f.addFeature("NightTime");
-            }
-        }
 
         //library
-        f.addNumericFeature("LibraryCount", myPlayer.getLibrary().size());
+        addNumericFeature("LibrarySize", myPlayer.getLibrary().size(), parentId);
         //TODO: revealed cards
 
         //attachments
         List<UUID> attachments = myPlayer.getAttachments();
         if(attachments != null && !attachments.isEmpty()) {
-            Features attachmentsFeatures = f.getSubFeatures("Attachments", false);
             for(UUID id : attachments) {
-                processPermBattlefield(game.getPermanent(id), game, playerId, attachmentsFeatures);
+                if(game.getPermanent(id) != null) {
+                    addNode(FeatureGraph.Node.Type.PERMANENT, game.getPermanent(id).getName(), id, parentId, "attachment");
+                }
             }
         }
         //counters
         Counters counters = myPlayer.getCountersAsCopy();
         for (String counterName : counters.keySet()) {
-            f.addNumericFeature(counterName, counters.get(counterName).getCount());
+            addNumericFeature(counterName, counters.get(counterName).getCount(), parentId);
         }
 
         //mana pool
-        Features mpFeatures = f.getSubFeatures("ManaPool", false);
-        processManaPool(myPlayer.getManaPool(), game, mpFeatures);
-
-        //battlefield
-        Battlefield bf = game.getBattlefield();
-        Features bfFeatures = f.getSubFeatures("Battlefield");
-        processBattlefield(bf, game, bfFeatures, playerId);
+        processManaPool(myPlayer.getManaPool(), game, parentId);
 
         //graveyard
         Graveyard gy = myPlayer.getGraveyard();
-        Features gyFeatures = f.getSubFeatures("Graveyard");
-        processGraveyard(gy, game, gyFeatures);
+        UUID gyId = stringToUUID(GRAVEYARD_ID + parentId.toString());
+        addNode(FeatureGraph.Node.Type.ZONE, "Graveyard", gyId, parentId);
+        processGraveyard(gy, game, gyId);
 
         //hand
-        if(playerId==decisionPlayerId || perfectInfo) { //keep perspective
-            Cards hand = myPlayer.getHand();
-            Features handFeatures = f.getSubFeatures("Hand");
-            processHand(hand, game, handFeatures);
-        } else {
-            Cards hand = myPlayer.getHand();
-            f.addNumericFeature("CardsInHand", hand.size());
+        Cards hand = myPlayer.getHand();
+        UUID handId = stringToUUID(HAND_ID + parentId.toString());
+        addNode(FeatureGraph.Node.Type.ZONE, "Hand", handId, parentId);
+        addNumericFeature("HandSize", hand.size(), parentId);
+        if(playerId.equals(decisionPlayerId) || perfectInfo) { //keep perspective
+            processHand(hand, game, handId);
         }
+
         //command zone
-        Features commandZoneFeatures = f.getSubFeatures("CommandZone", false);
-        processCommandZone(game, playerId, commandZoneFeatures);
+        UUID czId = stringToUUID(COMMAND_ZONE_ID + parentId.toString());
+        addNode(FeatureGraph.Node.Type.ZONE, "CommandZone", czId, parentId);
+        processCommandZone(game, playerId, czId);
 
         //global watchers
-        Features globalWatcherFeatures = f.getSubFeatures("GlobalWatchers", false);
-        processWatchers(game, playerId, globalWatcherFeatures);
+        processWatchers(game, playerId, parentId);
+
+        //battlefield
+        Battlefield bf = game.getBattlefield();
+        UUID bfId = stringToUUID(BATTLEFIELD_ID + parentId.toString());
+        addNode(FeatureGraph.Node.Type.ZONE, "Battlefield", bfId, parentId);
+        processBattlefield(bf, game, playerId, bfId);
 
 
         //TODO dungeons
@@ -626,51 +594,137 @@ public class StateEncoder {
      * @param decisionsText informative context about the micro decision being made to be hashed as its own feature for the network
      * @return set of active indices in the sparse binary vector
      */
-    public synchronized Set<Integer> processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText) {
-        features.stateRefresh();
-        featureVector.clear();
-
+    public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText) {
+        featureGraph.clear();
         //globals
         if(game.getPhase() != null) {
-            features.addFeature(game.getTurnStepType().toString()); //phases
+            addFeature(game.getTurnStepType().toString(), GAME_ROOT_ID); //phases
+        }
+        if(game.hasDayNight()) {
+            if(game.checkDayNight(true)) {
+                addFeature("DayTime", GAME_ROOT_ID);
+            }
+            if(game.checkDayNight(false)) {
+                addFeature("NightTime", GAME_ROOT_ID);
+            }
         }
 
         //decision type
-        features.addFeature(decisionType.toString());
+        addFeature(decisionType.toString(), GAME_ROOT_ID);
         //decision state
-        features.addFeature(cleanString(decisionsText));
+        addFeature(cleanString(decisionsText), GAME_ROOT_ID);
+        //empty target flag
+        addNode(FeatureGraph.Node.Type.CARD, "StopChoosing", STOP_CHOOSING, GAME_ROOT_ID);
 
-
-
-        //stack
-        Features stackFeatures = features.getSubFeatures("Stack", false);
-        processStack(game.getStack(), game, myPlayerId, stackFeatures);
 
         //exiled
-        Features exileFeatures = features.getSubFeatures("Exile");
-        processExile(game.getExile(), game, exileFeatures);
+        addNode(FeatureGraph.Node.Type.ZONE, "Exile", EXILE_ID, GAME_ROOT_ID);
+        processExile(game.getExile(), game, EXILE_ID);
 
         //each player
 
         //PlayerA
-        Features playerFeatures = features.getSubFeatures("Player");
-        processPlayer(game, myPlayerId, decisionPlayerId, playerFeatures);
+        addNode(FeatureGraph.Node.Type.PLAYER, "PlayerA", myPlayerId, GAME_ROOT_ID);
+        processPlayer(game, myPlayerId, decisionPlayerId, myPlayerId);
         //PlayerB
-        Features opponentFeatures = features.getSubFeatures("Opponent");
-        processPlayer(game, opponentId, decisionPlayerId, opponentFeatures);
+        addNode(FeatureGraph.Node.Type.PLAYER, "PlayerB", opponentId, GAME_ROOT_ID);
+        processPlayer(game, opponentId, decisionPlayerId, opponentId);
+
+        //stack
+        addNode(FeatureGraph.Node.Type.ZONE, "Stack", STACK_ID, GAME_ROOT_ID);
+        processStack(game.getStack(), game, myPlayerId, STACK_ID);
 
 
-        return new HashSet<>(featureVector);
+        return new FeatureGraph(featureGraph);
 
     }
 
-    public synchronized Set<Integer> processState(Game game, UUID actingPlayerID) {
+    public synchronized FeatureGraph processState(Game game, UUID actingPlayerID) {
         return processState(game, actingPlayerID, ActionEncoder.ActionType.PRIORITY,"priority");
     }
 
-    public void addLabeledState(Set<Integer> stateVector, int[] actionVector, double score, ActionEncoder.ActionType actionType, boolean isPlayer) {
-        LabeledState newState = new LabeledState(stateVector, actionVector, score, actionType, isPlayer);
+    public void addLabeledState(FeatureGraph state, Map<UUID, Integer> actionMap, double score, ActionEncoder.ActionType actionType, boolean isPlayer) {
+        LabeledState newState = new LabeledState(state, actionMap, score, actionType, isPlayer);
         labeledStates.add(newState);
+    }
+    //private String featureName;
+    public static boolean useFeatureMap = false;
+    public boolean addNode(FeatureGraph.Node.Type type, String name, UUID id, UUID parentId) {
+        return addNode(type, name, id, parentId, "NONE");
+    }
+    public boolean addNode(FeatureGraph.Node.Type type, String name, UUID id, UUID parentId, String edge) {
+        //name becomes attribute of base-type.
+        if(!addFeature(type.name(), id, parentId, edge)) {
+            return false;
+        }
+        addFeature(name, id, "name");
+        return true;
+    }
+    public void addFeature(String name, UUID parentId) {
+        addFeature(name, stringToUUID(name), parentId, "NONE");
+    }
+    public void addFeature(String name, UUID parentId, String edge) {
+        addFeature(name, stringToUUID(name), parentId, edge);
+    }
+        public boolean addFeature(String name, UUID id, UUID parentId, String  edge) {
+            boolean result = false;
+            int hash = indexFor(hash64(name));
+            if(!featureGraph.containsKey(id)) {
+                FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash);
+                featureGraph.put(id, newNode);
+                result = true;
+            }
+            if(parentId != null) {
+                featureGraph.get(parentId).children.put(id, edge);
+            }
+            if(useFeatureMap) {
+                featureMap.addFeature(name, hash);
+            }
+            return result;
+        }
+        public void addNumericFeature(String name, int num, UUID parentId) {
+            addNumericFeature(name, num, parentId, "NONE");
+        }
+        public void addNumericFeature(String name, int num, UUID parentId, String edge) {
+            int hash = indexFor(hash64(name));
+            UUID key = stringToUUID(name+"@"+num);
+            if(!featureGraph.containsKey(key)) {
+                FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash, num);
+                featureGraph.put(key, newNode);
+            }
+            if(parentId != null) {
+                featureGraph.get(parentId).children.put(key, edge);
+            }
+        }
+
+    public static int indexFor(long h) {
+        if (h < 0) h = -h;
+        return (int) (h % TABLE_SIZE);
+    }
+    public static long hash64(String s) {
+        byte[] data = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        long h = mix64(GLOBAL_SEED ^ (data.length * 0x9E3779B185EBCA87L));
+        ByteBuffer bb = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        while (bb.remaining() >= 8) {
+            long k = bb.getLong();
+            h ^= mix64(k);
+            h = Long.rotateLeft(h, 27) * 0x9E3779B185EBCA87L + 0x165667B19E3779F9L;
+        }
+        long k = 0;
+        int rem = bb.remaining();
+        for (int i = 0; i < rem; i++) {
+            k ^= ((long) bb.get() & 0xFFL) << (8 * i);
+        }
+        h ^= mix64(k);
+        h ^= h >>> 33; h *= 0xff51afd7ed558ccdL;
+        h ^= h >>> 33; h *= 0xc4ceb9fe1a85ec53L;
+        h ^= h >>> 33;
+        return h;
+    }
+    public static long mix64(long z) {
+        z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L;
+        z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL;
+        return z ^ (z >>> 31);
     }
 
 
@@ -719,5 +773,9 @@ public class StateEncoder {
             index++;
         }
         return result;
+    }
+    public static UUID stringToUUID(String s) {
+        long h = hash64(s);
+        return new UUID(h, mix64(h));
     }
 }

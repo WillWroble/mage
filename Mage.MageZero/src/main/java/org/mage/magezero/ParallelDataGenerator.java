@@ -13,7 +13,6 @@ import mage.game.match.MatchOptions;
 import mage.game.mulligan.MulliganType;
 import mage.player.ai.*;
 import mage.player.ai.encoder.FeatureMap;
-import mage.player.ai.encoder.Features;
 import mage.player.ai.encoder.LabeledState;
 import mage.player.ai.encoder.StateEncoder;
 import mage.player.ai.RemoteModelEvaluator;
@@ -103,7 +102,7 @@ public class ParallelDataGenerator {
             logger.warn("Failed to establish connection to network model B; falling back to offline mode");
             remoteModelEvaluatorB = null;
         }
-        Features.useFeatureMap = Config.INSTANCE.logging.logFeatureHash;
+        StateEncoder.useFeatureMap = Config.INSTANCE.logging.logFeatureHash;
     }
     public void print_known_feature_map() {
         try {

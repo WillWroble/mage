@@ -18,11 +18,16 @@ public class PassAbility extends ActivatedAbilityImpl {
     public PassAbility() {
         super(Zone.ALL, new PassEffect(), null);
         this.usesStack = false;
+        this.name = "Pass";
+        this.id = new UUID(0, "Pass".hashCode());
     }
 
     protected PassAbility(final PassAbility ability) {
         super(ability);
+        this.usesStack = false;
+
     }
+
 
     @Override
     public PassAbility copy() {

@@ -8,6 +8,7 @@ import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
 import mage.player.ai.encoder.ActionEncoder;
+import mage.player.ai.encoder.FeatureGraph;
 import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
 import mage.players.PlayerScript;
@@ -41,7 +42,7 @@ public class MCTSPlayer extends ComputerPlayer {
     //additional text for state encoder that describes the decision the player is currently making
     private String decisionText;
     private UUID targetPlayer;
-    private Set<Integer> stateVector;
+    private FeatureGraph featureGraph;
     private StateEncoder encoder;
 
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
@@ -86,7 +87,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
     public boolean isRandomTransition() {return isRandomTransition;}
     public boolean isLastToAct() {return lastToAct;}
-    public Set<Integer> getStateVector() {return stateVector;}
+    public FeatureGraph getFeatureGraph() {return featureGraph;}
 
 
     @Override
@@ -102,7 +103,7 @@ public class MCTSPlayer extends ComputerPlayer {
     private void freezeState(Game game) {
         game.pause();
         lastToAct = true;
-        stateVector = encoder.processState(game, playerId, actionType, decisionText);
+        featureGraph = encoder.processState(game, playerId, actionType, decisionText);
     }
     @Override
     public boolean priority(Game game) {

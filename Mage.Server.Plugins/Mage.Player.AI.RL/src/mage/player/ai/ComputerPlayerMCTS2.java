@@ -206,7 +206,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                         continue;
                     }
                     //remove child if node is already in the tree
-                    MCTSNode2 match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.stateVector, current.parent.playerId);
+                    MCTSNode2 match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.featureGraph, current.parent.playerId);
                     while(match != null && !allowDuplicates) {
                         MCTSNode oldPath = match.getChildOfCommonAncestor(current);
                         MCTSNode newPath = current.getChildOfCommonAncestor(match);
@@ -222,7 +222,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                             //prune old
                             invalidDuplicatesPurged++;
                             match.getParent().prune(match);
-                            match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.stateVector, current.parent.playerId);
+                            match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.featureGraph, current.parent.playerId);
                         }
                     }
                     if(current==null) {
@@ -262,16 +262,15 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             logger.info(illegalPurged + " illegals purged, " + validDuplicatesPurged + " valid duplicates purged, " +  invalidDuplicatesPurged + " invalid duplicates purged.");
         }
     }
-    int[] getActionVec(MCTSNode node, Game game) {
-        int[] out = new int[128];
-        Arrays.fill(out, 0);
+    Map<UUID, Integer> getActionMap(MCTSNode node, Game game) {
+        Map<UUID, Integer> out = new HashMap<>();
         for (MCTSNode child : node.getChildren()) {
-            int idx = child.getActionIndex(game);
-            if (idx < 0) {
+            UUID id = child.getActionId(game);
+            if (id == null) {
                 return null;
             }
             int v = child.getVisits();//un normalized counts
-            out[idx%128] += v;
+            out.put(id, v);
         }
         return out;
     }
@@ -306,7 +305,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             logger.info("opponent prefix at root: " + opponentPrefixScript);
         }
         if (root != null) {
-            root = (MCTSNode2) root.getMatchingState(newRoot.stateVector, newRoot.stateString);
+            root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph, newRoot.stateString);
         }
         if (root == null) {
             root = newRoot;
@@ -333,9 +332,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         MCTSNode best = root.bestChild(game);
 
-        int[] actionVec = getActionVec(root, game);
+        Map<UUID, Integer> actionMap = getActionMap(root, game);
 
-        if(actionVec != null) stateEncoder.addLabeledState(root.stateVector, actionVec, root.getMeanScore(), action, true);
+        if(actionMap != null) stateEncoder.addLabeledState(root.featureGraph, actionMap, root.getMeanScore(), action, true);
 
 
         return best;

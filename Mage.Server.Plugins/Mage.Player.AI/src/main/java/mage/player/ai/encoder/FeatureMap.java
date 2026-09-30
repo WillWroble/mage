@@ -13,11 +13,11 @@ import java.util.*;
  */
 public class FeatureMap implements Serializable {
 
-    private Map<Integer, Set<Pair<Long, String>>> map = new HashMap<>();
+    private Map<Integer, Set<String>> map = new HashMap<>();
 
     public int getFeatureCount() {
         int count = 0;
-        for (Map.Entry<Integer, Set<Pair<Long, String>>> entry : map.entrySet()) {
+        for (Map.Entry<Integer, Set<String>> entry : map.entrySet()) {
             count += entry.getValue().size();
         }
         return count;
@@ -26,12 +26,12 @@ public class FeatureMap implements Serializable {
         return map.size();
     }
 
-    public void addFeature(String name, long nameSpace, int idx) {
+    public void addFeature(String name, int idx) {
         if(map.containsKey(idx)) {
-            map.get(idx).add(new Pair<>(nameSpace, name));
+            map.get(idx).add(name);
         } else {
-            Set<Pair<Long, String>> empty = new HashSet<>();
-            empty.add(new Pair<>(nameSpace, name));
+            Set<String> empty = new HashSet<>();
+            empty.add(name);
             map.put(idx, empty);
         }
     }
@@ -57,14 +57,14 @@ public class FeatureMap implements Serializable {
                 StringBuilder sb = new StringBuilder();
                 sb.append(idx).append(": ");
 
-                Set<Pair<Long, String>> features = map.get(idx);
+                Set<String> features = map.get(idx);
                 if (features != null && !features.isEmpty()) {
                     boolean first = true;
-                    for (Pair<Long, String> pair : features) {
+                    for (String s : features) {
                         if (!first) {
                             sb.append(", ");
                         }
-                        sb.append("[").append(pair.getKey()).append("/").append(pair.getValue()).append("]");
+                        sb.append("[").append(s).append("]");
                         first = false;
                     }
                 }
