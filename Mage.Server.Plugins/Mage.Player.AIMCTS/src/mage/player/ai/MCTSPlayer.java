@@ -3,6 +3,7 @@ package mage.player.ai;
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
 import mage.abilities.costs.mana.ManaCost;
+import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
@@ -101,9 +102,12 @@ public class MCTSPlayer extends ComputerPlayer {
         return drawCards(num, source, game, null);
     }
     private void freezeState(Game game) {
+        freezeState(game, null);
+    }
+    private void freezeState(Game game, Cards options) {
         game.pause();
         lastToAct = true;
-        featureGraph = encoder.processState(game, playerId, actionType, decisionText);
+        featureGraph = encoder.processState(game, playerId, actionType, decisionText, options);
     }
     @Override
     public boolean priority(Game game) {
@@ -225,7 +229,7 @@ public class MCTSPlayer extends ComputerPlayer {
         sb.append(":Choose a target:").append(target.getTargetName());
         decisionText = sb.toString();
         actionType = ActionEncoder.ActionType.CHOOSE_TARGET;
-        freezeState(game);
+        freezeState(game, fromCards);
         return makeChoiceFallback(outcome, target, source, game, fromCards);//continue with default target until able to pause
     }
     @Override

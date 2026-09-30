@@ -137,7 +137,8 @@ public class ComputerPlayer8 extends ComputerPlayer7{
             while (actions.peek() != null) {
                 Ability ability = actions.poll();
                 log.info("===> SELECTED ACTION for {}: {}", getName(), getAbilityAndSourceInfo(game, ability, true));
-
+                //TODO: support this
+                /*
                 Player opponent = game.getOpponent(playerId);
                 FeatureGraph stateGraph = encoder.processState(game, playerId);
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
@@ -162,6 +163,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                         encoder.addLabeledState(stateGraph, null, score, ActionEncoder.ActionType.PRIORITY, name.equals("PlayerA"));
                     }
                 }
+                 */
                 if (!ability.getTargets().isEmpty()) {
                     for (Target target : ability.getTargets()) {
                         for (UUID id : target.getTargets()) {

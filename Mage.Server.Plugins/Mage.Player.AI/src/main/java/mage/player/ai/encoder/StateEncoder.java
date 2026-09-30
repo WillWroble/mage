@@ -594,7 +594,7 @@ public class StateEncoder {
      * @param decisionsText informative context about the micro decision being made to be hashed as its own feature for the network
      * @return set of active indices in the sparse binary vector
      */
-    public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText) {
+    public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText, Cards options) {
         featureGraph.clear();
         //globals
         if(game.getPhase() != null) {
@@ -615,6 +615,14 @@ public class StateEncoder {
         addFeature(cleanString(decisionsText), GAME_ROOT_ID);
         //empty target flag
         addNode(FeatureGraph.Node.Type.CARD, "StopChoosing", STOP_CHOOSING, GAME_ROOT_ID);
+
+        //additional options
+        if(options != null) {
+            for (UUID c : options) {
+                Card card = game.getCard(c);
+                addNode(FeatureGraph.Node.Type.CARD, card.getName(), c, GAME_ROOT_ID, "OptionPile");
+            }
+        }
 
 
         //exiled
@@ -638,9 +646,11 @@ public class StateEncoder {
         return new FeatureGraph(featureGraph);
 
     }
-
+    public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText) {
+        return processState(game, decisionPlayerId, decisionType, decisionsText, null);
+    }
     public synchronized FeatureGraph processState(Game game, UUID actingPlayerID) {
-        return processState(game, actingPlayerID, ActionEncoder.ActionType.PRIORITY,"priority");
+        return processState(game, actingPlayerID, ActionEncoder.ActionType.PRIORITY,"priority", null);
     }
 
     public void addLabeledState(FeatureGraph state, Map<UUID, Integer> actionMap, double score, ActionEncoder.ActionType actionType, boolean isPlayer) {
