@@ -1051,7 +1051,7 @@ public class ComputerPlayer extends PlayerImpl {
             for (Permanent attacker : availableAttackers) {
                 ChooseToAttackAbility attackAbility = new ChooseToAttackAbility("attack with: {this} ?", attacker.getId());
                 Target defenderTarget = new TargetDefender(game.getCombat().getDefenders());
-                defenderTarget.setMaxNumberOfTargets(0);
+                defenderTarget.setMinNumberOfTargets(0);
                 makeChoice(Outcome.Neutral, defenderTarget, attackAbility, game, null);
                 UUID choice = defenderTarget.getFirstTarget();
                 if (!choice.equals(TargetImpl.STOP_CHOOSING)) {

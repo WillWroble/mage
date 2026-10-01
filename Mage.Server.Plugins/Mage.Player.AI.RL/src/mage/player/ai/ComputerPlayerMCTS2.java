@@ -334,7 +334,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
 
         Map<UUID, Integer> actionMap = getActionMap(root, game);
 
-        if(actionMap != null) stateEncoder.addLabeledState(root.featureGraph, actionMap, root.getMeanScore(), action, true);
+        if(actionMap != null) stateEncoder.addLabeledState(root.featureGraph, actionMap, root.getMeanScore(), action, true, game, playerId);
 
 
         return best;

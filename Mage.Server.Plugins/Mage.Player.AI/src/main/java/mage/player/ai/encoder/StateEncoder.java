@@ -664,7 +664,12 @@ public class StateEncoder {
         return processState(game, actingPlayerID, ActionEncoder.ActionType.PRIORITY,"priority", null, null);
     }
 
-    public void addLabeledState(FeatureGraph state, Map<UUID, Integer> actionMap, double score, ActionEncoder.ActionType actionType, boolean isPlayer) {
+    public void addLabeledState(FeatureGraph state, Map<UUID, Integer> actionMap, double score, ActionEncoder.ActionType actionType, boolean isPlayer, Game game, UUID playerId) {
+        for (UUID id : actionMap.keySet()) {
+            if(!state.containsKey(id)) {
+                logger.error("missing node: " + game.getEntityName(id, playerId) + ", cannot add state to buffer");
+            }
+        }
         LabeledState newState = new LabeledState(state, actionMap, score, actionType, isPlayer);
         labeledStates.add(newState);
     }

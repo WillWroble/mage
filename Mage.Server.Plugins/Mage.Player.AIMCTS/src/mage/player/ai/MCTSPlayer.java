@@ -229,7 +229,7 @@ public class MCTSPlayer extends ComputerPlayer {
         sb.append(":Choose a target:").append(target.getTargetName());
         decisionText = sb.toString();
         actionType = ActionEncoder.ActionType.CHOOSE_TARGET;
-        freezeState(game, fromCards, source == null ? null : source.getId());
+        freezeState(game, fromCards, source == null ? null : source.getSourceId());
         return makeChoiceFallback(outcome, target, source, game, fromCards);//continue with default target until able to pause
     }
     @Override
