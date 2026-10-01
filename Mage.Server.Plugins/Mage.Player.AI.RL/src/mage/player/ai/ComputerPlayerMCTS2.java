@@ -270,7 +270,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 return null;
             }
             if(!root.featureGraph.containsKey(id)) {
-                logger.error(String.format("action id not found for %s", child.state.getCardState(id)));
+                logger.error(String.format("action id not found for %s", child.getOrderString(game)));
                 continue;
             }
             int v = child.getVisits();//un normalized counts
