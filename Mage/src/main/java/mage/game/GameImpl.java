@@ -62,7 +62,6 @@ import mage.game.turn.Step;
 import mage.game.turn.Turn;
 import mage.game.turn.TurnMod;
 import mage.players.Player;
-import mage.players.PlayerImpl;
 import mage.players.PlayerList;
 import mage.players.Players;
 import mage.target.*;
@@ -523,7 +522,7 @@ public abstract class GameImpl implements Game {
      * @return never null
      */
     @Override
-    public String getEntityName(UUID entityId, UUID playerId) {
+    public String getEntityName(UUID entityId) {
         if(entityId == null) {
             return "null";
         }
@@ -538,11 +537,7 @@ public abstract class GameImpl implements Game {
                 if (player == null) {
                     return "null";
                 }
-                if(player.getId().equals(playerId)) {
-                    return "PlayerA";
-                } else {
-                    return "PlayerB";
-                }
+                return getPlayer(entityId).getName();
             }
         } catch (Exception e) {
             logger.warn("couldn't get entity name for entity " + entityId);
@@ -560,7 +555,7 @@ public abstract class GameImpl implements Game {
     }
     @Override
     public String getEntityValue(UUID entityId, UUID playerId) {
-        String name = getEntityName(entityId, playerId);
+        String name = getEntityName(entityId);
         StringBuilder sb = new StringBuilder();
         sb.append(name);
         Object o = getObject(entityId);

@@ -272,7 +272,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     public String getValue(GameState state) {
         StringBuilder sb = threadLocalBuilder.get();
         sb.append(controllerId).append(getName()).append(tapped).append(damage);
-        if(!this.isLand()) sb.append(getId());
+        sb.append(getId());
         sb.append(subtype).append(supertype).append(power.getValue()).append(toughness.getValue());
         sb.append(abilities.getValue());
         for(UUID att : attachments) {
@@ -291,7 +291,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         sb.append(getAbilities(game).getValue());
         List<String> names =  new ArrayList<>();
         for(UUID att : attachments) {
-            names.add(game.getEntityName(att, targetPlayer));
+            names.add(game.getEntityName(att));
         }
         names.sort(String::compareTo);
         for(String attName : names) {
@@ -300,7 +300,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         if(isCreature()) {
             if(isAttacking()) {
                 sb.append("Attacking");
-                List<String> blocking = game.getCombat().findGroup(getId()).getBlockers().stream().map(id -> game.getEntityName(id, targetPlayer)).collect(Collectors.toList());
+                List<String> blocking = game.getCombat().findGroup(getId()).getBlockers().stream().map(id -> game.getEntityName(id)).collect(Collectors.toList());
                 blocking.sort(String::compareTo);
                 for (String blockingName : blocking) {
                     sb.append(blockingName).append("Blocking");

@@ -51,7 +51,7 @@ public class MCTSDeckValidationTest {
             "decks/UW Control.dck"
     };*/
     private static final String[] DECK_POOL = {
-            "decks/Standard32-UWB.txt",
+            //"decks/Standard32-UWB.txt",
             "decks/Standard16-UB.dck",
             "decks/Standard-MonoB.dck",
             "decks/Standard-MonoG.dck",

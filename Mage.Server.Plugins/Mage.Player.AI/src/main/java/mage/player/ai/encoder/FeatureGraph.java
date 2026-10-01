@@ -38,7 +38,7 @@ public class FeatureGraph {
             name = n;
             id = i;
             value = v;
-            oldHash = id ^ value;
+            oldHash = StateEncoder.mix64(id ^ value);
             hash = oldHash;
             children = new HashMap<>();
         }
@@ -47,11 +47,11 @@ public class FeatureGraph {
     private GraphArrays graphArrays = null;
     private long stateHash = -1;
 
-    FeatureGraph() {
+    public FeatureGraph() {
         state = new HashMap<UUID, Node>();
         state.put(GAME_ROOT_ID, new Node("root", 0, 0));
     }
-    FeatureGraph(FeatureGraph fg) {
+    public FeatureGraph(FeatureGraph fg) {
         state = new HashMap<UUID, Node>(fg.state);
         graphArrays = fg.graphArrays;
         stateHash = fg.stateHash;

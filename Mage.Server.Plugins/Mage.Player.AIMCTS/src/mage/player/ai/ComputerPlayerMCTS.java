@@ -223,7 +223,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         if (target.isChoiceCompleted(abilityControllerId, source, game, fromCards)) {
             return false;
         }
-        logger.info("base choose target " + (source == null ? "null" : source.toString()));
+        logger.info("base choose target " + (source == null ? "null" : source.getGameLogMessage(game)));
         Set<UUID> possible = target.possibleTargets(abilityControllerId, source, game, fromCards).stream().filter(id -> !target.contains(id)).collect(Collectors.toSet());
         logger.info("possible targets: " + possible.size());
         // nothing to choose, e.g. no valid targets
@@ -253,7 +253,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.error("target id is null");
             return false;
         }
-        logger.info(String.format("Targeting %s", game.getEntityName(targetId, playerId)));
+        logger.info(String.format("Targeting %s", game.getEntityName(targetId)));
 
         if(!targetId.equals(STOP_CHOOSING)) {
             target.addTarget(targetId, source, game);

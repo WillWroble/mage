@@ -1246,3 +1246,8 @@ WR with Standard32-UWB vs Standard32-UWB: 0.875 in 16 games
 WR with Standard32-UWB vs Standard32-UWB: 0.75 in 16 games
 WR with Standard32-UWB vs Standard32-UWB: 0.4375 in 16 games
 WR with Standard16-UB vs Standard32-UWB: 0.6875 in 16 games
+WR with Standard16-UB vs Standard32-UWB: 0.375 in 16 games
+WR with Standard-MonoB vs Standard32-UWB: 0.6875 in 16 games
+WR with Standard-MonoG vs Standard32-UWB: 0.3333333333333333 in 15 games
+WR with Standard16-UB vs Standard32-UWB: 0.2857142857142857 in 14 games
+WR with Standard-MonoB vs Standard32-UWB: 0.625 in 16 games

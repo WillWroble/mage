@@ -3,7 +3,6 @@ package mage.player.ai.encoder;
 import mage.ConditionalMana;
 import mage.Mana;
 import mage.abilities.*;
-import mage.abilities.common.PassAbility;
 import mage.abilities.costs.Cost;
 import mage.abilities.costs.Costs;
 import mage.abilities.costs.mana.ManaCost;
@@ -12,6 +11,7 @@ import mage.abilities.effects.Effect;
 import mage.abilities.keyword.KickerAbility;
 import mage.cards.Card;
 import mage.cards.Cards;
+import mage.cards.SplitCard;
 import mage.constants.CardType;
 import mage.constants.SubType;
 import mage.constants.Zone;
@@ -25,7 +25,6 @@ import mage.game.command.Commander;
 import mage.game.command.Emblem;
 import mage.game.permanent.Battlefield;
 import mage.game.permanent.Permanent;
-import mage.game.permanent.PermanentCard;
 import mage.game.stack.SpellStack;
 import mage.game.stack.StackObject;
 import mage.players.ManaPool;
@@ -287,6 +286,11 @@ public class StateEncoder {
 
 
         Abilities<Ability> allAbilities = c.getAbilities(game);
+        if (c instanceof SplitCard) {
+            SplitCard split = (SplitCard) c;
+            allAbilities.addAll(split.getLeftHalfCard().getAbilities(game));
+            allAbilities.addAll(split.getRightHalfCard().getAbilities(game));
+        }
         //static abilities
         for (StaticAbility sa : allAbilities.getStaticAbilities(z)) {
             addNode(FeatureGraph.Node.Type.ABILITY, sa.getRule(), sa.getId(), parentId);
@@ -327,13 +331,13 @@ public class StateEncoder {
     }
     private void processTarget(UUID target, Game game, UUID playerId, UUID parentId, String edge) {
         if(game.getPermanent(target) != null) {
-            addNode(FeatureGraph.Node.Type.PERMANENT, game.getEntityName(target, playerId), target, parentId, edge);
+            addNode(FeatureGraph.Node.Type.PERMANENT, game.getEntityName(target), target, parentId, edge);
         } else if (game.getPlayer(target) != null) {
-            addNode(FeatureGraph.Node.Type.PLAYER, game.getEntityName(target, playerId), target, parentId, edge);
+            addNode(FeatureGraph.Node.Type.PLAYER, game.getEntityName(target), target, parentId, edge);
         } else if (game.getStack().getStackObject(target) != null) {
             addNode(FeatureGraph.Node.Type.STACK_OBJECT, cleanString(game.getStack().getStackObject(target).toString()), target, parentId, edge);
         } else if (game.getCard(target) != null) {
-            addNode(FeatureGraph.Node.Type.CARD, game.getEntityName(target, playerId), target, parentId, edge);
+            addNode(FeatureGraph.Node.Type.CARD, game.getEntityName(target), target, parentId, edge);
         } else {
             logger.warn("unknown target type");
         }
@@ -528,6 +532,8 @@ public class StateEncoder {
         addNode(FeatureGraph.Node.Type.ABILITY, "PassAbility", PASS_ABILITY_ID, parentId);
 
 
+
+
         if(game.isActivePlayer(playerId)) addFeature("IsActivePlayer", parentId);
         if(decisionPlayerId.equals(playerId)) addFeature("IsDecisionPlayer", parentId);
         addNumericFeature("LifeTotal", myPlayer.getLife(), parentId);
@@ -584,7 +590,6 @@ public class StateEncoder {
         UUID bfId = stringToUUID(BATTLEFIELD_ID + parentId.toString());
         addNode(FeatureGraph.Node.Type.ZONE, "Battlefield", bfId, parentId);
         processBattlefield(bf, game, playerId, bfId);
-
 
         //TODO dungeons
     }

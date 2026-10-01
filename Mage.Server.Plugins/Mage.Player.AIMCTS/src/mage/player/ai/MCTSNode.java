@@ -10,7 +10,6 @@ import mage.game.Game;
 import mage.game.GameState;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.FeatureGraph;
-import mage.player.ai.encoder.StateEncoder;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.util.RandomUtil;
@@ -454,7 +453,7 @@ public class MCTSNode {
         } else if(actionType == ActionEncoder.ActionType.CHOOSE_TARGET) {
             Set<UUID> targetOptions = player.chooseTargetOptions;
             for(UUID target : targetOptions) {
-                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + game.getEntityName(target, targetPlayer));
+                logger.trace(game.getTurn().getValue(game.getTurnNum()) + " expanding: " + game.getEntityName(target));
                 MCTSNode node = createChild();
                 node.targetAction = target;
                 children.add(node);
@@ -603,7 +602,7 @@ public class MCTSNode {
         sb.append(" actions: ");
         for (MCTSNode node: children) {
             if(node.targetAction != null) {
-                sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntityName(node.targetAction, targetPlayer), node.getMeanScore(), node.getVisits()));
+                sb.append(String.format("[%s score: %.3f count: %d] ", baseGame.getEntityName(node.targetAction), node.getMeanScore(), node.getVisits()));
             } else if(node.choiceAction != null) {
                 sb.append(String.format("[%s score: %.3f count: %d] ", node.choiceAction, node.getMeanScore(), node.getVisits()));
             } else if(node.useAction != null) {

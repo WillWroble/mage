@@ -3,6 +3,7 @@ package mage.players;
 import mage.abilities.AbilityImpl;
 import mage.constants.AbilityType;
 import mage.constants.Zone;
+import mage.game.Game;
 
 import java.util.UUID;
 
@@ -45,6 +46,10 @@ public class ChooseToAttackAbility extends AbilityImpl {
     @Override
     public String toString() {
         return this.name;
+    }
+    @Override
+    public String getGameLogMessage(Game game) {
+        return this.name.replace("{this}", game.getEntityName(sourceId));
     }
 
     @Override

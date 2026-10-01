@@ -269,8 +269,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             if (id == null) {
                 return null;
             }
-            if(!root.featureGraph.containsKey(id)) {
-                logger.error(String.format("action id not found for %s", child.getOrderString(game)));
+            if(!node.featureGraph.containsKey(id) && !node.actionType.equals(ActionEncoder.ActionType.CHOOSE_USE)) {
+                logger.error(String.format("action id not found for %s", node.actionType.toString() + game.getEntityName(id)));
                 continue;
             }
             int v = child.getVisits();//un normalized counts
