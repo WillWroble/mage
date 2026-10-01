@@ -619,11 +619,6 @@ public class StateEncoder {
         //empty target flag
         addNode(FeatureGraph.Node.Type.CARD, "StopChoosing", STOP_CHOOSING, GAME_ROOT_ID);
 
-        if(decisionSource != null && game.getCard(decisionSource) != null) {
-            Card card = game.getCard(decisionSource);
-            addNode(FeatureGraph.Node.Type.CARD, card.getName(), card.getId(), GAME_ROOT_ID, "DecisionSource");
-        }
-
 
         //exiled
         addNode(FeatureGraph.Node.Type.ZONE, "Exile", EXILE_ID, GAME_ROOT_ID);
@@ -651,6 +646,10 @@ public class StateEncoder {
                 }
             }
         }
+        if(decisionSource != null && game.getCard(decisionSource) != null) {
+            Card card = game.getCard(decisionSource);
+            addNode(FeatureGraph.Node.Type.CARD, card.getName(), card.getId(), GAME_ROOT_ID, "DecisionSource");
+        }
 
 
 
@@ -665,11 +664,6 @@ public class StateEncoder {
     }
 
     public void addLabeledState(FeatureGraph state, Map<UUID, Integer> actionMap, double score, ActionEncoder.ActionType actionType, boolean isPlayer, Game game, UUID playerId) {
-        for (UUID id : actionMap.keySet()) {
-            if(!state.containsKey(id)) {
-                logger.error("missing node: " + game.getEntityName(id, playerId) + ", cannot add state to buffer");
-            }
-        }
         LabeledState newState = new LabeledState(state, actionMap, score, actionType, isPlayer);
         labeledStates.add(newState);
     }
@@ -768,38 +762,7 @@ public class StateEncoder {
         return cleaned;
     }
 
-    /**
-     * returns stack objects targeting given permanent. and populates a list of stackIndices that correspond to
-     * those object's stack positions
-     * @param permanent
-     * @param game
-     * @param stackIndices is populated
-     * @return
-     */
-    public static List<StackObject> getSpellsTargetingPermanent(Permanent permanent, Game game, List<Integer> stackIndices) {
-        List<StackObject> result = new ArrayList<>();
-        int index = 1;
-        if (permanent == null) return result;
 
-        for (StackObject so : game.getStack()) {
-            Ability sa = so.getStackAbility();
-            if (sa == null) continue;
-
-            Targets targets = sa.getTargets();
-            if (targets == null || targets.isEmpty()) continue;
-
-            boolean targetsThisPerm = targets
-                    .stream()
-                    .anyMatch(t -> t.getTargets().contains(permanent.getId()));
-
-            if (targetsThisPerm) {
-                result.add(so);
-                stackIndices.add(index);
-            }
-            index++;
-        }
-        return result;
-    }
     public static UUID stringToUUID(String s) {
         long h = hash64(s);
         return new UUID(h, mix64(h));

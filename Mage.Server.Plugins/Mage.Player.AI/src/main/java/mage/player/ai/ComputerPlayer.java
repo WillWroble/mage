@@ -1054,7 +1054,7 @@ public class ComputerPlayer extends PlayerImpl {
                 defenderTarget.setMinNumberOfTargets(0);
                 makeChoice(Outcome.Neutral, defenderTarget, attackAbility, game, null);
                 UUID choice = defenderTarget.getFirstTarget();
-                if (!choice.equals(TargetImpl.STOP_CHOOSING)) {
+                if (choice != null) {
                     this.declareAttacker(attacker.getId(), choice, game, false);
                 }
             }
