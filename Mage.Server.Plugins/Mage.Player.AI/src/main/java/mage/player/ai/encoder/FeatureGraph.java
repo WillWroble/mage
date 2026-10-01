@@ -38,7 +38,7 @@ public class FeatureGraph {
             name = n;
             id = i;
             value = v;
-            oldHash = StateEncoder.mix64(id ^ value);
+            oldHash = StateEncoder.mix64(id) ^ value;
             hash = oldHash;
             children = new HashMap<>();
         }

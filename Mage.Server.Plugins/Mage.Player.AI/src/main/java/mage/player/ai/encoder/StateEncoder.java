@@ -288,6 +288,7 @@ public class StateEncoder {
         Abilities<Ability> allAbilities = c.getAbilities(game);
         if (c instanceof SplitCard) {
             SplitCard split = (SplitCard) c;
+            allAbilities = allAbilities.copy();
             allAbilities.addAll(split.getLeftHalfCard().getAbilities(game));
             allAbilities.addAll(split.getRightHalfCard().getAbilities(game));
         }
@@ -632,10 +633,10 @@ public class StateEncoder {
         //each player
 
         //PlayerA
-        addNode(FeatureGraph.Node.Type.PLAYER, "PlayerA", myPlayerId, GAME_ROOT_ID);
+        addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(decisionPlayerId).getName(), myPlayerId, GAME_ROOT_ID);
         processPlayer(game, myPlayerId, decisionPlayerId, myPlayerId);
         //PlayerB
-        addNode(FeatureGraph.Node.Type.PLAYER, "PlayerB", opponentId, GAME_ROOT_ID);
+        addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(opponentId).getName(), opponentId, GAME_ROOT_ID);
         processPlayer(game, opponentId, decisionPlayerId, opponentId);
 
         //stack
