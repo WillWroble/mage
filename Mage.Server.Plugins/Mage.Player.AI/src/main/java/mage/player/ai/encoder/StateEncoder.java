@@ -633,7 +633,7 @@ public class StateEncoder {
         //each player
 
         //PlayerA
-        addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(decisionPlayerId).getName(), myPlayerId, GAME_ROOT_ID);
+        addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(myPlayerId).getName(), myPlayerId, GAME_ROOT_ID);
         processPlayer(game, myPlayerId, decisionPlayerId, myPlayerId);
         //PlayerB
         addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(opponentId).getName(), opponentId, GAME_ROOT_ID);
