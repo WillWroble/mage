@@ -107,7 +107,7 @@ public class MCTSPlayer extends ComputerPlayer {
     private void freezeState(Game game, Cards options, UUID decisionSource) {
         game.pause();
         lastToAct = true;
-        featureGraph = encoder.processState(game, playerId, actionType, decisionText, options, null);
+        featureGraph = encoder.processState(game, playerId, actionType, decisionText, options, decisionSource);
     }
     @Override
     public boolean priority(Game game) {
