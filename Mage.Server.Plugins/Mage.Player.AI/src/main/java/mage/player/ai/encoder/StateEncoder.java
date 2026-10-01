@@ -267,10 +267,13 @@ public class StateEncoder {
             //if(p.hasSummoningSickness()) addFeature("SummoningSickness");
             if(p.isAttacking()) {
                 addFeature("Attacking", parentId);
+                UUID defender = game.getCombat().getDefenderId(p.getId());
+                processTarget(defender, game, playerId, parentId, "defender");
                 for(UUID blockerId : game.getCombat().findGroup(p.getId()).getBlockers()) {
                     Permanent blocker  = game.getPermanent(blockerId);
                     addNode(FeatureGraph.Node.Type.PERMANENT, blocker.getName(), blocker.getId(), parentId, "blocker");
                 }
+
             }
             addNumericFeature("Damage", p.getDamage(), parentId);
             addNumericFeature("Power", p.getPower().getValue(), parentId);

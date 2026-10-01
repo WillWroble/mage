@@ -35,6 +35,7 @@ import mage.target.TargetAmount;
 import mage.target.TargetCard;
 import mage.target.TargetImpl;
 import mage.target.common.TargetAttackingCreature;
+import mage.target.common.TargetDefender;
 import mage.util.*;
 import org.apache.log4j.Logger;
 
@@ -1045,14 +1046,16 @@ public class ComputerPlayer extends PlayerImpl {
         game.fireEvent(new GameEvent(GameEvent.EventType.DECLARE_ATTACKERS_STEP_PRE, null, null, attackingPlayerId));
         if (!game.replaceEvent(GameEvent.getEvent(GameEvent.EventType.DECLARING_ATTACKERS, attackingPlayerId, attackingPlayerId))) {
             logger.debug("selectAttackersOneAtATime");
-            UUID opponentId = game.getCombat().getDefenders().iterator().next();
             List<Permanent> availableAttackers = getAvailableAttackers(game);
             availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
             for (Permanent attacker : availableAttackers) {
                 ChooseToAttackAbility attackAbility = new ChooseToAttackAbility("attack with: {this} ?", attacker.getId());
-                boolean willAttack = chooseUse(Outcome.Neutral, "attack with: {this} ?", attackAbility, game);
-                if (willAttack) {
-                    this.declareAttacker(attacker.getId(), opponentId, game, false);
+                Target defenderTarget = new TargetDefender(game.getCombat().getDefenders());
+                defenderTarget.setMaxNumberOfTargets(0);
+                makeChoice(Outcome.Neutral, defenderTarget, attackAbility, game, null);
+                UUID choice = defenderTarget.getFirstTarget();
+                if (!choice.equals(TargetImpl.STOP_CHOOSING)) {
+                    this.declareAttacker(attacker.getId(), choice, game, false);
                 }
             }
             game.getPlayers().resetPassed();
