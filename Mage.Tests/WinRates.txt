@@ -1243,3 +1243,5 @@ WR with Standard32-UWB vs Standard32-UWB: 0.6666666666666666 in 15 games
 WR with Standard32-UWB vs Standard32-UWB: 0.5625 in 16 games
 WR with Standard32-UWB vs Standard32-UWB: 0.4375 in 16 games
 WR with Standard32-UWB vs Standard32-UWB: 0.875 in 16 games
+WR with Standard32-UWB vs Standard32-UWB: 0.75 in 16 games
+WR with Standard32-UWB vs Standard32-UWB: 0.4375 in 16 games

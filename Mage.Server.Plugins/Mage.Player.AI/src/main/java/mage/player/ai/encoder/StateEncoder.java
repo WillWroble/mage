@@ -594,7 +594,7 @@ public class StateEncoder {
      * @param decisionsText informative context about the micro decision being made to be hashed as its own feature for the network
      * @return set of active indices in the sparse binary vector
      */
-    public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText, Cards options) {
+    public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText, Cards options, UUID decisionSource) {
         featureGraph.clear();
         //globals
         if(game.getPhase() != null) {
@@ -615,6 +615,11 @@ public class StateEncoder {
         addFeature(cleanString(decisionsText), GAME_ROOT_ID);
         //empty target flag
         addNode(FeatureGraph.Node.Type.CARD, "StopChoosing", STOP_CHOOSING, GAME_ROOT_ID);
+
+        if(decisionSource != null && game.getCard(decisionSource) != null) {
+            Card card = game.getCard(decisionSource);
+            addNode(FeatureGraph.Node.Type.CARD, card.getName(), card.getId(), GAME_ROOT_ID, "DecisionSource");
+        }
 
 
         //exiled
@@ -645,14 +650,15 @@ public class StateEncoder {
         }
 
 
+
         return new FeatureGraph(featureGraph);
 
     }
     public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText) {
-        return processState(game, decisionPlayerId, decisionType, decisionsText, null);
+        return processState(game, decisionPlayerId, decisionType, decisionsText, null, null);
     }
     public synchronized FeatureGraph processState(Game game, UUID actingPlayerID) {
-        return processState(game, actingPlayerID, ActionEncoder.ActionType.PRIORITY,"priority", null);
+        return processState(game, actingPlayerID, ActionEncoder.ActionType.PRIORITY,"priority", null, null);
     }
 
     public void addLabeledState(FeatureGraph state, Map<UUID, Integer> actionMap, double score, ActionEncoder.ActionType actionType, boolean isPlayer) {

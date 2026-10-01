@@ -102,12 +102,12 @@ public class MCTSPlayer extends ComputerPlayer {
         return drawCards(num, source, game, null);
     }
     private void freezeState(Game game) {
-        freezeState(game, null);
+        freezeState(game, null, null);
     }
-    private void freezeState(Game game, Cards options) {
+    private void freezeState(Game game, Cards options, UUID decisionSource) {
         game.pause();
         lastToAct = true;
-        featureGraph = encoder.processState(game, playerId, actionType, decisionText, options);
+        featureGraph = encoder.processState(game, playerId, actionType, decisionText, options, null);
     }
     @Override
     public boolean priority(Game game) {
@@ -229,7 +229,7 @@ public class MCTSPlayer extends ComputerPlayer {
         sb.append(":Choose a target:").append(target.getTargetName());
         decisionText = sb.toString();
         actionType = ActionEncoder.ActionType.CHOOSE_TARGET;
-        freezeState(game, fromCards);
+        freezeState(game, fromCards, source == null ? null : source.getId());
         return makeChoiceFallback(outcome, target, source, game, fromCards);//continue with default target until able to pause
     }
     @Override
@@ -286,7 +286,7 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         decisionText = message;
         actionType = ActionEncoder.ActionType.CHOOSE_USE;
-        freezeState(game);
+        freezeState(game, null, source == null ? null : source.getSourceId());
         return false;
     }
     @Override

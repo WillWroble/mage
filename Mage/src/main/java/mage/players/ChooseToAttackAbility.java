@@ -11,21 +11,21 @@ import java.util.UUID;
  *
  * @author willwroble
  */
-public class ChooseCreatureToBlockAbility extends AbilityImpl {
+public class ChooseToAttackAbility extends AbilityImpl {
 
-    public ChooseCreatureToBlockAbility() {
+    public ChooseToAttackAbility() {
         super(AbilityType.SPECIAL_ACTION, Zone.ALL);
         this.usesStack = false;
-        this.name = "choose which creature to block";
+        this.name = "attack with: {this} ?";
         this.id = new  UUID(0, this.toString().hashCode());
     }
-    public ChooseCreatureToBlockAbility(String message) {
+    public ChooseToAttackAbility(String message) {
         super(AbilityType.SPECIAL_ACTION, Zone.ALL);
         this.usesStack = false;
         this.name = message;
         this.id = new  UUID(0, this.toString().hashCode());
     }
-    public ChooseCreatureToBlockAbility(String message, UUID source) {
+    public ChooseToAttackAbility(String message, UUID source) {
         super(AbilityType.SPECIAL_ACTION, Zone.ALL);
         this.usesStack = false;
         this.name = message;
@@ -33,13 +33,13 @@ public class ChooseCreatureToBlockAbility extends AbilityImpl {
         this.id = new UUID(this.sourceId.toString().hashCode(), this.toString().hashCode());
     }
 
-    protected ChooseCreatureToBlockAbility(final ChooseCreatureToBlockAbility ability) {
+    protected ChooseToAttackAbility(final ChooseToAttackAbility ability) {
         super(ability);
     }
 
     @Override
-    public ChooseCreatureToBlockAbility copy() {
-        return new ChooseCreatureToBlockAbility(this);
+    public ChooseToAttackAbility copy() {
+        return new ChooseToAttackAbility(this);
     }
 
     @Override

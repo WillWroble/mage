@@ -1049,7 +1049,8 @@ public class ComputerPlayer extends PlayerImpl {
             List<Permanent> availableAttackers = getAvailableAttackers(game);
             availableAttackers.sort(Comparator.comparing(Permanent::getId));//need deterministic order
             for (Permanent attacker : availableAttackers) {
-                boolean willAttack = chooseUse(Outcome.Neutral, "attack with: " + attacker.getName() + "?", null, game);
+                ChooseToAttackAbility attackAbility = new ChooseToAttackAbility("attack with: {this} ?", attacker.getId());
+                boolean willAttack = chooseUse(Outcome.Neutral, "attack with: {this} ?", attackAbility, game);
                 if (willAttack) {
                     this.declareAttacker(attacker.getId(), opponentId, game, false);
                 }
@@ -1077,7 +1078,7 @@ public class ComputerPlayer extends PlayerImpl {
             blockers.sort(Comparator.comparing(Permanent::getId));
             for (Permanent blocker : blockers) {
                 Target attackerTarget = new TargetAttackingCreature(0, 1);
-                makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for " + blocker.getName()), game, null);
+                makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for {this}", blocker.getId()), game, null);
                 UUID attackerId = attackerTarget.getFirstTarget();
                 declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
             }

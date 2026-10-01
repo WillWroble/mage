@@ -1,7 +1,5 @@
 package mage.player.ai.encoder;
 
-
-
 import java.util.*;
 
 import static mage.player.ai.encoder.StateEncoder.stringToUUID;
@@ -44,9 +42,6 @@ public class FeatureGraph {
             hash = oldHash;
             children = new HashMap<>();
         }
-        public Map<UUID, String> getChildren() {
-            return Collections.unmodifiableMap(children);
-        }
     }
     private final HashMap<UUID, Node> state;
     private GraphArrays graphArrays = null;
@@ -77,15 +72,11 @@ public class FeatureGraph {
         stateHash = -1;
         graphArrays = null;
     }
-    public Map<UUID, Node> getNodes() {
-        return Collections.unmodifiableMap(state);
-    }
     public void mixHash() {
-        for (UUID nodeId : state.keySet()) {
-            Node node =  state.get(nodeId);
+        for (Node node : state.values()) {
             long h = 0;
-            for (UUID child : node.children.keySet()) {
-                h += (state.get(child).oldHash ^ StateEncoder.hash64(node.children.get(child)));
+            for (Map.Entry<UUID, String> entry : node.children.entrySet()) {
+                h += (state.get(entry.getKey()).oldHash ^ StateEncoder.hash64(entry.getValue()));
             }
             node.hash = StateEncoder.mix64(h ^ node.oldHash);
         }
@@ -95,7 +86,7 @@ public class FeatureGraph {
     }
     public long getStateHash() {
         if (stateHash == -1) {
-            for (int i = 0; i < 32; i++) {
+            for (int i = 0; i < 16; i++) {
                 mixHash();
             }
             stateHash = 0;
