@@ -17,7 +17,7 @@ public class ChooseCreatureToBlockAbility extends AbilityImpl {
     public ChooseCreatureToBlockAbility() {
         super(AbilityType.SPECIAL_ACTION, Zone.ALL);
         this.usesStack = false;
-        this.name = "choose which creature to block";
+        this.name = "choose which creature to block for {this}";
         this.id = new  UUID(0, this.toString().hashCode());
     }
     public ChooseCreatureToBlockAbility(String message) {

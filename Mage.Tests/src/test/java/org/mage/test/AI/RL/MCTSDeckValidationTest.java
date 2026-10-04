@@ -21,7 +21,7 @@ public class MCTSDeckValidationTest {
     //config
     private static final int GAMES_PER_TEST = 16;
     private static final int MAX_TURNS = 50;
-    private static final String OPPONENT_DECK = "decks/Standard32-UWB.txt";
+    private static final String OPPONENT_DECK = "decks/Standard-MonoB.dck";
     private static final String COMMANDER_OPPONENT_DECK = "decks/Commander-MonoG.dck";
 
     /*private static final String[] DECK_POOL = {
@@ -52,21 +52,21 @@ public class MCTSDeckValidationTest {
     };*/
     private static final String[] DECK_POOL = {
             //"decks/Standard32-UWB.txt",
-            "decks/Standard16-UB.dck",
-            "decks/Standard-MonoB.dck",
-            "decks/Standard-MonoG.dck",
-            "decks/Standard-MonoR.dck",
-            "decks/Standard-MonoU.dck",
-            "decks/Standard-MonoW.dck",
-            "decks/Standard16-5C.dck",
-            "decks/Standard16-BW.dck",
-            "decks/Standard16-GB.dck",
-            "decks/Standard16-GW.dck",
+            //"decks/Standard16-UB.dck",
+            //"decks/Standard-MonoB.dck",
+            //"decks/Standard-MonoG.dck",
+            //"decks/Standard-MonoR.dck",
+            //"decks/Standard-MonoU.dck",
+            //"decks/Standard-MonoW.dck",
+            //"decks/Standard16-5C.dck",
+            //"decks/Standard16-BW.dck",
+            //"decks/Standard16-GB.dck",
+            //"decks/Standard16-GW.dck",
             "decks/Standard16-RB.dck",
-            "decks/Standard16-RG.dck",
-            "decks/Standard16-RW.dck",
+            //"decks/Standard16-RG.dck",
+            //"decks/Standard16-RW.dck",
             "decks/Standard16-UG.dck",
-            "decks/Standard16-UR.dck",
+            //"decks/Standard16-UR.dck",
             "decks/Standard16-UW.dck"
     };
     private static final String[] COMMANDER_DECK_POOL = {

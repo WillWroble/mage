@@ -75,8 +75,8 @@ public class MCTSNode2 extends MCTSNode {
                             default:
                                 policy = null;
                         }
-
-                        networkScore = out.value;
+                        int perspective = playerId.equals(targetPlayer) ? 1 : -1;
+                        networkScore = perspective * out.value;
                         backpropagate(1 + networkScore, 0);
                         setPriors();
                         ((ComputerPlayerMCTS2) basePlayer).pendingNodes.decrementAndGet();

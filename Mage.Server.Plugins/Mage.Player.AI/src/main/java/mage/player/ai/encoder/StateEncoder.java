@@ -194,7 +194,7 @@ public class StateEncoder {
         List<Ability> abilities = p.getAbilities(game);
         if(!abilities.isEmpty()) {
             for(Ability a : abilities) {
-                if(addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId)) {
+                if(addNode(FeatureGraph.Node.Type.ABILITY, cleanString(a.toString()), a.getId(), parentId)) {
                     if (a instanceof TriggeredAbility) {
                         processTriggeredAbility((TriggeredAbility) a, game, a.getId());
                     } else if (a instanceof ActivatedAbility) {
@@ -294,19 +294,28 @@ public class StateEncoder {
         }
         //static abilities
         for (StaticAbility sa : allAbilities.getStaticAbilities(z)) {
-            addNode(FeatureGraph.Node.Type.ABILITY, sa.getRule(), sa.getId(), parentId);
+            addNode(FeatureGraph.Node.Type.ABILITY, cleanString(sa.toString()), sa.getId(), parentId);
             processAbility(sa, game, sa.getId());
         }
         //activated abilities
         for(ActivatedAbility aa : allAbilities.getActivatedAbilities(z)) {
-            addNode(FeatureGraph.Node.Type.ABILITY, aa.getRule(), aa.getId(), parentId);
+            addNode(FeatureGraph.Node.Type.ABILITY, cleanString(aa.toString()), aa.getId(), parentId);
             processActivatedAbility(aa, game, aa.getId());
         }
         //triggered abilities
         for(TriggeredAbility ta : allAbilities.getTriggeredAbilities(z)) {
-            addNode(FeatureGraph.Node.Type.ABILITY, ta.getRule(), ta.getId(), parentId);
+            addNode(FeatureGraph.Node.Type.ABILITY, cleanString(ta.toString()), ta.getId(), parentId);
             processTriggeredAbility(ta, game, ta.getId());
 
+        }
+        //cards castable from graveyard/exile through a permission effect (Case of the Uneaten Feast, warp recast, impulse draw):
+        if (z == Zone.GRAVEYARD || z == Zone.EXILED) {
+            for (ActivatedAbility aa : allAbilities.getActivatedAbilities(Zone.HAND)) {
+                if (aa instanceof SpellAbility || aa instanceof PlayLandAbility) {
+                    addNode(FeatureGraph.Node.Type.ABILITY, cleanString(aa.toString()), aa.getId(), parentId);
+                    processActivatedAbility(aa, game, aa.getId());
+                }
+            }
         }
     }
     private void processBattlefield(Battlefield bf, Game game, UUID playerId, UUID parentId) {
@@ -444,7 +453,7 @@ public class StateEncoder {
                 if (playerId.equals(emblem.getControllerId())) {
                     // Emblems mainly have continuous/static abilities
                     for (Ability a : emblem.getAbilities()) {
-                        addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId);
+                        addNode(FeatureGraph.Node.Type.ABILITY, cleanString(a.toString()), a.getId(), parentId);
                         processAbility(a, game, a.getId());
                     }
                 }
@@ -455,7 +464,7 @@ public class StateEncoder {
                     addNode(FeatureGraph.Node.Type.CARD, commander.getName(), commander.getId(), parentId);
                     processCard(commander.getSourceObject(), game, commander.getId());
                     for (Ability a : commander.getAbilities()) {
-                        addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId);
+                        addNode(FeatureGraph.Node.Type.ABILITY, cleanString(a.toString()), a.getId(), parentId);
                         processAbility(a, game, a.getId());
                     }
                 }
@@ -466,7 +475,7 @@ public class StateEncoder {
         for (Emblem emblem : game.getState().getHelperEmblems()) {
             if (playerId.equals(emblem.getControllerId())) {
                 for (Ability a : emblem.getAbilities()) {
-                    if(addNode(FeatureGraph.Node.Type.ABILITY, a.getRule(), a.getId(), parentId)) {
+                    if(addNode(FeatureGraph.Node.Type.ABILITY, cleanString(a.toString()), a.getId(), parentId)) {
                         processAbility(a, game, a.getId());
                     }
                 }
@@ -601,7 +610,9 @@ public class StateEncoder {
      * @param decisionPlayerId the player who is making the decision at this state
      * @param decisionType type of decision being made at this state (choose_target, choose_use, choose etc.)
      * @param decisionsText informative context about the micro decision being made to be hashed as its own feature for the network
-     * @return set of active indices in the sparse binary vector
+     * @param options additional revealed cards for targeting decisions (ie scry)
+     * @param decisionSource source object of current decision if available
+     * @return compressed graph representation of game state
      */
     public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText, Cards options, UUID decisionSource) {
         featureGraph.clear();
@@ -622,7 +633,7 @@ public class StateEncoder {
         addFeature(decisionType.toString(), GAME_ROOT_ID);
         //decision state
         addFeature(cleanString(decisionsText), GAME_ROOT_ID);
-        //empty target flag
+        //empty target flag for policy net
         addNode(FeatureGraph.Node.Type.CARD, "StopChoosing", STOP_CHOOSING, GAME_ROOT_ID);
 
 
@@ -687,41 +698,63 @@ public class StateEncoder {
         return true;
     }
     public void addFeature(String name, UUID parentId) {
+        if(name == null) {
+            name = "Null";
+        }
         addFeature(name, stringToUUID(name), parentId, "NONE");
     }
     public void addFeature(String name, UUID parentId, String edge) {
+        if(name == null) {
+            name = "Null";
+        }
         addFeature(name, stringToUUID(name), parentId, edge);
     }
-        public boolean addFeature(String name, UUID id, UUID parentId, String  edge) {
-            boolean result = false;
-            int hash = indexFor(hash64(name));
-            if(!featureGraph.containsKey(id)) {
-                FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash);
-                featureGraph.put(id, newNode);
-                result = true;
-            }
-            if(parentId != null) {
-                featureGraph.get(parentId).children.put(id, edge);
-            }
-            if(useFeatureMap) {
-                featureMap.addFeature(name, hash);
-            }
-            return result;
+    public boolean addFeature(String name, UUID id, UUID parentId, String  edge) {
+        if(name == null) {
+            name = "Null";
         }
-        public void addNumericFeature(String name, int num, UUID parentId) {
-            addNumericFeature(name, num, parentId, "NONE");
+        boolean result = false;
+        int hash = indexFor(hash64(name));
+        if(!featureGraph.containsKey(id)) {
+            FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash);
+            featureGraph.put(id, newNode);
+            result = true;
         }
-        public void addNumericFeature(String name, int num, UUID parentId, String edge) {
-            int hash = indexFor(hash64(name));
-            UUID key = stringToUUID(name+"@"+num);
-            if(!featureGraph.containsKey(key)) {
-                FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash, num);
-                featureGraph.put(key, newNode);
-            }
-            if(parentId != null) {
-                featureGraph.get(parentId).children.put(key, edge);
+        if(parentId != null) {
+            Node parent = featureGraph.get(parentId);
+            if(parent != null) {
+                parent.children.put(id, edge);
+            } else {
+                logger.error("missing parent reference for " + name);
             }
         }
+        if(useFeatureMap) {
+            featureMap.addFeature(name, hash);
+        }
+        return result;
+    }
+    public void addNumericFeature(String name, int num, UUID parentId) {
+        addNumericFeature(name, num, parentId, "NONE");
+    }
+    public void addNumericFeature(String name, int num, UUID parentId, String edge) {
+        if(name == null) {
+            name = "Null";
+        }
+        int hash = indexFor(hash64(name));
+        UUID key = stringToUUID(name+"@"+num);
+        if(!featureGraph.containsKey(key)) {
+            FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash, num);
+            featureGraph.put(key, newNode);
+        }
+        if(parentId != null) {
+            Node parent = featureGraph.get(parentId);
+            if(parent != null) {
+                parent.children.put(key, edge);
+            } else {
+                logger.error("missing parent reference for " + name);
+            }
+        }
+    }
 
     public static int indexFor(long h) {
         if (h < 0) h = -h;

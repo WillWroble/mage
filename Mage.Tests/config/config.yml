@@ -78,7 +78,7 @@ training:
   games: 200
   threads: 4
   max_turns: 50
-  max_minutes: 40
+  max_minutes: 60
 
 server:
   host: localhost

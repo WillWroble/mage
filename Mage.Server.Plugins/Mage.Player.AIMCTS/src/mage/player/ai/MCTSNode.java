@@ -13,6 +13,7 @@ import mage.player.ai.encoder.FeatureGraph;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.util.RandomUtil;
+import mage.util.RateLimitedLogger;
 import org.apache.log4j.Logger;
 import java.util.Random;
 
@@ -205,7 +206,7 @@ public class MCTSNode {
     }
     MCTSNode getChildOfCommonAncestor(MCTSNode node) {
         if(parent == null || parent ==  node) {
-            logger.warn("duplicate of parent - gameplay loop found?");
+            RateLimitedLogger.warn("duplicate of parent - gameplay loop found?");
             return this;
         }
         if(parent.isParentOf(node)) {

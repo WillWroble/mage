@@ -22,8 +22,9 @@ player_a:
   mcts:
     search_budget: 1000
     timeout_ms: 4000
-    td_discount: 0.85
-    offline_mode: false
+    td_discount: 0.92
+    offline_mode: true
+    prune_duplicate_states: true
 
   gameplay:
     mulligans_enabled: false
@@ -53,8 +54,9 @@ player_b:
   mcts:
     search_budget: 1000
     timeout_ms: 4000
-    td_discount: 0.85
+    td_discount: 0.92
     offline_mode: false
+    prune_duplicate_states: true
 
   gameplay:
     mulligans_enabled: false
@@ -68,6 +70,7 @@ training:
   games: 100
   threads: 4
   max_turns: 50 #does nothing
+  max_minutes: 60
 
 server:
   host: localhost
