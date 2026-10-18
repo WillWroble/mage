@@ -282,6 +282,7 @@ reductions show up.
 | + `PermanentCard` copies share one template snapshot (`440799d6`) | 60.9 / 63.2 | 131.2 / 126.4 |
 | + playable calc in place on MCTS working games (`3ed14901`) | | 175.6 |
 | + encoder hash resolves edges once, precompiled regexes (`79d97ebb`) | | (included above) |
+| + priority nodes store a state copied before the in-place playable calc (`e8263c5e`), so the calc's side effects can't be stored in a node | | **142.4** (the cost of one `GameState` copy per priority point) |
 | tried and dropped: reuse getPlayable's simulation for its nested getManaAvailable | 55.3 / 59.4 | 121.9 |
 | tried and dropped: playable calc shares triggers until first use | | 125.3 |
 | G1 instead of ZGC (at `440799d6`) | | G1: 97.5 |
@@ -330,12 +331,12 @@ changing the launchers.
 
 Both engines ran on the same machine and the same core (one core of the 4-vCPU Xeon @ 2.10 GHz, `taskset`), with
 the same decks: the gate's UB pair, Standard16-UB vs Standard-MonoB. gorge at `df885f9`, Go 1.25.8, its Forge card
-corpus at the Makefile pin (all 60+60 cards resolve). XMage at `e8263c5e` (this branch), JDK 21, ParallelGC,
+corpus at the Makefile pin (all 60+60 cards resolve). XMage at `e8263c5e` (this branch, priority nodes store a copy taken before the playable calc), JDK 21, ParallelGC,
 `-Xmx10g`. Both numbers include GC.
 
 | | XMage (this branch) | gorge | gap |
 |---|---|---|---|
-| copy a mid-game state (turns 5–8) | `Game.copy()` 530–840 µs, 1.55–1.65 MB allocated (`GameState.copy()` alone 155–510 µs, 440–535 KB) | `Engine.Clone` 40 µs, 210 KB | 13–21× |
+| copy a mid-game state (turns 5–8) | `Game.copy()` 530–840 µs, 1.55–1.65 MB allocated (`GameState.copy()` alone 155–510 µs, 440–535 KB) | `Engine.Clone` 65–74 µs with GC (37–38 µs with the Go collector off), 210 KB, 204 KB retained | 8–12× |
 | search step to the next real choice | one MCTS simulation: 7.36 ms (136 sims/s) | `Clone` + `Submit`, then auto-pass to the next real choice: about 200 µs (163–223) | ~37× |
 | … without features | ~5 ms (encoder ~1.1 ms per call, ~2 calls per simulation) | no encoder | ~25× |
 | random play, turns/s | not measured | 300 | |
@@ -348,7 +349,8 @@ corpus at the Makefile pin (all 60+60 cards resolve). XMage at `e8263c5e` (this 
   the only option, the way `MCTSPlayer` auto-passes. Command:
   `GOMAXPROCS=1 taskset -c 0 bin/enginebench -row step|clone -pair MZ`. Roots are its heuristic bot's games at
   turns 5–8. The step figure is `USPerCPUWithGC` (GC included). gorge's headline `us_per_op` (127 µs) is with the
-  Go collector off.
+  Go collector off, as is the clone row's headline (37–38 µs). The clone figure in the table is its
+  `USPerCPUWithGC` (65–74 µs).
 - **XMage:** the gate's UB case with one game thread on one core:
   `taskset -c 1` + `-Dgate.threads=1 -XX:ActiveProcessorCount=1`, 15 minutes of play.
   - The step is search seconds per simulation from the gate log.
