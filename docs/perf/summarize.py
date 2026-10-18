@@ -163,8 +163,6 @@ def print_jfr(path, case):
         elif t <= t1:
             last[tid] = v
     alloc = sum(v - before.get(tid, 0) for tid, v in last.items())
-    sampled = sum(e['values']['weight'] for e in jfr_json(path, 'jdk.ObjectAllocationSample')
-                  if t0 <= ev_time(e) <= t1)
 
     gcs = [e for e in jfr_json(path, 'jdk.GarbageCollection') if t0 <= ev_time(e) <= t1]
     gc_s = sum(duration_s(e['values']['duration']) for e in gcs)
@@ -175,8 +173,6 @@ def print_jfr(path, case):
     print('|---|---|')
     print(f'| window wall time | {window:.0f} s |')
     print(f'| allocated (ThreadAllocationStatistics) | {alloc / 2**30:.1f} GiB = {alloc / steps / 2**20:.2f} MiB/step |')
-    print(f'| allocated (ObjectAllocationSample weights) | {sampled / 2**30:.1f} GiB = '
-          f'{sampled / steps / 2**20:.2f} MiB/step |')
     print(f'| GC collections | {len(gcs)} |')
     print(f'| GC time (collection duration, concurrent for ZGC) | {gc_s:.1f} s = {gc_s * 1000 / steps * 1000:.0f} ms '
           f'per 1,000 steps |')
