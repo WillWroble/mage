@@ -72,6 +72,20 @@ public class FeatureGraph {
         stateHash = -1;
         graphArrays = null;
     }
+    private void mixHash(Map<Node, Node[]> children, Map<Node, long[]> labels) {
+        for (Node node : state.values()) {
+            Node[] c = children.get(node);
+            long[] l = labels.get(node);
+            long h = 0;
+            for (int i = 0; i < c.length; i++) {
+                h += (c[i].oldHash ^ l[i]);
+            }
+            node.hash = StateEncoder.mix64(h ^ node.oldHash);
+        }
+        for (Node node : state.values()) {
+            node.oldHash = node.hash;
+        }
+    }
     public void mixHash() {
         for (Node node : state.values()) {
             long h = 0;
@@ -86,8 +100,22 @@ public class FeatureGraph {
     }
     public long getStateHash() {
         if (stateHash == -1) {
+            // edge label hashes and child lookups don't change between rounds, so resolve them once
+            Map<Node, Node[]> children = new IdentityHashMap<>(state.size());
+            Map<Node, long[]> labels = new IdentityHashMap<>(state.size());
+            for (Node node : state.values()) {
+                Node[] c = new Node[node.children.size()];
+                long[] l = new long[c.length];
+                int i = 0;
+                for (Map.Entry<UUID, String> entry : node.children.entrySet()) {
+                    c[i] = state.get(entry.getKey());
+                    l[i++] = StateEncoder.hash64(entry.getValue());
+                }
+                children.put(node, c);
+                labels.put(node, l);
+            }
             for (int i = 0; i < 16; i++) {
-                mixHash();
+                mixHash(children, labels);
             }
             stateHash = 0;
             for (UUID nodeId : state.keySet()) {

@@ -795,13 +795,14 @@ public class StateEncoder {
      * @param input nondeterministic string with UUIDs
      * @return deterministic cleaned strings
      */
+    private static final java.util.regex.Pattern OBJECT_ID = java.util.regex.Pattern.compile(" \\[[0-9a-f]+]");
+    private static final java.util.regex.Pattern HTML_TAG = java.util.regex.Pattern.compile("<[^>]*>");
+
     public static String cleanString (String input) {
         if (input == null || input.isEmpty()) {
             return input;
         }
-        String cleaned = input.replaceAll(" \\[[0-9a-f]+]", "");
-        cleaned = cleaned.replaceAll("<[^>]*>", "");
-        return cleaned;
+        return HTML_TAG.matcher(OBJECT_ID.matcher(input).replaceAll("")).replaceAll("");
     }
 
 
