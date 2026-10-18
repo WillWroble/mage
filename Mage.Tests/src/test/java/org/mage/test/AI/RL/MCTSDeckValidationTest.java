@@ -115,7 +115,7 @@ public class MCTSDeckValidationTest {
         Config.INSTANCE.playerB.type = "mcts";
         Config.INSTANCE.training.games = GAMES_PER_TEST;
         Config.INSTANCE.training.maxTurns = MAX_TURNS;
-        Config.INSTANCE.training.threads = 4;
+        Config.INSTANCE.training.threads = Integer.getInteger("gate.threads", 4);
         //Config.INSTANCE.playerA.gameplay.manualTap = true;
 
         try {
@@ -145,7 +145,7 @@ public class MCTSDeckValidationTest {
         Config.INSTANCE.playerB.type = "mcts";
         Config.INSTANCE.training.games = GAMES_PER_TEST;
         Config.INSTANCE.training.maxTurns = MAX_TURNS;
-        Config.INSTANCE.training.threads = 4;
+        Config.INSTANCE.training.threads = Integer.getInteger("gate.threads", 4);
         //Config.INSTANCE.playerA.gameplay.manualTap = true;
 
         try {
@@ -168,7 +168,7 @@ public class MCTSDeckValidationTest {
         Config.INSTANCE.playerB.type = "minimax";
         Config.INSTANCE.training.games = GAMES_PER_TEST;
         Config.INSTANCE.training.maxTurns = MAX_TURNS;
-        Config.INSTANCE.training.threads = 4;
+        Config.INSTANCE.training.threads = Integer.getInteger("gate.threads", 4);
         //Config.INSTANCE.playerA.gameplay.manualTap = false;
         try {
             ParallelDataGenerator generator = new ParallelDataGenerator();
@@ -190,7 +190,7 @@ public class MCTSDeckValidationTest {
         Config.INSTANCE.playerB.type = "minimax";
         Config.INSTANCE.training.games = GAMES_PER_TEST;
         Config.INSTANCE.training.maxTurns = MAX_TURNS;
-        Config.INSTANCE.training.threads = 4;
+        Config.INSTANCE.training.threads = Integer.getInteger("gate.threads", 4);
         try {
             ParallelDataGenerator generator = new ParallelDataGenerator();
             generator.generateData();
