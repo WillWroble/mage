@@ -79,7 +79,10 @@ public class MCTSDeckValidationTest {
             "decks/Standard16-GW.dck"
     };
     static Stream<String> fastGateDeckPool() {
-        return Arrays.stream(FAST_GATE_DECK_POOL);
+        // -Dgate.decks=UB,GW runs only those cases (matched against the deck name), default all
+        String only = System.getProperty("gate.decks", "");
+        return Arrays.stream(FAST_GATE_DECK_POOL)
+                .filter(deck -> only.isEmpty() || Arrays.stream(only.split(",")).anyMatch(deck::contains));
     }
     static Stream<String> deckPool() {
         return Arrays.stream(DECK_POOL);
