@@ -315,3 +315,13 @@ The release launchers (`Mage.MageZero/release/mz-xmage.sh` / `.bat`) run `-Xmx24
 non-generational ZGC on JDK 21. On this 4-vCPU machine ParallelGC is about 1.7× faster on the same code. Whether
 that holds on Will's machine (more cores, 24 GiB heap) is untested. It is a hypothesis to measure there before
 changing the launchers.
+
+### Tried after batch 1 and dropped (measured, not committed)
+
+- **No `applyEffects` in `MCTSNode.resetRootGame`.** The resumed game's `playPriority` applies effects first anyway,
+  so this should be neutral. Probe: 178.5 against 175.6, inside the noise. Not worth even a small behaviour risk.
+- **Skip `applyEffects` when no event was handled since the previous run.** An event counter in `GameState`
+  showed 31% of calls are quiet (564k of 1.8M in 5 minutes). But a fingerprint check found 11 of 28,222 quiet
+  calls still changed state. A transform (Cecil, Dark Knight → Redeemed Paladin) appeared only after the next
+  apply. Effects that grant abilities also create new ability objects, with new ids, on every apply. Not safe
+  without dirty tracking beyond events.
