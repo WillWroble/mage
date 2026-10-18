@@ -386,6 +386,10 @@ public abstract class GameImpl implements Game {
         return res;
     }
 
+    public void setCheckPlayableState(boolean checkPlayableState) {
+        this.checkPlayableState = checkPlayableState;
+    }
+
     @Override
     public boolean inCheckPlayableState() {
         return checkPlayableState;

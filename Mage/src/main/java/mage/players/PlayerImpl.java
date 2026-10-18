@@ -3566,8 +3566,10 @@ public abstract class PlayerImpl implements Player, Serializable {
      */
     @Override
     public ManaOptions getManaAvailable(Game originalGame) {
-        // workaround to fix a triggers list modification bug (game must be immutable on playable calculations)
-        Game game = originalGame.createSimulationForPlayableCalc();
+        // workaround to fix a triggers list modification bug (game must be immutable on playable calculations);
+        // inside getPlayable's in-place calc on an MCTS working game no extra copy is needed
+        Game game = originalGame.isMCTSSimulation() && originalGame.inCheckPlayableState()
+                ? originalGame : originalGame.createSimulationForPlayableCalc();
 
         ManaOptions availableMana = new ManaOptions();
         availableMana.addMana(manaPool.getMana());
@@ -4294,12 +4296,24 @@ public abstract class PlayerImpl implements Player, Serializable {
      * @return
      */
     public List<ActivatedAbility> getPlayable(Game originalGame, boolean hidden, Zone fromZone, boolean hideDuplicatedAbilities) {
+        if (!originalGame.isMCTSSimulation() || originalGame.inCheckPlayableState()) {
+            return getPlayable(originalGame, originalGame.createSimulationForPlayableCalc(), hidden, fromZone, hideDuplicatedAbilities);
+        }
+        // an MCTS working game is already a throwaway copy of the real game, so the calc can run on it directly
+        ((GameImpl) originalGame).setCheckPlayableState(true);
+        try {
+            return getPlayable(originalGame, originalGame, hidden, fromZone, hideDuplicatedAbilities);
+        } finally {
+            ((GameImpl) originalGame).setCheckPlayableState(false);
+        }
+    }
+
+    private List<ActivatedAbility> getPlayable(Game originalGame, Game game, boolean hidden, Zone fromZone, boolean hideDuplicatedAbilities) {
         List<ActivatedAbility> playable = new ArrayList<>();
         if (shouldSkipGettingPlayable(originalGame)) {
             return playable;
         }
 
-        Game game = originalGame.createSimulationForPlayableCalc();
         ManaOptions availableMana = getManaAvailable(game); // get available mana options (mana pool and conditional mana added (but conditional still lose condition))
         boolean fromAll = fromZone.equals(Zone.ALL);
         if (hidden && (fromAll || fromZone == Zone.HAND)) {
