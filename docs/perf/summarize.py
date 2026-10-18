@@ -11,7 +11,7 @@ import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
-LINE = re.compile(r'^(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s+(\S+ \S+)\s(.*?)\s*=>\[[^\]]*\]\s*(\S*)')
+LINE = re.compile(r'^(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\s+(\S+ \S+)\s(.*?)\s*=>\[([^\]]*)\]\s*(\S*)')
 MOVE = re.compile(r'Player: (\S+) simulated (\d+) evaluations in ([\d.E-]+) seconds')
 WR = re.compile(r'Player A win rate: [\d.]+% \((\d+)/(\d+)\)')
 STOPS = {'required visits reached': 'budget', 'timed out, ending search': 'timeout',
@@ -37,13 +37,15 @@ def norm(msg):
 
 def parse_log(path):
     cases = []
+    stopped = {}  # thread -> stop reason of its search in progress
     for line in open(path, errors='replace'):
         m = LINE.match(line)
         if not m:
             continue
-        level, ts, msg, where = m.groups()
+        level, ts, msg, thread, where = m.groups()
         if 'STARTING DATA GENERATION' in msg:
-            cases.append(dict(start=ts, end=None, sims=0, secs=0.0, moves=0, stops=Counter(), errors=Counter(),
+            cases.append(dict(start=ts, end=None, sims=0, secs=0.0, moves=0, capped_secs=0.0, capped_sims=0,
+                              stops=Counter(), errors=Counter(),
                               wins=None, games=None))
         if not cases:
             continue
@@ -53,9 +55,13 @@ def parse_log(path):
             c['sims'] += int(mv.group(2))
             c['secs'] += float(mv.group(3))
             c['moves'] += 1
+            if stopped.pop(thread, None) == 'force':
+                c['capped_sims'] += int(mv.group(2))
+                c['capped_secs'] += float(mv.group(3))
         for k, v in STOPS.items():
             if k in msg:
                 c['stops'][v] += 1
+                stopped[thread] = v
         wr = WR.search(msg)
         if wr:
             c['wins'], c['games'] = int(wr.group(1)), int(wr.group(2))
@@ -65,18 +71,25 @@ def parse_log(path):
     return cases
 
 
+def rate(sims, secs):
+    return sims / secs if secs else 0
+
+
 def print_log(cases, names):
-    print('| case | games | win rate | sims | search s | sims/s | stops |')
-    print('|---|---|---|---|---|---|---|')
-    tot_sims = tot_secs = 0
+    print('| case | games | win rate | sims | search s | sims/s | sims/s excl. 300 s cap | stops |')
+    print('|---|---|---|---|---|---|---|---|')
+    tot_sims = tot_secs = cap_sims = cap_secs = 0
     for name, c in zip(names, cases):
         wr = f"{c['wins']}/{c['games']} ({100.0 * c['wins'] / c['games']:.1f}%)" if c['games'] else 'n/a'
-        sps = c['sims'] / c['secs'] if c['secs'] else 0
         stops = ', '.join(f'{k} {v}' for k, v in sorted(c['stops'].items()))
-        print(f"| {name} | {c['games']} | {wr} | {c['sims']} | {c['secs']:.0f} | {sps:.1f} | {stops} |")
+        print(f"| {name} | {c['games']} | {wr} | {c['sims']} | {c['secs']:.0f} | {rate(c['sims'], c['secs']):.1f} | "
+              f"{rate(c['sims'] - c['capped_sims'], c['secs'] - c['capped_secs']):.1f} | {stops} |")
         tot_sims += c['sims']
         tot_secs += c['secs']
-    print(f"| **all** | | | {tot_sims} | {tot_secs:.0f} | {tot_sims / tot_secs if tot_secs else 0:.1f} | |")
+        cap_sims += c['capped_sims']
+        cap_secs += c['capped_secs']
+    print(f"| **all** | | | {tot_sims} | {tot_secs:.0f} | {rate(tot_sims, tot_secs):.1f} | "
+          f"{rate(tot_sims - cap_sims, tot_secs - cap_secs):.1f} | |")
     print()
     print('| ERROR/FATAL (normalized) | ' + ' | '.join(names) + ' | total |')
     print('|---|' + '---|' * (len(names) + 1))
