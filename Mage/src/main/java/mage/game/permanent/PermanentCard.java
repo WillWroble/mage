@@ -27,6 +27,8 @@ public class PermanentCard extends PermanentImpl {
     // (this is not the original card, so it's possible to change some attribute before it enters the battlefield)
     // TODO: wtf, it modified on getCard/getBasicMageObject/getMainCard() and other places, e.g. on bestow -- must be fixed!
     protected Card card;
+    // true when card is a private snapshot owned by permanent copies, not the game's card object
+    private boolean cardSnapshot = false;
 
     protected int maxLevelCounters;
     protected int zoneChangeCounter;
@@ -97,7 +99,9 @@ public class PermanentCard extends PermanentImpl {
 
     protected PermanentCard(final PermanentCard permanent) {
         super(permanent);
-        this.card = permanent.card.copy();
+        // card is a read-only template (reset copies from it), so copies share one snapshot of it
+        this.card = permanent.cardSnapshot ? permanent.card : permanent.card.copy();
+        this.cardSnapshot = true;
         this.maxLevelCounters = permanent.maxLevelCounters;
         this.zoneChangeCounter = permanent.zoneChangeCounter;
     }
