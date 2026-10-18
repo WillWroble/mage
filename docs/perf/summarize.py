@@ -3,6 +3,7 @@
 
   summarize.py run.log --cases UB 5C UR GW
   summarize.py run.log --cases UB --jfr run.jfr --case 0
+  summarize.py junit.mvn.log --junit [--failed-out failed.txt]
 """
 import argparse
 import json
@@ -217,13 +218,57 @@ def print_jfr(path, case):
           f'{other_cpu * 1e6 / steps:.0f} ms per 1,000 steps ({100.0 * other_cpu / jvm_cpu:.0f}% of JVM CPU) |')
 
 
+MODULE = re.compile(r'^\[INFO\] Building (.+?) [\d.]+\s+\[\d+/\d+\]')
+TOTALS = re.compile(r'^\[(?:INFO|WARNING|ERROR)\] Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)$')
+FAILED = re.compile(r'^\[ERROR\]   (\S+?)(?::\d+)?(?:->\S+)? (.*)$')
+
+
+def print_junit(path, failed_out):
+    module, totals, causes, failed = None, [], Counter(), []
+    in_results = False
+    for line in open(path, errors='replace'):
+        line = line.rstrip('\n')
+        m = MODULE.match(line)
+        if m:
+            module = m.group(1)
+        m = TOTALS.match(line)
+        if m:
+            totals.append((module, *map(int, m.groups())))
+        if line in ('[ERROR] Failures: ', '[ERROR] Errors: '):
+            in_results = True  # entries until the next plain Maven line; messages may span lines
+            continue
+        if line.startswith(('[INFO]', '[WARNING]', '[ERROR] Tests run')):
+            in_results = False
+        m = FAILED.match(line) if in_results else None
+        if m:
+            failed.append(f'{module}: {m.group(1)}')
+            causes[norm(m.group(2)).strip()[:110]] += 1
+    print('| module | tests | failures | errors | skipped |')
+    print('|---|---|---|---|---|')
+    for row in totals:
+        print('| ' + ' | '.join(map(str, row)) + ' |')
+    print()
+    print('| failing tests by cause (normalized, top 25) | count |')
+    print('|---|---|')
+    for cause, n in causes.most_common(25):
+        print(f"| `{cause.replace('|', '/')}` | {n} |")
+    print(f'| all causes | {sum(causes.values())} |')
+    if failed_out:
+        open(failed_out, 'w').write('\n'.join(sorted(failed)) + '\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('log')
-    ap.add_argument('--cases', nargs='+', required=True, help='case names, in run order')
+    ap.add_argument('--cases', nargs='+', help='case names, in run order')
+    ap.add_argument('--junit', action='store_true', help='log is a run-junit.sh Maven log')
+    ap.add_argument('--failed-out', help='with --junit: write the sorted failing test ids here')
     ap.add_argument('--jfr')
     ap.add_argument('--case', type=int, default=0, help='index of the case the JFR window covers')
     a = ap.parse_args()
+    if a.junit:
+        print_junit(a.log, a.failed_out)
+        return
     cases = parse_log(a.log)
     if a.jfr:
         print_jfr(a.jfr, cases[a.case])
