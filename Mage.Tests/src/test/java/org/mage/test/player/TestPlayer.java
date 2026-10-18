@@ -2367,6 +2367,11 @@ public class TestPlayer implements Player {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
+        // MageZero routes non-targeting selections (costs, "choose a ...") through chooseTarget too;
+        // strict tests script those with setChoice, as upstream routes them to choose
+        if (strictChooseMode && target.isNotTarget() && targets.isEmpty()) {
+            return choose(outcome, target, source, game);
+        }
         UUID abilityControllerId = target.getAffectedAbilityControllerId(this.getId());
 
         assertAliasSupportInTargets(true);

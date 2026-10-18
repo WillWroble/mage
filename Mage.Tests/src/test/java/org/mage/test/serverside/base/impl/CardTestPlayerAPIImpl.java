@@ -185,6 +185,8 @@ public abstract class CardTestPlayerAPIImpl extends MageTestPlayerBase implement
         currentGame = createNewGameAndPlayers();
 
         activePlayer = playerA;
+        stopOnTurn = 2;
+        stopAtStep = PhaseStep.UNTAP;
 
         for (Player player : currentGame.getPlayers().values()) {
             TestPlayer testPlayer = (TestPlayer) player;
