@@ -3,7 +3,7 @@
 goes_first: random  # player_a, player_b, random
 
 player_a:
-  deckPath: decks/UWTempo.dck
+  deckPath: decks/Pauper-Faeries.txt
   type: mcts
   #output_file: data/playerA/AvsB.hdf5
 
@@ -20,10 +20,10 @@ player_a:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
-    timeout_ms: 4000
+    search_budget: 300
+    timeout_ms: 60000
     td_discount: 0.92
-    offline_mode: true
+    offline_mode: false
     prune_duplicate_states: true
 
   gameplay:
@@ -35,7 +35,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoR.dck
+  deckPath: decks/Pauper-CawGates.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -52,8 +52,8 @@ player_b:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
-    timeout_ms: 4000
+    search_budget: 300
+    timeout_ms: 60000
     td_discount: 0.92
     offline_mode: false
     prune_duplicate_states: true
@@ -68,7 +68,7 @@ player_b:
 
 training:
   games: 100
-  threads: 4
+  threads: 8
   max_turns: 50 #does nothing
   max_minutes: 60
 

@@ -40,7 +40,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoU.dck
+  deckPath: decks/Standard-MonoRB.dck
   type: minimax
   output_dir: data/playerB
 

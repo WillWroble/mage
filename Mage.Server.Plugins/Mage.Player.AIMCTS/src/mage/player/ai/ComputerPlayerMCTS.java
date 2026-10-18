@@ -88,7 +88,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         this.noPolicyOpponent = player.noPolicyOpponent;
         this.actionEncoder = player.actionEncoder;
         this.stateEncoder = player.stateEncoder;
-        this.root = player.root;
+        this.root = null;//player.root;
         this.lastPhase = player.lastPhase;
         this.totalThinkTime = player.totalThinkTime;
         this.totalSimulations = player.totalSimulations;

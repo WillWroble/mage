@@ -754,6 +754,9 @@ public class StateEncoder {
                 logger.error("missing parent reference for " + name);
             }
         }
+        if(useFeatureMap) {
+            featureMap.addFeature(name, hash);
+        }
     }
 
     public static int indexFor(long h) {
