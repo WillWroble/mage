@@ -6,7 +6,7 @@ MODE=$1 RUN=$2 JFR=${3:-}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT_DIR=${OUT_DIR:-$ROOT/docs/perf/runs}
 YML=$ROOT/Mage.Tests/config/config.yml
-mkdir -p "$OUT_DIR"
+mkdir -p "$OUT_DIR" "$ROOT/Mage.Tests/data/playerA" "$ROOT/Mage.Tests/data/playerB"  # HDF5 output dirs
 
 TAP=false; [ "$MODE" = manual ] && TAP=true
 cp "$YML" "$YML.bak"
