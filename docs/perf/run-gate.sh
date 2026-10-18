@@ -20,6 +20,7 @@ if [ -n "$JFR" ]; then
   JVM="$JVM -XX:StartFlightRecording=settings=profile,filename=$OUT_DIR/$RUN.jfr,jdk.ThreadAllocationStatistics#period=1s"
 fi
 
-cd "$ROOT/Mage.Tests"
-mvn -B test -Dtest='MCTSDeckValidationTest#fastGate' -Dsurefire.failIfNoSpecifiedTests=false \
+# Mage.MageZero skips install, so Mage.Tests runs inside the reactor
+cd "$ROOT"
+mvn -B test -pl Mage.Tests -am -Dtest='MCTSDeckValidationTest#fastGate' -Dsurefire.failIfNoSpecifiedTests=false \
   -DargLine="$JVM" 2>&1 | tee "$OUT_DIR/$RUN.mvn.log"
