@@ -244,3 +244,74 @@ Recording `autotap-jfr-2` (UB case, 296,807 execution samples). Callee and calle
 
 So the MCTS tree's own copies are negligible. The cost is the throwaway simulations that the playable and mana
 checks create, and within those it is mostly copying every card object.
+
+## 2026-10-18 — Speed batch 1: GC and the first copy reductions (autotap)
+
+### Method
+
+Iteration uses a 5-minute speed probe: the UB case, stopped after 5 minutes of play. It reports sims/s and the
+live heap per `GameState` from a class histogram at the end.
+
+```
+OUT_DIR=<dir> [GATE_GC="-XX:+UseParallelGC"] docs/perf/probe.sh <run name>
+```
+
+The probe's own noise is ±1 sims/s under ZGC (baseline 50.0 / 48.3 / 50.9) and ±5 under ParallelGC (HEAD 131.2 /
+126.4). The correctness sweeps (Mage.Tests and the full 4-case gate) run only once a batch shows a large gain.
+Profiling is JFR (`profile` settings) on the probe: execution samples for CPU, `jdk.ObjectAllocationSample` for
+allocation sites, and `jdk.OldObjectSample` for what survives.
+
+### What limits throughput
+
+At baseline the game threads ran at only 0.55–0.70 of a core each, with no lock contention. The live heap after GC
+was a median 5.6 GiB, a p90 of 8.5 GiB, and touched the 10 GiB limit. Every MCTS node keeps a full `GameState`
+(about 0.9 MB each). Generational ZGC ran a cycle nearly all the time, took about a third of JVM CPU on 4 vCPUs,
+and stalled allocating threads (788 s of stalls in a 2,605 s window).
+
+So under ZGC, cutting short-lived allocation did nothing. The `gameCards` change and skipping the nested mana copy
+removed about 20% of samples and allocation each, yet sims/s did not move. Only cutting what nodes retain
+(`PermanentCard` templates) helped. With ParallelGC the GC stops being the ceiling, and allocation and CPU
+reductions show up.
+
+### Results (5-minute UB probe, sims/s)
+
+| change | ZGC | ParallelGC |
+|---|---|---|
+| baseline engine (`cfbfb733` + hand fix) | 50.9 (48.3–50.9) | 84.7 |
+| + `gameCards` copied on first access in playable calc (`66ae79c1`) | 49.5 | |
+| + `PermanentCard` copies share one template snapshot (`440799d6`) | 60.9 / 63.2 | 131.2 / 126.4 |
+| + playable calc in place on MCTS working games (`3ed14901`) | | 175.6 |
+| + encoder hash resolves edges once, precompiled regexes (`79d97ebb`) | | (included above) |
+| tried and dropped: reuse getPlayable's simulation for its nested getManaAvailable | 55.3 / 59.4 | 121.9 |
+| tried and dropped: playable calc shares triggers until first use | | 125.3 |
+| G1 instead of ZGC (at `440799d6`) | | G1: 97.5 |
+
+### Full gate on batch 2 (`79d97ebb`, ParallelGC, `-Xmx10g`)
+
+```
+OUT_DIR=<dir> GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh autotap batch2-gate
+```
+
+| case | pass | win rate | sims/s | baseline sims/s (run 1 / run 2) |
+|---|---|---|---|---|
+| UB | pass | 4/16 (25.0%) | 184.1 | 53.0 / 53.4 |
+| 5C | pass | 6/16 (37.5%) | 155.8 | 52.9 / 55.6 |
+| UR | pass | 5/16 (31.2%) | 200.7 | 65.0 / 61.1 |
+| GW | pass | 4/16 (25.0%) | 106.4 | 46.9 / 41.9 |
+| all | 4/4 | 19/64 (29.7%), baseline 11/63 and 22/64 | **139.2** | 52.6 / 50.8 |
+
+- Wall time is 56 min, against 1 h 54 for the baseline.
+- No search hit the 300 s cap (the baseline had 2 and 3 in GW).
+- ERROR/FATAL: 4 × `StateEncoder.addFeature: missing parent reference` (GW), the same kind as the baseline's 3.
+  No new kinds.
+- Mage.Tests on this code: 157 failing, the same as the harness baseline (150 / 157). No new failures.
+
+Under ParallelGC the full UB case had 21 full GCs, the longest 2.4 s, with 141 s of pauses in all. Pauses don't
+matter for offline self-play throughput.
+
+### Not changed, needs a decision
+
+The release launchers (`Mage.MageZero/release/mz-xmage.sh` / `.bat`) run `-Xmx24g -XX:+UseZGC`, which is
+non-generational ZGC on JDK 21. On this 4-vCPU machine ParallelGC is about 1.7× faster on the same code. Whether
+that holds on Will's machine (more cores, 24 GiB heap) is untested. It is a hypothesis to measure there before
+changing the launchers.
