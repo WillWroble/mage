@@ -332,6 +332,7 @@ public class ParallelDataGenerator {
             // way to configure and run a game simulation.
             GameOptions options = new GameOptions();
             options.testMode = true;
+            options.drawHandInTestMode = true;
             options.stopOnTurn = Config.INSTANCE.training.maxTurns;
             options.stopAtStep = PhaseStep.END_TURN;
             game.setGameOptions(options);

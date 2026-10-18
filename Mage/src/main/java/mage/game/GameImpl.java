@@ -93,8 +93,6 @@ public abstract class GameImpl implements Game {
     private UUID lastPriorityPlayerId;
     public Set<StackObject> decisionStackObjects;
 
-    public static boolean drawHand = true;
-
     private final static AtomicInteger GLOBAL_INDEX = new AtomicInteger();
 
     private static final int ROLLBACK_TURNS_MAX = 4;
@@ -1511,7 +1509,7 @@ public abstract class GameImpl implements Game {
             if (!gameOptions.testMode || player.getLife() == 0) {
                 player.initLife(this.getStartingLife());
             }
-            if (drawHand || !gameOptions.testMode) {
+            if (gameOptions.drawHandInTestMode || !gameOptions.testMode) {
                 mulligan.drawHand(startingHandSize, player, this);
             }
         }

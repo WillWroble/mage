@@ -46,6 +46,11 @@ public class GameOptions implements Serializable, Copyable<GameOptions> {
     public boolean skipInitShuffling = false;
 
     /**
+     * If true, players draw their opening hands even in test mode (MageZero self-play)
+     */
+    public boolean drawHandInTestMode = false;
+
+    /**
      * If true, players can rollback turn if all players agree
      */
     public boolean rollbackTurnsAllowed = true;
@@ -82,6 +87,7 @@ public class GameOptions implements Serializable, Copyable<GameOptions> {
         this.stopOnTurn = options.stopOnTurn;
         this.stopAtStep = options.stopAtStep;
         this.skipInitShuffling = options.skipInitShuffling;
+        this.drawHandInTestMode = options.drawHandInTestMode;
         this.rollbackTurnsAllowed = options.rollbackTurnsAllowed;
         this.bannedUsers.addAll(options.bannedUsers);
         this.planeChase = options.planeChase;
