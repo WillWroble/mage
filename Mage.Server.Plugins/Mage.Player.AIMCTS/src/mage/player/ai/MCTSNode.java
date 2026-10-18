@@ -287,8 +287,9 @@ public class MCTSNode {
         featureGraph = actingPlayer.getFeatureGraph();
         stateString = rootGame.getState().getValue(rootGame, targetPlayer);
         if(parent != null) {
-            if (actingPlayer.getNextAction() == ActionEncoder.ActionType.PRIORITY) {//priority point, use current state value
-                this.state = rootGame.getState();
+            if (actingPlayer.getNextAction() == ActionEncoder.ActionType.PRIORITY) {//priority point, use the state from before the playable calc
+                this.state = actingPlayer.getPriorityState();
+                this.state.pause();
             } else {//micro point, use previous state value
                 this.state = parent.state;
                 //this.state.gameLocalRandom = RandomUtil.deepCopy(rootGame.getLocalRandom());

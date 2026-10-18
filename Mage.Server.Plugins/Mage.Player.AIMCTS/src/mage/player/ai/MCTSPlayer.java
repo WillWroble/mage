@@ -8,6 +8,7 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
+import mage.game.GameState;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.FeatureGraph;
 import mage.player.ai.encoder.StateEncoder;
@@ -44,6 +45,7 @@ public class MCTSPlayer extends ComputerPlayer {
     private String decisionText;
     private UUID targetPlayer;
     private FeatureGraph featureGraph;
+    private GameState priorityState; // state at the last priority decision, taken before the playable calc ran on the game
     private StateEncoder encoder;
 
     private static final Logger logger = Logger.getLogger(MCTSPlayer.class);
@@ -75,6 +77,7 @@ public class MCTSPlayer extends ComputerPlayer {
         choiceOptions.clear();
         numOptionsSize = 0;
         playables.clear();
+        priorityState = null;
     }
 
     @Override
@@ -89,6 +92,7 @@ public class MCTSPlayer extends ComputerPlayer {
     public boolean isRandomTransition() {return isRandomTransition;}
     public boolean isLastToAct() {return lastToAct;}
     public FeatureGraph getFeatureGraph() {return featureGraph;}
+    public GameState getPriorityState() {return priorityState;}
 
 
     @Override
@@ -124,11 +128,14 @@ public class MCTSPlayer extends ComputerPlayer {
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
         }
+        // the playable calc runs in place on this working game, so keep a copy from before it for the node
+        GameState beforePlayable = game.getState().copy();
         playables = getPlayableAbilities(game);
         if(playables.size() == 1 && !game.isCheckPoint(playerId)) {
             pass(game);
             return false;
         }
+        priorityState = beforePlayable;
         game.setLastPriority(playerId);
         decisionText = "priority";
         actionType = ActionEncoder.ActionType.PRIORITY;
