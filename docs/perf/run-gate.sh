@@ -2,6 +2,7 @@
 # Fast gate: MCTSDeckValidationTest#fastGate in one tapping mode. Log (and optional JFR) go to OUT_DIR.
 #   docs/perf/run-gate.sh autotap|manual <run name> [jfr]
 # GATE_DECKS=UB (comma-separated) runs only those cases; default all four
+# GATE_GC replaces the GC flags (default ZGC); GATE_JVM_EXTRA / GATE_MVN_EXTRA add test-JVM flags / Maven arguments (e.g. a profiler on the test classpath)
 set -euo pipefail
 MODE=$1 RUN=$2 JFR=${3:-}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -15,9 +16,9 @@ trap 'mv "$OUT_DIR/config.yml.bak" "$YML"' EXIT
 sed -i "s/manual_tapping: .*/manual_tapping: $TAP/" "$YML"
 
 # surefire runs with -ea; jhdf5's own asserts reject LabeledStateWriter's offset arrays (block > size), so skip them
-JVM="-Dfile.encoding=UTF-8 -Xmx10g -XX:+UseZGC -XX:+ZGenerational -da:ch.systemsx.cisd..."
+JVM="-Dfile.encoding=UTF-8 -Xmx10g ${GATE_GC:--XX:+UseZGC -XX:+ZGenerational} -da:ch.systemsx.cisd..."
 JVM="$JVM -Dlog4j.configuration=file:$ROOT/docs/perf/log4j-perf.properties -Dperf.log=$OUT_DIR/$RUN.log"
-JVM="$JVM -Dgate.decks=${GATE_DECKS:-}"
+JVM="$JVM -Dgate.decks=${GATE_DECKS:-} ${GATE_JVM_EXTRA:-}"
 if [ -n "$JFR" ]; then
   JVM="$JVM -XX:FlightRecorderOptions:stackdepth=2048"
   JVM="$JVM -XX:StartFlightRecording=settings=profile,filename=$OUT_DIR/$RUN.jfr,jdk.ThreadAllocationStatistics#period=1s"
@@ -26,4 +27,4 @@ fi
 # Mage.MageZero skips install, so Mage.Tests runs inside the reactor
 cd "$ROOT"
 mvn -B test -pl Mage.Tests -am -Dtest='MCTSDeckValidationTest#fastGate' -Dsurefire.failIfNoSpecifiedTests=false \
-  -DargLine="$JVM" 2>&1 | tee "$OUT_DIR/$RUN.mvn.log"
+  ${GATE_MVN_EXTRA:-} -DargLine="$JVM" 2>&1 | tee "$OUT_DIR/$RUN.mvn.log"
