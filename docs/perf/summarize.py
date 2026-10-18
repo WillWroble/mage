@@ -6,6 +6,7 @@
 """
 import argparse
 import json
+import os
 import re
 import subprocess
 from collections import Counter, defaultdict
@@ -26,7 +27,7 @@ HOT = {
     'applyEffects': 'mage.game.GameImpl.applyEffects(',
     'encoder (StateEncoder)': 'mage.player.ai.encoder.StateEncoder.',
 }
-SAMPLE_PERIOD_MS = 10  # jdk.ExecutionSample period in the 'profile' settings
+SEARCH, SEARCH_FRAME = 'search', 'mage.player.ai.ComputerPlayerMCTS2.applyMCTS('
 
 
 def norm(msg):
@@ -120,11 +121,31 @@ def duration_s(iso):  # "PT0.001234S"
     return (int(m.group(1) or 0) * 60 + float(m.group(2))) if m else 0.0
 
 
+def integrate_load(events, key, fields):
+    """CPU-seconds from periodic load events (fractions of the whole machine), grouped by key(event)."""
+    cores = os.cpu_count()
+    by_key = defaultdict(list)
+    for e in events:
+        by_key[key(e)].append(e)
+    total = 0.0
+    for evs in by_key.values():
+        evs.sort(key=ev_time)
+        for prev, cur in zip(evs, evs[1:]):
+            dt = (ev_time(cur) - ev_time(prev)).total_seconds()
+            total += sum(cur['values'][f] for f in fields) * cores * dt
+    return total
+
+
 def print_jfr(path, case):
     t0, t1 = log_time(case['start']), log_time(case['end'])
     steps = case['sims']
+    search_ms_per_step = case['secs'] * 1000.0 / steps
+    window = (t1 - t0).total_seconds()
+    in_window = lambda e: t0 <= ev_time(e) <= t1
 
-    samples, hits = 0, Counter()
+    # inclusive buckets over execution samples; per-step cost is taken relative to samples inside the search
+    samples = searching = 0
+    hits, search_hits = Counter(), Counter()
     proc = subprocess.Popen(['jfr', 'print', '--events', 'jdk.ExecutionSample', '--stack-depth', '4096', path],
                             stdout=subprocess.PIPE, text=True)
     inside, seen = False, set()
@@ -134,24 +155,31 @@ def print_jfr(path, case):
             hms, day = re.match(r'startTime = (\S+) \((\S+)\)', s).groups()
             t = datetime.fromisoformat(f'{day}T{hms}').replace(tzinfo=timezone.utc)
             inside, seen = t0 <= t <= t1, set()
-            if inside:
-                samples += 1
         elif inside and s == '}':
-            hits.update(seen)
+            samples += 1
+            hits.update(seen - {SEARCH})
+            if SEARCH in seen:
+                searching += 1
+                search_hits.update(seen - {SEARCH})
         elif inside:
+            if s.startswith(SEARCH_FRAME):
+                seen.add(SEARCH)
             for label, prefix in HOT.items():
                 if s.startswith(prefix):
                     seen.add(label)
     proc.wait()
 
-    print(f'Window {case["start"]} .. {case["end"]}, {steps} simulation steps, {samples} execution samples')
+    print(f'Window {case["start"]} .. {case["end"]} ({window:.0f} s), {steps} simulation steps, '
+          f'{search_ms_per_step:.1f} ms search time per step')
+    print(f'{samples} execution samples in the window, {searching} ({100.0 * searching / samples:.1f}%) inside '
+          f'ComputerPlayerMCTS2.applyMCTS')
     print()
-    print('| inclusive bucket | samples | share of samples | est. CPU µs/step |')
+    print('| inclusive bucket | share of all samples | share of search samples | est. ms/step |')
     print('|---|---|---|---|')
     for label in HOT:
-        n = hits[label]
-        print(f'| {label} | {n} | {100.0 * n / samples:.1f}% | {n * SAMPLE_PERIOD_MS * 1000.0 / steps:.0f} |')
-    print(f'| all samples | {samples} | 100% | {samples * SAMPLE_PERIOD_MS * 1000.0 / steps:.0f} |')
+        share = search_hits[label] / searching
+        print(f'| {label} | {100.0 * hits[label] / samples:.1f}% | {100.0 * share:.1f}% | '
+              f'{share * search_ms_per_step:.2f} |')
     print()
 
     # cumulative per-thread allocation counters: bytes allocated in the window per thread
@@ -164,19 +192,29 @@ def print_jfr(path, case):
             last[tid] = v
     alloc = sum(v - before.get(tid, 0) for tid, v in last.items())
 
-    gcs = [e for e in jfr_json(path, 'jdk.GarbageCollection') if t0 <= ev_time(e) <= t1]
-    gc_s = sum(duration_s(e['values']['duration']) for e in gcs)
+    gcs = [e for e in jfr_json(path, 'jdk.GarbageCollection') if in_window(e)]
+    cycles = Counter(e['values']['name'] for e in gcs)
+    cycle_s = defaultdict(float)
+    for e in gcs:
+        cycle_s[e['values']['name']] += duration_s(e['values']['duration'])
     pause_s = sum(duration_s(e['values']['sumOfPauses']) for e in gcs)
-    window = (t1 - t0).total_seconds()
+
+    jvm_cpu = integrate_load([e for e in jfr_json(path, 'jdk.CPULoad') if in_window(e)],
+                             lambda e: 0, ['jvmUser', 'jvmSystem'])
+    java_cpu = integrate_load([e for e in jfr_json(path, 'jdk.ThreadCPULoad') if in_window(e)],
+                              lambda e: e['values']['eventThread']['javaThreadId'], ['user', 'system'])
+    other_cpu = jvm_cpu - java_cpu
 
     print('| metric | value |')
     print('|---|---|')
-    print(f'| window wall time | {window:.0f} s |')
-    print(f'| allocated (ThreadAllocationStatistics) | {alloc / 2**30:.1f} GiB = {alloc / steps / 2**20:.2f} MiB/step |')
-    print(f'| GC collections | {len(gcs)} |')
-    print(f'| GC time (collection duration, concurrent for ZGC) | {gc_s:.1f} s = {gc_s * 1000 / steps * 1000:.0f} ms '
-          f'per 1,000 steps |')
-    print(f'| GC pause time | {pause_s * 1000:.1f} ms = {pause_s * 1000 / steps * 1000:.2f} ms per 1,000 steps |')
+    print(f'| allocated (ThreadAllocationStatistics) | {alloc / 2**30:.0f} GiB = {alloc / steps / 2**20:.1f} MiB/step |')
+    for name, n in sorted(cycles.items()):
+        print(f'| {name} cycles | {n}, {cycle_s[name]:.0f} s total ({100.0 * cycle_s[name] / window:.0f}% of the window) |')
+    print(f'| GC pause time | {pause_s * 1000:.0f} ms = {pause_s * 1e6 / steps:.2f} ms per 1,000 steps |')
+    print(f'| JVM CPU (CPULoad) | {jvm_cpu:.0f} s = {jvm_cpu * 1e6 / steps:.0f} ms per 1,000 steps |')
+    print(f'| Java threads CPU (ThreadCPULoad) | {java_cpu:.0f} s |')
+    print(f'| GC + other non-Java JVM threads CPU (difference) | {other_cpu:.0f} s = '
+          f'{other_cpu * 1e6 / steps:.0f} ms per 1,000 steps ({100.0 * other_cpu / jvm_cpu:.0f}% of JVM CPU) |')
 
 
 def main():
