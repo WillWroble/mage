@@ -167,3 +167,80 @@ threads are Java threads and so already fall in the Java-thread sum. Allocation 
 - The gate's win-rate check is noisy at 16 games per case (see Noise above).
 - Not measured: manual tap (dropped for this ticket), the full `MCTSDeckValidationTest` matrix, minimax and
   commander cases.
+
+## 2026-10-18 — Engine correctness baseline: Mage.Tests
+
+The second correctness baseline is XMage's own rules suite. Only Mage.Tests counts. Client/server modules and
+Mage.Verify are out of scope.
+
+```
+OUT_DIR=<dir> docs/perf/run-junit.sh <run name>
+#   mvn test -B -pl Mage.Tests -am, with upstream CI's flags (.travis.yml), -Dmaven.test.failure.ignore=true,
+#   excluding MCTSDeckValidationTest (the MageZero gate, see above)
+python3 docs/perf/summarize.py <dir>/<run name>.mvn.log --junit --failed-out <dir>/<run name>.failed.txt
+```
+
+Same machine as above. The test fork uses surefire's default heap, as in CI. One run takes about 4–7 minutes.
+
+| code | Mage.Tests failing (failures + errors) of 6,451 | runs |
+|---|---|---|
+| fork as received (`cfbfb733` engine) | 2,026 / 2,017 | 2 |
+| + opening hands only when asked (`59ad3754`) | 378 / 386 | 2 |
+| + harness adapted to MageZero's choice routing (`a0849002`) | 150 / 157 | 2 |
+| upstream `09a423ae6` (the fork's base), same environment | **0** | 1 |
+
+120 tests are skipped in every run, upstream included.
+
+**Fork base.** `09a423ae6` (upstream master, 2025-10-26) is the closest upstream commit. Mage.Sets plus the card
+tests differ from HEAD by 6 lines. Git history in the fork starts at a squashed import (`8f22235b`).
+
+**What the two fixes addressed.**
+
+- `GameImpl.drawHand` was a static flag defaulting to `true`, so every test-mode game dealt opening hands. It is
+  now a per-game `GameOptions.drawHandInTestMode`, which MageZero sets (`59ad3754`). This was about 1,650 failures.
+- The fork's `Target.choose` sends non-targeting selections (costs, "choose a …") to `chooseTarget`. Strict tests
+  script those with `setChoice`, which only `TestPlayer.choose` reads. The fix is in the harness only: in strict
+  mode, `TestPlayer.chooseTarget` answers a not-target selection from `setChoice` when no `addTarget` is queued.
+  `CardTestPlayerAPIImpl.reset()` also got back upstream's default stop (turn 2, UNTAP), whose absence crashed
+  tests without `setStopAt`. The engine wiring is unchanged (`a0849002`). This was about 230 failures.
+
+**The remaining ~155.** These are a long tail, not attributed one by one. They include about 40 "Missing TARGET
+def" and about 20 "addTarget … not used". These are probably targets the fork now asks for at a different point
+(MCTS no longer enumerates targets up front). The rest are state assertions and "can't activate". Fork rule
+changes are a likely source, for example `AbilityImpl.activate` now pays non-mana costs before mana costs, and
+`getPlayable(game, hidden)` no longer hides duplicate abilities. That is a hypothesis, not measured.
+
+**Noise.** 4–10 tests differ between runs of the same code, mostly AI tests and the Asmodeus/Doubling Season
+families. The gate for later changes is: no test fails that passed in both baseline runs, after checking it
+against that noisy set.
+
+## 2026-10-18 — Where the copy cost comes from (from the baseline JFR, no new runs)
+
+Recording `autotap-jfr-2` (UB case, 296,807 execution samples). Callee and caller are taken from the outermost
+`GameImpl.<init>` frame of each sample.
+
+| | share of all samples |
+|---|---|
+| `GameImpl.<init>` (inclusive) | 39.5% |
+| … line 211 `gameCards = CardUtil.deepCopyObject(game.gameCards)` | **24.3%** |
+| … line 223 `state = game.state.copy()` | 15.1% |
+| … everything else in the copy (LKI maps, meld cards, options) | < 0.2% |
+
+| who makes the copies (caller of `Game.copy`) | share of copy samples |
+|---|---|
+| `GameImpl.createSimulationForPlayableCalc` (`getPlayable` / `getManaAvailable`) | **99.5%** |
+| `GameImpl.createSimulationForAI` | 0.3% |
+| `GameImpl.setLastPriority` | 0.2% |
+
+| inside `GameState.<init>` (direct callee) | share of `GameState.<init>` samples |
+|---|---|
+| `Battlefield.copy` | 36.1% |
+| `TriggeredAbilities.copy` | 27.8% |
+| `ContinuousEffects.copy` | 11.9% |
+| `Watchers.copy` | 9.4% |
+| `CardUtil.deepCopyObject` (cardState, values, …) | 4.8% |
+| `Players.copy` | 2.5% |
+| `RandomUtil.deepCopy` | 2.0% |
+
+So the MCTS tree's own copies are negligible. The cost is the throwaway simulations that the playable and mana
+checks create, and within those it is mostly copying every card object.
