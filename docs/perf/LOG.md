@@ -325,3 +325,55 @@ changing the launchers.
   calls still changed state. A transform (Cecil, Dark Knight → Redeemed Paladin) appeared only after the next
   apply. Effects that grant abilities also create new ability objects, with new ids, on every apply. Not safe
   without dirty tracking beyond events.
+
+## 2026-10-18 — Same-decks comparison with gorge
+
+Both engines ran on the same machine and the same core (one core of the 4-vCPU Xeon @ 2.10 GHz, `taskset`), with
+the same decks: the gate's UB pair, Standard16-UB vs Standard-MonoB. gorge at `df885f9`, Go 1.25.8, its Forge card
+corpus at the Makefile pin (all 60+60 cards resolve). XMage at `e8263c5e` (this branch), JDK 21, ParallelGC,
+`-Xmx10g`. Both numbers include GC.
+
+| | XMage (this branch) | gorge | gap |
+|---|---|---|---|
+| copy a mid-game state (turns 5–8) | `Game.copy()` 530–840 µs, 1.55–1.65 MB allocated (`GameState.copy()` alone 155–510 µs, 440–535 KB) | `Engine.Clone` 40 µs, 210 KB | 13–21× |
+| search step to the next real choice | one MCTS simulation: 7.36 ms (136 sims/s) | `Clone` + `Submit`, then auto-pass to the next real choice: about 200 µs (163–223) | ~37× |
+| … without features | ~5 ms (encoder ~1.1 ms per call, ~2 calls per simulation) | no encoder | ~25× |
+| random play, turns/s | not measured | 300 | |
+
+**How it was run:**
+
+- **gorge:** `cmd/enginebench`, with `docs/perf/gorge-enginebench-mz.patch` applied. The patch adds a pair `MZ`
+  (copy the two `.dck` files from `Mage.Tests/decks` into `cmd/enginebench/testdata/decks`), lets the clone and
+  step rows take their roots from `-pair`, and adds `GORGE_TO_CHOICE=1`. That mode passes priority while pass is
+  the only option, the way `MCTSPlayer` auto-passes. Command:
+  `GOMAXPROCS=1 taskset -c 0 bin/enginebench -row step|clone -pair MZ`. Roots are its heuristic bot's games at
+  turns 5–8. The step figure is `USPerCPUWithGC` (GC included). gorge's headline `us_per_op` (127 µs) is with the
+  Go collector off.
+- **XMage:** the gate's UB case with one game thread on one core:
+  `taskset -c 1` + `-Dgate.threads=1 -XX:ActiveProcessorCount=1`, 15 minutes of play.
+  - The step is search seconds per simulation from the gate log.
+  - Copy and encoder costs came from temporary timing code, not committed: 1,000 copies at each game's first
+    search on turns 5–8, `ThreadMXBean` allocation, and `System.nanoTime` around `encoder.processState`.
+
+**Caveats:**
+
+- The roots differ: gorge's bot games against XMage's MCTS self-play at turn 5.
+- An XMage simulation also does MCTS bookkeeping (selection, backup, duplicate detection). That was under 3% of
+  samples in the profiles.
+- On an M1 Pro, draft-zero measured gorge at 14 µs per clone and 46 µs per step (FDN decks, GC off). This Xeon core
+  runs about 2.8× slower.
+
+**Why gorge is so much cheaper (from its code):**
+
+- **A gorge object is a flat value.** `state.Object` is about 1 KB in one array. It points at the compiled,
+  immutable card (`Card *cards.Card`), which every clone shares. `Game.CloneIntoDirty` copies the array and a few
+  small slices, and can reuse a spent clone's arrays.
+- **An XMage copy is a deep object-graph copy.** Every card and permanent carries its own copies of its abilities,
+  with `Modes`, `Effects`, `Costs`, `Targets`, mana costs and so on.
+- **gorge memoizes layers.** Its static-effects result is cached under a `continuousVersion` stamp, and clones
+  carry the cache. XMage's `applyEffects` rebuilds every permanent from its template and reapplies every layer at
+  every priority point (about 30% of our step).
+- **Every gorge mutation is an event** (`events.Apply`), so "nothing changed" is knowable. XMage writes state
+  directly, which is why our "skip quiet `applyEffects`" experiment found changes no event announced.
+- **gorge has no feature encoder in the step.** Ours costs about 1.1 ms per call: the whole graph is rebuilt from
+  ability text at every decision.

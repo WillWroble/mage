@@ -1,0 +1,94 @@
+diff --git a/cmd/enginebench/clone.go b/cmd/enginebench/clone.go
+index b6e4edb..ae0139d 100644
+--- a/cmd/enginebench/clone.go
++++ b/cmd/enginebench/clone.go
+@@ -2,6 +2,7 @@ package main
+ 
+ import (
+ 	"context"
++	"os"
+ 	"fmt"
+ 	"math/rand/v2"
+ 	"runtime"
+@@ -85,7 +86,7 @@ func choicePoint(d *decision.Decision) bool {
+ // first choice point (choicePoint) of that turn -- taken only from a game in
+ // which every such root has a nonland permanent on both sides.
+ func findRoots(w workload, base uint64) ([]*rules.Engine, []rootInfo, error) {
+-	decks, names, err := w.decks("A")
++	decks, names, err := w.decks(rootPair)
+ 	if err != nil {
+ 		return nil, nil, err
+ 	}
+@@ -240,6 +241,9 @@ func runClone(r *result, w workload, base uint64, copies int, step bool) error {
+ 				if err := c.Submit(cands[k%len(cands)]); err != nil {
+ 					panic(err)
+ 				}
++				if toChoice {
++					passToChoice(c)
++				}
+ 			}
+ 			sink = c
+ 		}
+@@ -323,3 +327,29 @@ func mean(xs []float64) float64 {
+ 	}
+ 	return s / float64(len(xs))
+ }
++
++// toChoice (GORGE_TO_CHOICE=1) makes a step run on to the next real choice: priority
++// decisions whose only options are pass/concede/activate are passed, the way MageZero's
++// MCTSPlayer auto-passes when pass is its only playable. autoPasses counts them.
++var toChoice = os.Getenv("GORGE_TO_CHOICE") == "1"
++var autoPasses, toChoiceSteps int
++
++func passToChoice(c *rules.Engine) {
++	toChoiceSteps++
++	for !c.G.Over && c.Pending() != nil && !choicePoint(c.Pending()) {
++		d := c.Pending()
++		pass := -1
++		for i, o := range d.Options {
++			if o.Kind == "pass" {
++				pass = i
++			}
++		}
++		if pass < 0 {
++			return
++		}
++		if err := c.Submit(decision.Intent{Seq: d.Seq, Player: d.Player, Choices: []int{pass}}); err != nil {
++			panic(err)
++		}
++		autoPasses++
++	}
++}
+diff --git a/cmd/enginebench/decks.go b/cmd/enginebench/decks.go
+index 2befb0e..643d910 100644
+--- a/cmd/enginebench/decks.go
++++ b/cmd/enginebench/decks.go
+@@ -24,8 +24,13 @@ var corpusMode = "full"
+ var pairs = map[string][2]string{
+ 	"A": {"FDN_top_04956_UG", "FDN_top_20626_WG"},
+ 	"B": {"FDN_top_07961_WR", "FDN_top_02581_UR"},
++	// MageZero gate pair (Mage.Tests/decks), for a same-decks comparison with XMage
++	"MZ": {"Standard16-UB", "Standard-MonoB"},
+ }
+ 
++// rootPair is the pair the clone/step rows draw their roots from (set from -pair).
++var rootPair = "A"
++
+ // randomExpectedEvents is the random row's event-log size hint. Uniform-random
+ // play runs far longer logs than the bot: measured 2026-10-06 over 400 random
+ // pair-A games, final log length was min 2201, p50 6522, p95 8867, p99 9491,
+diff --git a/cmd/enginebench/main.go b/cmd/enginebench/main.go
+index 34d8349..5d56bc5 100644
+--- a/cmd/enginebench/main.go
++++ b/cmd/enginebench/main.go
+@@ -115,6 +115,10 @@ func main() {
+ 	walkstats := flag.Bool("walkstats", false, "random/bot rows: also print the priority legal-walk reuse table (spec 2026-10-06-legal-walk-design §1.5) to stderr")
+ 	quietstats := flag.Bool("quietstats", false, "print the quiet-seat proof counters at exit (needs -ldflags \"-X github.com/adams-shaun/gorge/engine/rules.quietStatsFlag=1\")")
+ 	flag.Parse()
++	rootPair = *pair
++	if rootPair == "burn" {
++		rootPair = "A"
++	}
+ 	walkStatsFlag = *walkstats
+ 	quietStatsFlag = *quietstats
+ 	setupQuietStats()
