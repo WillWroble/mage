@@ -11,7 +11,7 @@ Manual tap was dropped for this ticket at Will's request; only autotap is measur
 | | |
 |---|---|
 | Engine/search code | `cfbfb733` (branch base; this ticket changes only test, config and `docs/perf/`) |
-| Harness commit | `94c50a73` |
+| Harness commit | `94c50a73` for the gate runs; JFR summary from the next commits on `graph-encoder-fast` (summary script only) |
 | Machine | cloud container, 4 vCPU Intel Xeon @ 2.10 GHz (1 thread/core), 15 GiB RAM, Linux 6.18 |
 | JVM | OpenJDK 21.0.12, test fork: `-Xmx10g -XX:+UseZGC -XX:+ZGenerational -da:ch.systemsx.cisd...` |
 | Build | Maven 3.9.11: `MAVEN_OPTS=-Xmx4g mvn -q -B install -DskipTests -pl Mage.Tests -am` |
@@ -95,4 +95,75 @@ The 4 lines in run 1 all come from the single GW crash above.
 
 ### JFR (UB case)
 
-Pending.
+Two separate runs, with JFR on, of the first gate case (Standard16-UB vs Standard-MonoB, 16 games). Each run was
+stopped after that case. Nothing else was running on the machine during either recording window.
+
+```
+OUT_DIR=<dir> docs/perf/run-gate.sh autotap <run name> jfr
+#   adds -XX:FlightRecorderOptions:stackdepth=2048
+#        -XX:StartFlightRecording=settings=profile,filename=<run>.jfr,jdk.ThreadAllocationStatistics#period=1s
+# after the case's "Player A win rate" line: jcmd <fork pid> JFR.dump filename=<run>.jfr, then stop the fork
+python3 docs/perf/summarize.py <dir>/<run name>.log --cases UB --jfr <dir>/<run name>.jfr --case 0
+```
+
+The window runs from the case's `STARTING DATA GENERATION` line to its `Player A win rate` line. Steps are the
+simulations counted in the log for that window.
+
+| | JFR run 1 | JFR run 2 |
+|---|---|---|
+| UB win rate | 3/16 | 3/16 |
+| window | 1,997 s | 2,605 s |
+| simulation steps | 156,369 | 199,730 |
+| sims/s (search) | 45.2 | 45.6 |
+| search time per step | 22.1 ms | 21.9 ms |
+| execution samples in window / inside `applyMCTS` | 307,888 / 98.5% | 293,924 / 98.7% |
+
+With JFR on, sims/s is 45.4, against 53.2 for UB without JFR. JFR (profile settings, 2048-frame stacks) costs
+about 15%. The JFR runs are for attribution only; the gate runs above are the speed numbers.
+
+**Where search time goes.** Each bucket is the share of execution samples inside `ComputerPlayerMCTS2.applyMCTS`
+whose stack contains that frame (inclusive), times the measured search time per step. These are sampling estimates.
+Buckets nest: `getPlayable` contains `getManaAvailable`, and both contain game copies. So the shares overlap and
+don't sum to 100%.
+
+| inclusive bucket (frame) | share, run 1 | share, run 2 | est. ms/step, run 1 | run 2 |
+|---|---|---|---|---|
+| `getPlayable` (`PlayerImpl.getPlayable`) | 47.5% | 42.9% | 10.5 | 9.4 |
+| Game copy (`GameImpl.<init>`) | 43.6% | 39.1% | 9.6 | 8.6 |
+| `getManaAvailable` (`PlayerImpl.getManaAvailable`) | 23.7% | 21.6% | 5.2 | 4.7 |
+| GameState copy (`GameState.<init>`) | 23.1% | 21.7% | 5.1 | 4.8 |
+| `applyEffects` (`GameImpl.applyEffects`) | 17.9% | 20.7% | 4.0 | 4.6 |
+| encoder (`mage.player.ai.encoder.StateEncoder.*`) | 11.7% | 13.6% | 2.6 | 3.0 |
+| `RandomUtil.deepCopy` | 0.4% | 0.4% | 0.09 | 0.09 |
+
+Searches on moves where `allMana` is set aren't logged, so their simulations are missing from the step count while
+their samples are included. That makes the ms/step column a slight overestimate. The share columns are unaffected.
+
+**Allocation and GC.**
+
+| metric | JFR run 1 | JFR run 2 |
+|---|---|---|
+| allocated (Δ `jdk.ThreadAllocationStatistics`, all threads) | 4,985 GiB = **32.6 MiB/step** | 5,973 GiB = **30.6 MiB/step** |
+| ZGC minor cycles (count, time in cycle) | 2,098, 2,430 s | 1,978, 2,201 s |
+| ZGC major cycles (count, time in cycle) | 178, 1,608 s | 184, 1,448 s |
+| GC pause time | 126 ms = 0.81 ms / 1,000 steps | 127 ms = 0.64 ms / 1,000 steps |
+| JVM CPU (`jdk.CPULoad`) | 4,722 s = 30.2 s / 1,000 steps | 4,418 s = 22.1 s / 1,000 steps |
+| GC + other non-Java JVM threads CPU (JVM CPU − Σ `jdk.ThreadCPULoad`) | 1,723 s = **11.0 s / 1,000 steps** (36%) | 1,582 s = **7.9 s / 1,000 steps** (36%) |
+
+ZGC runs concurrently, so cycle times overlap each other and the run. Time in cycle above 100% of the window means
+a minor cycle was running at almost all times. Pauses are negligible. GC cost shows up as CPU instead: about a
+third of all JVM CPU goes to non-Java threads, mostly ZGC workers. That figure is an estimate, since JIT compiler
+threads are Java threads and so already fall in the Java-thread sum. Allocation is about 2.5 GiB/s.
+
+### Takeaways (measured above; anything about fixes is a hypothesis)
+
+- Copying the game is the largest cost. `GameImpl.<init>` is in about 40% of search samples and `GameState.<init>`
+  in about 22%. `RandomUtil.deepCopy` is only 0.4%, so the planned RNG-copy ticket will gain little on its own.
+- `getPlayable` is in 43–48% of search samples. About half of that is `getManaAvailable`, and much of it overlaps
+  with game copies (the legality checks copy the game, per CLAUDE.md). Cheaper copies should shrink it. How much
+  is a hypothesis until measured.
+- About 31 MiB allocated per step, and about a third of JVM CPU spent outside Java threads. Allocation is a target
+  in its own right.
+- The gate's win-rate check is noisy at 16 games per case (see Noise above).
+- Not measured: manual tap (dropped for this ticket), the full `MCTSDeckValidationTest` matrix, minimax and
+  commander cases.
