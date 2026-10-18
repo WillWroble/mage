@@ -118,6 +118,9 @@ public abstract class GameImpl implements Game {
     protected transient PlayerQueryEventSource playerQueryEventSource = new PlayerQueryEventSource();
 
     protected Map<UUID, Card> gameCards = new LinkedHashMap<>();
+    // playable calc simulations share the parent's cards and copy each one on first access (see getCard)
+    private Set<UUID> sharedCards = Collections.emptySet();
+    private static final ThreadLocal<Boolean> copyingForPlayableCalc = ThreadLocal.withInitial(() -> false);
     protected Map<UUID, MeldCard> meldCards = new HashMap<>(0);
 
     protected Map<Zone, Map<UUID, MageObject>> lki = new EnumMap<>(Zone.class);
@@ -206,7 +209,13 @@ public abstract class GameImpl implements Game {
         //this.tableEventSource = game.tableEventSource; // client-server part, not need on copy/simulations
         //this.playerQueryEventSource = game.playerQueryEventSource; // client-server part, not need on copy/simulations
 
-        this.gameCards = CardUtil.deepCopyObject(game.gameCards);
+        if (copyingForPlayableCalc.get()) {
+            // the parent waits while its playable calc simulation runs, so it can't change the shared cards
+            this.gameCards = new LinkedHashMap<>(game.gameCards);
+            this.sharedCards = new HashSet<>(game.gameCards.keySet());
+        } else {
+            this.gameCards = CardUtil.deepCopyObject(game.gameCards);
+        }
         this.meldCards = CardUtil.deepCopyObject(game.meldCards);
 
         this.lki = CardUtil.deepCopyObject(game.lki);
@@ -365,7 +374,12 @@ public abstract class GameImpl implements Game {
         if(false && simulation) {//TODO: figure out how to optimize this
             res = this;
         } else {
-            res = this.copy();
+            copyingForPlayableCalc.set(true);
+            try {
+                res = this.copy();
+            } finally {
+                copyingForPlayableCalc.set(false);
+            }
         }
         ((GameImpl) res).simulation = true;
         ((GameImpl) res).checkPlayableState = true;
@@ -462,6 +476,9 @@ public abstract class GameImpl implements Game {
 
     @Override
     public Collection<Card> getCards() {
+        for (UUID cardId : new ArrayList<>(sharedCards)) {
+            getCard(cardId);
+        }
         return gameCards.values();
     }
 
@@ -921,6 +938,10 @@ public abstract class GameImpl implements Game {
             return null;
         }
         Card card = gameCards.get(cardId);
+        if (card != null && sharedCards.remove(cardId)) {
+            card = card.copy();
+            gameCards.put(cardId, card);
+        }
         if (card == null) {
             card = state.getCopiedCard(cardId);
         }
