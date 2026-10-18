@@ -251,11 +251,12 @@ public class MCTSNode {
         PlayerScript myScript = new PlayerScript();
         PlayerScript opponentScript = new PlayerScript();
         populateActionScripts(myScript, opponentScript);
+        // node states are never changed after they are stored, so the restore copy can share them until first access
         GameState baseState;
         if(parent == null) {
-            baseState = state.copy();
+            baseState = state.lazyCopy();
         } else {
-            baseState = parent.state.copy();
+            baseState = parent.state.lazyCopy();
         }
         resetRootGame(baseState);
         MCTSPlayer playerA = (MCTSPlayer) rootGame.getPlayer(targetPlayer);
