@@ -24,8 +24,8 @@ player_a:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
-    timeout_ms: 4000
+    search_budget: 300
+    timeout_ms: 600000
     td_discount: 0.95
     backprop_discount: 0.99
     offline_mode: true
@@ -59,8 +59,8 @@ player_b:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
-    timeout_ms: 4000
+    search_budget: 300
+    timeout_ms: 600000
     td_discount: 0.95
     backprop_discount: 0.99
     offline_mode: true

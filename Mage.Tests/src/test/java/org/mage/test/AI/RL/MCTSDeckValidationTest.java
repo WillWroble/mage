@@ -72,6 +72,15 @@ public class MCTSDeckValidationTest {
     private static final String[] COMMANDER_DECK_POOL = {
             "decks/Commander-MonoG.dck"
     };
+    private static final String[] FAST_GATE_DECK_POOL = {
+            "decks/Standard16-UB.dck",
+            "decks/Standard16-5C.dck",
+            "decks/Standard16-UR.dck",
+            "decks/Standard16-GW.dck"
+    };
+    static Stream<String> fastGateDeckPool() {
+        return Arrays.stream(FAST_GATE_DECK_POOL);
+    }
     static Stream<String> deckPool() {
         return Arrays.stream(DECK_POOL);
     }
@@ -115,6 +124,11 @@ public class MCTSDeckValidationTest {
         } catch (Exception e) {
             fail("Deck " + testDeck + " caused crash: " + e.getMessage(), e);
         }
+    }
+    @ParameterizedTest
+    @MethodSource("fastGateDeckPool")
+    public void fastGate(String testDeck) {
+        testDeckAgainstMCTS(testDeck);
     }
     @ParameterizedTest
     @MethodSource("commanderDeckPool")
