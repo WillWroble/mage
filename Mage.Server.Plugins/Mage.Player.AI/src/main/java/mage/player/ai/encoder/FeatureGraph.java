@@ -27,10 +27,11 @@ public class FeatureGraph {
         public enum Type {
             PLAYER, ZONE, STACK_OBJECT, PERMANENT, CARD, ABILITY, LEAF
         }
-        HashMap<UUID, String> children;
-        // the same edges as children, as node references for getStateHash (in insertion order)
-        final List<Node> childNodes = new ArrayList<>();
-        final List<String> childEdges = new ArrayList<>();
+        HashMap<UUID, String> children; // while the encoder builds the graph; null once frozen
+        UUID key; // the key the node is stored under
+        // once frozen: the children map as arrays (child nodes and edge labels, in map order)
+        Node[] childNodes;
+        String[] childEdges;
         int index; // position in getStateHash's arrays
         public Node(String n, int i) {
             name = n;
@@ -50,7 +51,9 @@ public class FeatureGraph {
             children = new HashMap<>();
         }
     }
-    private final HashMap<UUID, Node> state;
+    // while building: the nodes by key; a frozen graph keeps only the node array and builds the map on demand
+    private HashMap<UUID, Node> state;
+    private Node[] nodes = null;
     private GraphArrays graphArrays = null;
     private long stateHash = -1;
     private long labelSum;
@@ -58,14 +61,56 @@ public class FeatureGraph {
 
     public FeatureGraph() {
         state = new HashMap<UUID, Node>();
-        state.put(GAME_ROOT_ID, new Node("root", 0, 0));
+        put(GAME_ROOT_ID, new Node("root", 0, 0));
     }
     public FeatureGraph(FeatureGraph fg) {
-        state = new HashMap<UUID, Node>(fg.state);
+        state = fg.nodes == null ? new HashMap<>(fg.state) : null;
+        nodes = fg.nodes;
         graphArrays = fg.graphArrays;
         stateHash = fg.stateHash;
         labelSum = fg.labelSum;
         hasLabelSum = fg.hasLabelSum;
+    }
+
+    /**
+     * Copy of this graph that keeps its nodes compactly (arrays instead of maps), for graphs that are kept but no
+     * longer built: the result of StateEncoder.processState. Node values, hashes and graph arrays stay the same.
+     * The nodes are shared, so this graph must not be built further (StateEncoder clears it first).
+     */
+    public FeatureGraph freeze() {
+        Node[] frozen = state.values().toArray(new Node[0]);
+        for (Node node : frozen) {
+            node.childNodes = new Node[node.children.size()];
+            node.childEdges = new String[node.childNodes.length];
+            int i = 0;
+            for (Map.Entry<UUID, String> child : node.children.entrySet()) {
+                node.childNodes[i] = state.get(child.getKey());
+                node.childEdges[i++] = child.getValue();
+            }
+            node.children = null;
+        }
+        FeatureGraph graph = new FeatureGraph(this);
+        graph.state = null;
+        graph.nodes = frozen;
+        return graph;
+    }
+
+    private Collection<Node> nodes() {
+        return nodes == null ? state.values() : Arrays.asList(nodes);
+    }
+
+    private static int childCount(Node node) {
+        return node.children != null ? node.children.size() : node.childNodes.length;
+    }
+
+    private Map<UUID, Node> byKey() {
+        if (state == null) { // frozen: only for the rare lookups
+            state = new HashMap<>(nodes.length);
+            for (Node node : nodes) {
+                state.put(node.key, node);
+            }
+        }
+        return state;
     }
 
     /**
@@ -76,8 +121,8 @@ public class FeatureGraph {
     public long getLabelSum() {
         if (!hasLabelSum) {
             long sum = 0;
-            for (Node node : state.values()) {
-                sum += StateEncoder.mix64(node.initialHash ^ ((long) node.children.size() << 32));
+            for (Node node : nodes()) {
+                sum += StateEncoder.mix64(node.initialHash ^ ((long) childCount(node) << 32));
             }
             labelSum = sum;
             hasLabelSum = true;
@@ -85,55 +130,27 @@ public class FeatureGraph {
         return labelSum;
     }
 
-    /**
-     * Adds (or relabels) the edge parent -> child; child must be the node stored under childId
-     */
-    public static void addChild(Node parent, UUID childId, Node child, String edge) {
-        String previous = parent.children.put(childId, edge);
-        if (previous == null) {
-            parent.childNodes.add(child);
-            parent.childEdges.add(edge);
-        } else if (!previous.equals(edge)) {
-            for (int i = 0; i < parent.childNodes.size(); i++) {
-                if (parent.childNodes.get(i) == child) {
-                    parent.childEdges.set(i, edge);
-                }
-            }
-        }
-    }
-
     public void put(UUID uuid, Node node) {
+        node.key = uuid;
         state.put(uuid, node);
     }
     public Node get(UUID uuid) {
-        return state.get(uuid);
+        return byKey().get(uuid);
     }
     public boolean containsKey(UUID uuid) {
-        return state.containsKey(uuid);
+        return byKey().containsKey(uuid);
     }
     public void clear() {
         state.clear();
-        state.put(GAME_ROOT_ID, new Node("root", 0, 0));
+        put(GAME_ROOT_ID, new Node("root", 0, 0));
         stateHash = -1;
         hasLabelSum = false;
         graphArrays = null;
     }
-    public void mixHash() {
-        for (Node node : state.values()) {
-            long h = 0;
-            for (Map.Entry<UUID, String> entry : node.children.entrySet()) {
-                h += (state.get(entry.getKey()).oldHash ^ StateEncoder.hash64(entry.getValue()));
-            }
-            node.hash = StateEncoder.mix64(h ^ node.oldHash);
-        }
-        for (UUID nodeId : state.keySet()) {
-            state.get(nodeId).oldHash = state.get(nodeId).hash;
-        }
-    }
     public long getStateHash() {
         if (stateHash == -1) {
             // flat arrays: edge label hashes and child lookups don't change between rounds, so resolve them once
-            Node[] nodes = state.values().toArray(new Node[0]);
+            Node[] nodes = nodes().toArray(new Node[0]);
             for (int i = 0; i < nodes.length; i++) {
                 nodes[i].index = i;
             }
@@ -143,11 +160,13 @@ public class FeatureGraph {
             long[] oldHash = new long[nodes.length];
             for (int n = 0; n < nodes.length; n++) {
                 Node node = nodes[n];
-                int[] c = new int[node.childNodes.size()];
+                Node[] childNodes = childNodes(node);
+                String[] childEdges = childEdges(node);
+                int[] c = new int[childNodes.length];
                 long[] l = new long[c.length];
                 for (int i = 0; i < c.length; i++) {
-                    c[i] = node.childNodes.get(i).index;
-                    l[i] = labelHashes.computeIfAbsent(node.childEdges.get(i), StateEncoder::hash64);
+                    c[i] = childNodes[i].index;
+                    l[i] = labelHashes.computeIfAbsent(childEdges[i], StateEncoder::hash64);
                 }
                 children[n] = c;
                 labels[n] = l;
@@ -178,6 +197,23 @@ public class FeatureGraph {
         }
         return stateHash;
     }
+
+    private Node[] childNodes(Node node) {
+        if (node.children == null) {
+            return node.childNodes;
+        }
+        Node[] childNodes = new Node[node.children.size()];
+        int i = 0;
+        for (UUID childId : node.children.keySet()) {
+            childNodes[i++] = state.get(childId);
+        }
+        return childNodes;
+    }
+
+    private static String[] childEdges(Node node) {
+        return node.children == null ? node.childEdges : node.children.values().toArray(new String[0]);
+    }
+
     /**
      * Array view of the graph for serialization (training data and inference requests).
      * Nodes get local indices 0..n-1 in sorted UUID order; edges refer to those indices.
@@ -208,7 +244,7 @@ public class FeatureGraph {
             return graphArrays;
         }
         // sorted UUID order, so the same graph always serializes the same way
-        List<UUID> order = new ArrayList<>(state.keySet());
+        List<UUID> order = new ArrayList<>(byKey().keySet());
         Collections.sort(order);
         Map<UUID, Integer> localIndex = new HashMap<>();
         for (int i = 0; i < order.size(); i++) {
@@ -221,10 +257,10 @@ public class FeatureGraph {
         int[] values = new int[n];
         int edgeCount = 0;
         for (int i = 0; i < n; i++) {
-            Node node = state.get(order.get(i));
+            Node node = get(order.get(i));
             ids[i] = node.id;
             values[i] = node.value;
-            edgeCount += node.children.size();
+            edgeCount += childCount(node);
         }
 
         // edges
@@ -233,16 +269,18 @@ public class FeatureGraph {
         int[] edgeLabel = new int[edgeCount];
         int e = 0;
         for (int i = 0; i < n; i++) {
-            Node node = state.get(order.get(i));
-            for (Map.Entry<UUID, String> child : node.children.entrySet()) {
-                Integer childIndex = localIndex.get(child.getKey());
+            Node node = get(order.get(i));
+            Node[] childNodes = childNodes(node);
+            String[] childEdges = childEdges(node);
+            for (int c = 0; c < childNodes.length; c++) {
+                Integer childIndex = childNodes[c] == null ? null : localIndex.get(childNodes[c].key);
                 if (childIndex == null) {
                     // addFeature always creates the node before the edge, so this is an encoder bug
-                    throw new IllegalStateException("edge to missing node " + child.getKey());
+                    throw new IllegalStateException("edge to missing node");
                 }
                 edgeChild[e] = childIndex;
                 edgeParent[e] = i;
-                edgeLabel[e] = StateEncoder.indexFor(StateEncoder.hash64(child.getValue()));
+                edgeLabel[e] = StateEncoder.indexFor(StateEncoder.hash64(childEdges[c]));
                 e++;
             }
         }

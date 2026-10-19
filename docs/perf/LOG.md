@@ -630,3 +630,50 @@ keep everything again), match dedup on the hash alone instead of the state strin
 
 **Checkpoint (2026-10-19): `92fd2a8f`.** Manual-tap step without encoder ~1.9–2.1 ms on one core; manual-tap gate 4/4 at `41e8d91a`
 (the last autotap gate ran at `13b10b66`, before the overnight changes). Return here if later work regresses.
+
+## After the checkpoint: toward 1 ms (manual tap, single core)
+
+Same setup as "Single-core step, encoder excluded" above (4 vCPU, 15 GiB, OpenJDK 21.0.12; `taskset -c 1`,
+`-Dgate.threads=1 -XX:ActiveProcessorCount=1 -XX:+UseParallelGC`, UB case, 12 minutes, `stepbench.patch`).
+
+| build | change | µs per validation without encoder | encoder µs per call | ratio |
+|---|---|---|---|---|
+| `dffe91b0` | quiet `applyEffects` skip + state value hash | 1481 | 969 | 1.53 |
+| `752d8ec8`, run 1 | + label-sum set, playable memo | 1839 | 981 | 1.87 |
+| `752d8ec8`, run 2 | | 1459 | 1010 | 1.44 |
+| this commit | + compact frozen FeatureGraph | 1137 | 819 | 1.39 |
+
+The two `752d8ec8` runs show the noise: about ±20% even after normalizing by the encoder.
+
+Each change was checked against the old code with a temporary runtime check (reverted before committing):
+- value hash: 400k validations matched the string comparisons one to one;
+- label-sum set: 300k identical;
+- playable memo: 900k repeats with the same result and no state-hash change;
+- frozen graph: 200k graphs with identical label sum, state hash and graph arrays.
+
+### Frozen FeatureGraph
+
+`StateEncoder.processState` returns `featureGraph.freeze()`: each node's children map becomes two arrays and the
+key → node map is dropped (rebuilt on demand only for `get`/`getGraphArrays`). Tree nodes keep their graphs, so
+this is retained heap.
+
+Class histograms, from a single-core probe at a random point in a game, so the totals are not comparable:
+- before: 467k graph nodes with 1.8M `HashMap$Node`, 694k `HashMap`, 1.29M `ArrayList`;
+- after: 124k graph nodes with 268k `HashMap$Node`, 248k `HashMap`, 337k `ArrayList`.
+
+Estimated retained bytes per graph node fell from about 350 B to about 130 B. Young GC time over a 5-minute
+probe (`fz-gc.jfr` vs `gc-1core.jfr`): 39.6 s in 87 pauses vs 44.7 s in 85, within noise.
+
+### Young-generation size (launcher setting, not committed)
+
+5-minute single-core manual probes, ParallelGC, at `752d8ec8`:
+
+| flags | young GC | old GC |
+|---|---|---|
+| none (`gc-1core`) | 44.7 s / 85 | 9.5 s |
+| `-Xmn6g` | 15.8 s / 44 | 7.9 s |
+| `-XX:MaxTenuringThreshold=1` | 41.4 s / 88 | 8.1 s |
+| both | 16.9 s / 46 | 6.5 s |
+
+`-Xmn6g` cuts GC from ~54 s to ~24 s per ~325 s, about 9% of wall time. Whether to add it to the launcher
+scripts is Will's call. The step numbers above run without it.

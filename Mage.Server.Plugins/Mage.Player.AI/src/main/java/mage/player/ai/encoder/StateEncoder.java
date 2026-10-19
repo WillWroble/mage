@@ -673,7 +673,7 @@ public class StateEncoder {
 
 
 
-        return new FeatureGraph(featureGraph);
+        return featureGraph.freeze();
 
     }
     public synchronized FeatureGraph processState(Game game, UUID decisionPlayerId, ActionEncoder.ActionType decisionType, String decisionsText) {
@@ -728,7 +728,7 @@ public class StateEncoder {
         if(parentId != null) {
             Node parent = featureGraph.get(parentId);
             if(parent != null) {
-                FeatureGraph.addChild(parent, id, node, edge);
+                parent.children.put(id, edge);
             } else {
                 logger.error("missing parent reference for " + name);
             }
@@ -755,7 +755,7 @@ public class StateEncoder {
         if(parentId != null) {
             Node parent = featureGraph.get(parentId);
             if(parent != null) {
-                FeatureGraph.addChild(parent, key, node, edge);
+                parent.children.put(key, edge);
             } else {
                 logger.error("missing parent reference for " + name);
             }
