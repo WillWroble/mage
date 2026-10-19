@@ -228,6 +228,11 @@ public interface Permanent extends Card, Controllable {
     boolean entersBattlefield(Ability source, Game game, Zone fromZone, boolean fireEvent);
 
     String getValue(GameState state);
+
+    /**
+     * Hash of getValue(state) without building the string (see GameState.getValueHash)
+     */
+    long getValueHash(GameState state);
     String getValue(Game game, UUID targetPlayer);
 
     /**

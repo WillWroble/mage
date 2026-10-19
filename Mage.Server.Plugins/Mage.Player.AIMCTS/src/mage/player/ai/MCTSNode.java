@@ -67,7 +67,7 @@ public class MCTSNode {
     private boolean winner;
     private boolean isRandomTransition = false;
     FeatureGraph featureGraph; //encoder derived state vector (used for ML and validation)
-    String stateString;
+    long stateValueHash; // GameState.getValueHash for the target player: the exact (UUID matching) part of root finding
     ActionEncoder.ActionType actionType;
     public GameState state; //the saved logical game state of this node. Should always be a stable priority window
     //prefix scripts represent the sequence of actions that need to be taken since the last priority to represent this microstate
@@ -121,16 +121,16 @@ public class MCTSNode {
     /**
      *
      * @param state
-     * @param stateString null for soft match string for exact match
+     * @param stateValueHash GameState.getValueHash of the state, for an exact match
      * @return
      */
-    public MCTSNode getMatchingState(FeatureGraph state, String stateString) {
+    public MCTSNode getMatchingState(FeatureGraph state, long stateValueHash) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.featureGraph.getLabelSum() == state.getLabelSum() && current.featureGraph.getStateHash() == state.getStateHash() && stateString.equals(current.stateString)) {
+            if(current.featureGraph.getLabelSum() == state.getLabelSum() && current.featureGraph.getStateHash() == state.getStateHash() && stateValueHash == current.stateValueHash) {
                 return current;
             }
             queue.addAll(current.children);
@@ -286,7 +286,7 @@ public class MCTSNode {
 
         actionType = actingPlayer.getNextAction();
         featureGraph = actingPlayer.getFeatureGraph();
-        stateString = rootGame.getState().getValue(rootGame, targetPlayer);
+        stateValueHash = rootGame.getState().getValueHash(rootGame, targetPlayer);
         if(parent != null) {
             if (actingPlayer.getNextAction() == ActionEncoder.ActionType.PRIORITY) {//priority point, use the state from before the playable calc
                 this.state = actingPlayer.getPriorityState();

@@ -326,7 +326,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             logger.info("opponent prefix at root: " + opponentPrefixScript);
         }
         if (root != null) {
-            root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph, newRoot.stateString);
+            root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph, newRoot.stateValueHash);
         }
         if (root == null) {
             root = newRoot;

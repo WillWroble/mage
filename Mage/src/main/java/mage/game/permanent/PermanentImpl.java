@@ -40,6 +40,7 @@ import mage.target.TargetPlayer;
 import mage.util.CardUtil;
 import mage.util.GameLog;
 import mage.util.ThreadLocalStringBuilder;
+import mage.util.ValueHash;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
@@ -288,6 +289,23 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         }
         return sb.toString();
     }
+    @Override
+    public long getValueHash(GameState state) {
+        // the pieces of getValue(state), in order
+        ValueHash h = new ValueHash();
+        h.add(controllerId).add(getName()).add(tapped).add(damage);
+        h.add(getId());
+        h.add(subtype).add(supertype).add(power.getValue()).add(toughness.getValue());
+        h.add(abilities.getValue());
+        for (UUID att : attachments) {
+            h.add(att);
+        }
+        for (Counter counter : getCounters(state).values()) {
+            h.add(counter.getName()).add(counter.getCount());
+        }
+        return h.get();
+    }
+
     @Override
     public String getValue(Game game, UUID targetPlayer) {
         StringBuilder sb = threadLocalBuilder.get();

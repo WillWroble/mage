@@ -38,6 +38,7 @@ import mage.util.Copyable;
 import mage.util.CopyableRandom;
 import mage.util.RandomUtil;
 import mage.util.ThreadLocalStringBuilder;
+import mage.util.ValueHash;
 import mage.watchers.Watcher;
 import mage.watchers.Watchers;
 import org.apache.log4j.Logger;
@@ -699,6 +700,64 @@ public class GameState implements Serializable, Copyable<GameState> {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * Hash of getValue(game, playerId) without building the string: the same pieces in the same order, except
+     * that permanents are combined as a multiset instead of a sorted list. Equal values give equal hashes.
+     */
+    public long getValueHash(Game game, UUID playerId) {
+        ValueHash h = new ValueHash();
+
+        h.add(turn().getValue(turnNum));
+        h.add(activePlayerId).add(priorityPlayerId).add(playerByOrderId);
+
+        for (Player player : players().values()) {
+            h.add("player").add(player.isPassed()).add(player.getLife()).add("hand");
+            if (Objects.equals(playerId, player.getId())) {
+                h.add(player.getHand().getValue(game));
+            } else {
+                h.add(player.getHand().size());
+            }
+            h.add("pool").add(player.getManaPool().getMana());
+            h.add("library").add(player.getLibrary().size());
+            h.add("graveyard");
+            h.add(player.getGraveyard().getValue(game));
+        }
+
+        h.add("permanents");
+        long perms = 0;
+        for (Permanent permanent : battlefield().getAllPermanents()) {
+            perms += permanent.getValueHash(this);
+        }
+        h.add(perms);
+
+        h.add("spells");
+        for (StackObject spell : stack()) {
+            h.add(spell.getControllerId()).add(spell.getName());
+            h.add(spell.getStackAbility().toString());
+            h.add(spell.getStackAbility().getId());
+            for (UUID modeId : spell.getStackAbility().getModes().getSelectedModes()) {
+                Mode mode = spell.getStackAbility().getModes().get(modeId);
+                if (!mode.getTargets().isEmpty()) {
+                    h.add("targets");
+                    for (Target target : mode.getTargets()) {
+                        h.add(target.getTargets());
+                    }
+                }
+            }
+        }
+        List<ExileZone> sortedZones = new ArrayList<>(exile().getExileZones());
+        sortedZones.sort(Comparator.comparing(ExileZone::getName));
+        for (ExileZone zone : sortedZones) {
+            h.add("exile").add(zone.getName()).add(zone.getValue(game));
+        }
+
+        h.add("combat");
+        for (CombatGroup group : combat().getGroups()) {
+            h.add(group.getDefenderId()).add(group.getAttackers()).add(group.getBlockers());
+        }
+        return h.get();
     }
 
     public Players getPlayers() {

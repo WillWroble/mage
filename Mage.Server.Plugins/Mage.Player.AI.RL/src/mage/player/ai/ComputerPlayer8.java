@@ -144,7 +144,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
                 if(opponent.getRealPlayer() instanceof ComputerPlayerMCTS2) { //encode opponent plays to the neural network for RL MCTS players
                     ComputerPlayerMCTS2 mcts2 = (ComputerPlayerMCTS2)opponent.getRealPlayer();
                     MCTSNode2 root = mcts2.root;
-                    if(root != null) root = (MCTSNode2) root.getMatchingState(stateGraph, game.getState().getValue(true, game));
+                    if(root != null) root = (MCTSNode2) root.getMatchingState(stateGraph, game.getState().getValueHash(game, getId()));
                     if (root != null) {
                         log.info("found matching root with {} visits", root.getVisits());
                         root.emancipate();
