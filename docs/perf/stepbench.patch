@@ -1,0 +1,32 @@
+diff --git a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java
+index 597629765..d91b2aeea 100644
+--- a/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java
++++ b/Mage.Server.Plugins/Mage.Player.AIMCTS/src/mage/player/ai/MCTSPlayer.java
+@@ -45,6 +45,14 @@ public class MCTSPlayer extends ComputerPlayer {
+     private String decisionText;
+     private UUID targetPlayer;
+     private FeatureGraph featureGraph;
++    // STEPBENCH: encoder calls, encoder ns, state hash ns (docs/perf/stepbench.patch)
++    public static final java.util.concurrent.atomic.AtomicLongArray ENC = new java.util.concurrent.atomic.AtomicLongArray(3);
++    static {
++        Runtime.getRuntime().addShutdownHook(new Thread(() -> { try { // next to the gate log (-Dperf.log)
++            java.nio.file.Files.writeString(java.nio.file.Path.of(System.getProperty("perf.log") + ".stepbench"),
++                    "encoder calls " + ENC.get(0) + " encoder us " + ENC.get(1) / 1000 + " statehash us " + ENC.get(2) / 1000 + "\n");
++        } catch (Exception e) { } }));
++    }
+     private GameState priorityState; // state at the last priority decision, taken before the playable calc ran on the game
+     private StateEncoder encoder;
+ 
+@@ -111,7 +119,12 @@ public class MCTSPlayer extends ComputerPlayer {
+     private void freezeState(Game game, Cards options, UUID decisionSource) {
+         game.pause();
+         lastToAct = true;
++        long t0 = System.nanoTime(); // STEPBENCH
+         featureGraph = encoder.processState(game, playerId, actionType, decisionText, options, decisionSource);
++        long t1 = System.nanoTime();
++        featureGraph.getStateHash();
++        long t2 = System.nanoTime();
++        ENC.addAndGet(0, 1); ENC.addAndGet(1, t1 - t0); ENC.addAndGet(2, t2 - t1);
+     }
+     @Override
+     public boolean priority(Game game) {
