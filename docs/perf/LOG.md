@@ -627,3 +627,6 @@ calc 14%, priority snapshot copy 10%, exact-match state string for dedup 7.5%, s
 needs structural changes, each a design decision: drop the restore's `applyEffects` (snapshots would have to
 keep everything again), match dedup on the hash alone instead of the state string, and dirty tracking in
 `applyEffects`.
+
+**Checkpoint (2026-10-19): `92fd2a8f`.** Manual-tap step without encoder ~1.9–2.1 ms on one core; gate 4/4
+in both tapping modes. Return here if later work regresses.
