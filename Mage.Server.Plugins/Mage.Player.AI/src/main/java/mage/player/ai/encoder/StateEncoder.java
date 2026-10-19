@@ -698,23 +698,24 @@ public class StateEncoder {
         return true;
     }
     public void addFeature(String name, UUID parentId) {
-        if(name == null) {
-            name = "Null";
-        }
-        addFeature(name, stringToUUID(name), parentId, "NONE");
+        addFeature(name, parentId, "NONE");
     }
     public void addFeature(String name, UUID parentId, String edge) {
         if(name == null) {
             name = "Null";
         }
-        addFeature(name, stringToUUID(name), parentId, edge);
+        long h = hash64(name);
+        addFeature(name, h, new UUID(h, mix64(h)), parentId, edge); // id = stringToUUID(name)
     }
     public boolean addFeature(String name, UUID id, UUID parentId, String  edge) {
         if(name == null) {
             name = "Null";
         }
+        return addFeature(name, hash64(name), id, parentId, edge);
+    }
+    private boolean addFeature(String name, long nameHash, UUID id, UUID parentId, String  edge) {
         boolean result = false;
-        int hash = indexFor(hash64(name));
+        int hash = indexFor(nameHash);
         if(!featureGraph.containsKey(id)) {
             FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash);
             featureGraph.put(id, newNode);
@@ -801,6 +802,9 @@ public class StateEncoder {
     public static String cleanString (String input) {
         if (input == null || input.isEmpty()) {
             return input;
+        }
+        if (input.indexOf('[') < 0 && input.indexOf('<') < 0) {
+            return input; // neither pattern can match
         }
         return HTML_TAG.matcher(OBJECT_ID.matcher(input).replaceAll("")).replaceAll("");
     }

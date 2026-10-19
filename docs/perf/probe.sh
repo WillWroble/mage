@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Speed probe: the UB gate case (autotap), stopped after PROBE_MINUTES (default 5) of play.
+# Speed probe: the UB gate case, stopped after PROBE_MINUTES (default 5) of play.
+# PROBE_MODE=manual runs it with manual tapping (default autotap).
 # Prints sims/s over the window and live bytes per GameState from a class histogram at the end.
 #   docs/perf/probe.sh <run name>
 # Baseline (cfbfb733 engine): 50.0 / 48.3 sims/s over the first 5 minutes.
@@ -9,7 +10,7 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 export OUT_DIR=${OUT_DIR:-$ROOT/docs/perf/runs}
 LOG=$OUT_DIR/$RUN.log
 rm -f "$LOG"
-GATE_DECKS=${GATE_DECKS:-UB} "$ROOT/docs/perf/run-gate.sh" autotap "$RUN" > /dev/null 2>&1 &
+GATE_DECKS=${GATE_DECKS:-UB} "$ROOT/docs/perf/run-gate.sh" "${PROBE_MODE:-autotap}" "$RUN" > /dev/null 2>&1 &
 GATE=$!
 
 until grep -q "STARTING DATA GENERATION" "$LOG" 2>/dev/null; do
