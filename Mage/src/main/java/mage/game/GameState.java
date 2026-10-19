@@ -1952,6 +1952,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
     /**
      * @return whether effects were applied right before a resume and not since; clears the mark
+     * (GameImpl.playPriority and AbilityImpl.activate skip applyEffects while it is set)
      */
     public boolean takeEffectsAppliedForResume() {
         boolean applied = effectsAppliedForResume;
