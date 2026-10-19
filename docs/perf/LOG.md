@@ -642,6 +642,8 @@ Same setup as "Single-core step, encoder excluded" above (4 vCPU, 15 GiB, OpenJD
 | `752d8ec8`, run 1 | + label-sum set, playable memo | 1839 | 981 | 1.87 |
 | `752d8ec8`, run 2 | | 1459 | 1010 | 1.44 |
 | `58a72245` | + compact frozen FeatureGraph | 1137 | 819 | 1.39 |
+| `3037a87d`, run 1 | + ability parts copy-on-access | 941 | 673 | 1.40 |
+| `3037a87d`, run 2 | | 1083 | 814 | 1.33 |
 
 The two `752d8ec8` runs show the noise: about ±20% even after normalizing by the encoder.
 
@@ -677,3 +679,49 @@ probe (`fz-gc.jfr` vs `gc-1core.jfr`): 39.6 s in 87 pauses vs 44.7 s in 85, with
 
 `-Xmn6g` cuts GC from ~54 s to ~24 s per ~325 s, about 9% of wall time. Whether to add it to the launcher
 scripts is Will's call. The step numbers above run without it.
+
+### Ability parts copy-on-access (`3037a87d`)
+
+JFR at `58a72245`: ability copy constructors were 15.8% of all samples, 10.7% in `Modes.copy`.
+
+`AbilityImpl` now keeps its modes, costs, mana costs, watchers, sub-abilities, hints, icons and costs tags in
+`SharedPart` holders. A copy shares a part that was never accessed and copies it on its first access. A part
+that was accessed is copied with its ability as before: references into it (effects registered in
+`ContinuousEffects`, targets) may be kept and changed elsewhere.
+
+Before that rule existed, a first version shared accessed parts too. The check below found real leaks with it,
+for example effect `order` set through `ContinuousEffects` on effects inside shared modes.
+
+The check was a temporary content fingerprint (Java serialization) of each shared part, compared at every
+copy-on-access:
+
+| run | shares | copies | checks | changes |
+|---|---|---|---|---|
+| UB manual | 659M | 68M | 68M | 0 |
+| UB autotap | 1059M | 89M | 89M | 0 |
+| GW manual | 375M | 29M | 28M | 0 |
+| UR manual | 360M | 30M | 30M | 0 |
+| 5C manual | 376M | 32M | 32M | 3703, all in `AddConditionalManaOfAnyColorEffect.manaBuilder` |
+
+The fingerprint writes live cards and permanents, games and singleton abilities as markers: copies always
+shared those by reference (effect `values` copy shallowly, singletons copy as themselves). The 5C changes are
+the same case: that effect's copy constructor shares `manaBuilder` by reference, so old copies mutated the same
+builder too.
+
+About 90% of ability part copies no longer happen. Step: 941 and 1083 µs per validation without the encoder
+(two runs), against 1137 at `58a72245`. Validations in 12 minutes: 434k and 366k, against 341k. The encoder
+also got faster (it copies abilities), so the normalized ratio barely moved (1.40 and 1.33 against 1.39).
+**About 1.0 ms per step, not yet reliably under it.**
+
+### Autotap gate at `58a72245` (before copy-on-access)
+
+`GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh autotap gate-auto-fz`: UB 4/16, 5C 7/16, UR 7/16, GW 4/15.
+3/4 cases pass.
+
+GW lost one game to a `NullPointerException` in `HideawayPlayEffect.apply`, inside a simulation
+(`MCTSNode.validateState`). A scripted target choice added a UUID that is not a card: `TargetImpl.addTarget`
+doesn't validate scripted ids. The same run also had new single-event ERROR kinds (a stack object's source not
+found, `SourceId NOT found in LKI`).
+
+GW rerun 3 times (`gate-auto-gw1..3`, 48 games): 2/16, 4/16, 1/16, no NPE, only the baseline
+`missing parent reference`. Open: the cause is not found, and it did not reproduce.
