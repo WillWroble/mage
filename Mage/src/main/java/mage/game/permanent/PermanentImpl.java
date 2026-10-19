@@ -22,6 +22,7 @@ import mage.counters.Counter;
 import mage.counters.CounterType;
 import mage.counters.Counters;
 import mage.filter.FilterOpponent;
+import mage.game.CardState;
 import mage.game.Game;
 import mage.game.GameState;
 import mage.game.ZoneChangeInfo;
@@ -460,6 +461,17 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     @Override
     public Abilities<Ability> getAbilities(Game game) {
         return super.getAbilities(game);
+    }
+
+    @Override
+    public boolean hasAbility(Ability ability, Game game) {
+        // same result as getAbilities(game).contains(ability), without building the combined list
+        if (game == null || !this.getId().equals(this.getMainCard().getId())) {
+            return super.hasAbility(ability, game);
+        }
+        CardState cardState = game.getState().getCardState(this.getId());
+        return (!cardState.hasLostAllAbilities() && abilities.contains(ability))
+                || cardState.getAbilities().contains(ability);
     }
 
     /**

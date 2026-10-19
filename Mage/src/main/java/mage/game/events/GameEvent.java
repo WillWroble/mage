@@ -9,6 +9,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author BetaSteward_at_googlemail.com
@@ -776,7 +777,8 @@ public class GameEvent implements Serializable {
         this.playerId = playerId;
         this.flag = flag;
         this.approvingObject = approvingObject;
-        this.id = UUID.randomUUID();
+        // only needs to be unique; UUID.randomUUID's shared SecureRandom is slow and contended across game threads
+        this.id = new UUID(ThreadLocalRandom.current().nextLong(), ThreadLocalRandom.current().nextLong());
     }
 
     public EventType getType() {

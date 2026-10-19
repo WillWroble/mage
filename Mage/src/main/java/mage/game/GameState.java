@@ -1759,8 +1759,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     public CardState getCardState(UUID cardId) {
-        cardState().putIfAbsent(cardId, new CardState());
-        return cardState().get(cardId);
+        return cardState().computeIfAbsent(cardId, k -> new CardState());
     }
 
     public MageObjectAttribute getMageObjectAttribute(UUID cardId) {
