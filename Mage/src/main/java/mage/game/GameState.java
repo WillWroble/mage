@@ -35,6 +35,7 @@ import mage.players.Players;
 import mage.target.Target;
 import mage.util.CardUtil;
 import mage.util.Copyable;
+import mage.util.CopyableRandom;
 import mage.util.RandomUtil;
 import mage.util.ThreadLocalStringBuilder;
 import mage.watchers.Watcher;
@@ -72,7 +73,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     private final Map<UUID, LookedAt> lookedAt = new HashMap<>();
     private Revealed companion;
 
-    public Random gameLocalRandom = new Random(); //for deterministic UUID generation
+    public Random gameLocalRandom = new CopyableRandom(); //for deterministic UUID generation
     private SpecialActions specialActions;
     private Watchers watchers;
     private Turn turn;
@@ -165,7 +166,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
     private TriggeredAbilities triggers() {
         if ((shared & SHARED_TRIGGERS) != 0) {
-            triggers = triggers.copy();
+            triggers = triggers.copyShared();
             shared &= ~SHARED_TRIGGERS;
         }
         return triggers;

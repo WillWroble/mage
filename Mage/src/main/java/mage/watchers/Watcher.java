@@ -78,20 +78,31 @@ public abstract class Watcher implements Serializable {
 
     public abstract void watch(GameEvent event, Game game);
 
-    public <T extends Watcher> T copy() {
-        try {
+    // reflection lookups for copy(), done once per watcher class
+    private static final ClassValue<CopyPlan> COPY_PLANS = new ClassValue<CopyPlan>() {
+        @Override
+        protected CopyPlan computeValue(Class<?> type) {
+            return new CopyPlan(type);
+        }
+    };
+
+    private static final class CopyPlan {
+
+        private final Constructor<?> constructor; // null if the class has multiple constructors
+        private final Object[] args;
+        private final List<Field> fields = new ArrayList<>();
+
+        private CopyPlan(Class<?> type) {
             //use getDeclaredConstructors to allow for package-private constructors (i.e. omit public)
-            List<?> constructors = Arrays.asList(this.getClass().getDeclaredConstructors());
-            if (constructors.size() > 1) {
-                logger.error(getClass().getSimpleName() + " has multiple constructors");
-                return null;
+            Constructor<?>[] constructors = type.getDeclaredConstructors();
+            if (constructors.length > 1) {
+                constructor = null;
+                args = null;
+                return;
             }
-
-            Constructor<? extends Watcher> constructor = (Constructor<? extends Watcher>) constructors.get(0);
-
-            // collect all fields
+            constructor = constructors[0];
             constructor.setAccessible(true);
-            Object[] args = new Object[constructor.getParameterCount()];
+            args = new Object[constructor.getParameterCount()];
             for (int index = 0; index < constructor.getParameterTypes().length; index++) {
                 Class<?> parameterType = constructor.getParameterTypes()[index];
                 if (parameterType.isPrimitive()) {
@@ -101,19 +112,31 @@ public abstract class Watcher implements Serializable {
                 } else {
                     args[index] = null;
                 }
-
             }
-            T watcher = (T) constructor.newInstance(args);
             List<Field> allFields = new ArrayList<>();
-            allFields.addAll(Arrays.asList(getClass().getDeclaredFields()));
-            allFields.addAll(Arrays.asList(getClass().getSuperclass().getDeclaredFields()));
-
-            // copy field's values
+            allFields.addAll(Arrays.asList(type.getDeclaredFields()));
+            allFields.addAll(Arrays.asList(type.getSuperclass().getDeclaredFields()));
             for (Field field : allFields) {
                 if (!Modifier.isStatic(field.getModifiers())) {
                     field.setAccessible(true);
-                    field.set(watcher, CardUtil.deepCopyObject(field.get(this)));
+                    fields.add(field);
                 }
+            }
+        }
+    }
+
+    public <T extends Watcher> T copy() {
+        try {
+            CopyPlan plan = COPY_PLANS.get(getClass());
+            if (plan.constructor == null) {
+                logger.error(getClass().getSimpleName() + " has multiple constructors");
+                return null;
+            }
+            T watcher = (T) plan.constructor.newInstance(plan.args);
+
+            // copy field's values
+            for (Field field : plan.fields) {
+                field.set(watcher, CardUtil.deepCopyObject(field.get(this)));
             }
             return watcher;
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
