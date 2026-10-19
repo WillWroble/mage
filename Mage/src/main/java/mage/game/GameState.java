@@ -121,6 +121,9 @@ public class GameState implements Serializable, Copyable<GameState> {
 
     private int applyEffectsCounter; // Upcounting number of each applyEffects execution
     private boolean effectsAppliedForResume; // effects were applied right before a resume, see GameImpl.playPriority
+    // events handled or replaced so far, and that count at the last applyEffects (not copied: a copy applies again)
+    private long eventCount;
+    private long eventCountAtApply = -1;
 
     // components still shared with the snapshot this state was lazily copied from (lazyCopy), one bit each;
     // the first access through the accessors below copies the component, so a lazy copy never touches the snapshot's objects
@@ -451,6 +454,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     public void restore(GameState state) {
+        this.eventCountAtApply = -1; // restored content: apply again
         // players, turn, revealed and companion stay this state's own
         this.shared = (this.shared & NOT_RESTORED) | (state.shared & ~NOT_RESTORED);
         // no needs in copy here cause GameState already copied on save and it will be used only one time here
@@ -915,9 +919,17 @@ public class GameState implements Serializable, Copyable<GameState> {
         this.gameOver = true;
     }
 
+    /**
+     * @return whether no event was handled or replaced since the last applyEffects on this state
+     */
+    boolean isQuietSinceApply() {
+        return eventCount == eventCountAtApply;
+    }
+
     void applyEffects(Game game) {
         applyEffectsCounter++;
         effectsAppliedForResume = false;
+        eventCountAtApply = eventCount;
         for (Player player : players().values()) {
             player.reset();
         }
@@ -1288,6 +1300,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     public void handleEvent(GameEvent event, Game game) {
+        eventCount++;
         watchers().watch(event, game);
         delayed().checkTriggers(event, game);
         triggers().checkTriggers(event, game);
@@ -1298,6 +1311,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     public boolean replaceEvent(GameEvent event, Ability targetAbility, Game game) {
+        eventCount++;
         if (effects().preventedByRuleModification(event, targetAbility, game, false)) {
             return true;
         }
