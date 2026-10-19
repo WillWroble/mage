@@ -39,7 +39,7 @@ public abstract class ManaCostImpl extends CostImpl implements ManaCost {
         this.payment = manaCost.payment.copy();
         this.usedManaToPay = manaCost.usedManaToPay.copy();
         this.cost = manaCost.cost.copy();
-        this.options = manaCost.options.copy();
+        this.options = manaCost.options; // set when the cost is built and never changed in place, so copies share it (see setPhyrexian)
         if (manaCost.sourceFilter != null) {
             this.sourceFilter = manaCost.sourceFilter.copy();
         }
@@ -324,6 +324,7 @@ public abstract class ManaCostImpl extends CostImpl implements ManaCost {
     @Override
     public void setPhyrexian(boolean phyrexian) {
         if (phyrexian) {
+            this.options = this.options.copy(); // may be shared with copies of this cost
             this.options.add(Mana.GenericMana(0));
         }
         this.phyrexian = phyrexian;
