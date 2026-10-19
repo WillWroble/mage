@@ -1898,7 +1898,7 @@ public abstract class GameImpl implements Game {
         clearAllBookmarks();
         try {
             // an MCTS node restore applies effects right before resuming (MCTSNode.resetRootGame)
-            if (!state.takeEffectsAppliedForResume() || !resuming) {
+            if (!state.isEffectsAppliedForResume() || !resuming) {
                 applyEffects();
             }
             while (!isPaused() && !checkIfGameIsOver() && !this.getTurn().isEndTurnRequested()) {
@@ -1920,8 +1920,11 @@ public abstract class GameImpl implements Game {
                         while (!player.isPassed() && player.canRespond() && !isPaused() && !checkIfGameIsOver()) {
                             if (!resuming) {
                                 // 603.3. Once an ability has triggered, its controller puts it on the stack as an object that's not a card the next time a player would receive priority
-                                checkStateAndTriggered();
-                                applyEffects();
+                                // after an MCTS node restore nothing may have happened since effects were applied
+                                // (any change applies effects, which clears the mark)
+                                if (checkStateAndTriggered() | !state.takeEffectsAppliedForResume()) {
+                                    applyEffects();
+                                }
                                 if (state.getStack().isEmpty()) {
                                     resetLKI();
                                 }
