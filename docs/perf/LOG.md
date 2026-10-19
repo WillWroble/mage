@@ -641,7 +641,7 @@ Same setup as "Single-core step, encoder excluded" above (4 vCPU, 15 GiB, OpenJD
 | `dffe91b0` | quiet `applyEffects` skip + state value hash | 1481 | 969 | 1.53 |
 | `752d8ec8`, run 1 | + label-sum set, playable memo | 1839 | 981 | 1.87 |
 | `752d8ec8`, run 2 | | 1459 | 1010 | 1.44 |
-| this commit | + compact frozen FeatureGraph | 1137 | 819 | 1.39 |
+| `58a72245` | + compact frozen FeatureGraph | 1137 | 819 | 1.39 |
 
 The two `752d8ec8` runs show the noise: about ±20% even after normalizing by the encoder.
 
