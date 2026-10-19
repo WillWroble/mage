@@ -778,6 +778,18 @@ public class MCTSNode {
         }
         return depth;
     }
+    /**
+     * Adds the label sums of the validated nodes in this subtree (see getMatchingStateInScope)
+     */
+    public void collectLabelSums(Set<Long> labelSums) {
+        if (featureGraph != null) {
+            labelSums.add(featureGraph.getLabelSum());
+        }
+        for (MCTSNode child : children) {
+            child.collectLabelSums(labelSums);
+        }
+    }
+
     public int[] sizeAndDepth(int maxNodes) {
         int[] sizeAndDepth = new int[2];
         sizeAndDepth(1, maxNodes, sizeAndDepth);

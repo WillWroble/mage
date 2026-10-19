@@ -162,6 +162,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         // prunes only make the tree smaller, so a full walk is needed only when a bound reaches its limit
         int[] sizeAndDepth = null;
         boolean exact = false;
+        // label sums of the tree's validated nodes (may include pruned ones): a node whose sum is not here has no match
+        Set<Long> labelSums = new HashSet<>();
+        root.collectLabelSums(labelSums);
 
 
         while (true) {
@@ -215,7 +218,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                         continue;
                     }
                     //remove child if node is already in the tree
-                    MCTSNode2 match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.featureGraph, current.parent.playerId);
+                    MCTSNode2 match = !labelSums.contains(current.featureGraph.getLabelSum()) ? null
+                            : (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.featureGraph, current.parent.playerId);
                     while(match != null && !allowDuplicates) {
                         MCTSNode oldPath = match.getChildOfCommonAncestor(current);
                         MCTSNode newPath = current.getChildOfCommonAncestor(match);
@@ -239,6 +243,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     if(current==null) {
                         continue;
                     }
+                    labelSums.add(current.featureGraph.getLabelSum());
                 }
             }
             double result;
