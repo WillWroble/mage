@@ -1587,8 +1587,37 @@ public class ComputerPlayer extends PlayerImpl {
         }
     }
 
-    // game: a game in check playable state
+    // results of findActivatedAbilityFromPlayable during one playable calc: the own hand is checked twice, by the
+    // hand loop and again by the hands of all players in range, with the same arguments
+    private Map<Ability, Map<MageObject, Map<UUID, Optional<ActivatedAbility>>>> playableMemo = null;
+
+    @Override
+    protected ActivatedAbility findActivatedAbilityFromPlayable(MageObject object, ManaOptions availableMana, Ability ability, Game game) {
+        if (playableMemo == null) {
+            return super.findActivatedAbilityFromPlayable(object, availableMana, ability, game);
+        }
+        Map<UUID, Optional<ActivatedAbility>> byController = playableMemo
+                .computeIfAbsent(ability, k -> new IdentityHashMap<>())
+                .computeIfAbsent(object, k -> new HashMap<>());
+        Optional<ActivatedAbility> result = byController.get(ability.getControllerId());
+        if (result == null) {
+            result = Optional.ofNullable(super.findActivatedAbilityFromPlayable(object, availableMana, ability, game));
+            byController.put(ability.getControllerId(), result);
+        }
+        return result.orElse(null);
+    }
+
     private List<ActivatedAbility> getPlayableAbilitiesInSimulation(Game game) {
+        playableMemo = new IdentityHashMap<>();
+        try {
+            return getPlayableAbilitiesInSimulationMemo(game);
+        } finally {
+            playableMemo = null;
+        }
+    }
+
+    // game: a game in check playable state
+    private List<ActivatedAbility> getPlayableAbilitiesInSimulationMemo(Game game) {
         // Build only from floating mana + conditional mana in pool
 
         ManaOptions availableMana = new ManaOptions();
