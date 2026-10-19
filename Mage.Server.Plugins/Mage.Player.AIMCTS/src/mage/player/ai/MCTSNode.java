@@ -764,6 +764,35 @@ public class MCTSNode {
         }
         return num;
     }
+    /**
+     * size() and maxDepth() in one walk; the size count stops at maxNodes
+     * @return {size (capped at maxNodes), maxDepth (exact when size is below maxNodes)}
+     */
+    /**
+     * @return this node's depth as maxDepth() counts it: 1 for the root
+     */
+    public int depthFromRoot() {
+        int depth = 1;
+        for (MCTSNode node = parent; node != null; node = node.parent) {
+            depth++;
+        }
+        return depth;
+    }
+    public int[] sizeAndDepth(int maxNodes) {
+        int[] sizeAndDepth = new int[2];
+        sizeAndDepth(1, maxNodes, sizeAndDepth);
+        return sizeAndDepth;
+    }
+    private void sizeAndDepth(int depth, int maxNodes, int[] sizeAndDepth) {
+        if (sizeAndDepth[0] >= maxNodes) {
+            return;
+        }
+        sizeAndDepth[0]++;
+        sizeAndDepth[1] = Math.max(sizeAndDepth[1], depth);
+        for (MCTSNode child : children) {
+            child.sizeAndDepth(depth + 1, maxNodes, sizeAndDepth);
+        }
+    }
     public int maxDepth() {
         int max = 0;
         for (MCTSNode child : children) {

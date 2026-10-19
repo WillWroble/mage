@@ -20,6 +20,7 @@ import mage.constants.*;
 import mage.filter.common.FilterLandCard;
 import mage.game.ExileZone;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.command.CommandObject;
 import mage.game.draft.Draft;
 import mage.game.events.GameEvent;
@@ -1573,8 +1574,22 @@ public class ComputerPlayer extends PlayerImpl {
         this.human = false;
     }
     protected List<ActivatedAbility> getPlayableAbilities(Game originalGame) {
+        if (!originalGame.isMCTSSimulation() || originalGame.inCheckPlayableState()) {
+            return getPlayableAbilitiesInSimulation(originalGame.createSimulationForPlayableCalc());
+        }
+        // an MCTS working game is already a throwaway copy of the real game, so the calc can run on it directly
+        // (as in PlayerImpl.getPlayable)
+        ((GameImpl) originalGame).setCheckPlayableState(true);
+        try {
+            return getPlayableAbilitiesInSimulation(originalGame);
+        } finally {
+            ((GameImpl) originalGame).setCheckPlayableState(false);
+        }
+    }
+
+    // game: a game in check playable state
+    private List<ActivatedAbility> getPlayableAbilitiesInSimulation(Game game) {
         // Build only from floating mana + conditional mana in pool
-        Game game = originalGame.createSimulationForPlayableCalc();
 
         ManaOptions availableMana = new ManaOptions();
         // floating mana

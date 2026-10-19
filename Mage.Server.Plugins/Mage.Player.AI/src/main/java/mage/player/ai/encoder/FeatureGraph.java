@@ -27,6 +27,10 @@ public class FeatureGraph {
             PLAYER, ZONE, STACK_OBJECT, PERMANENT, CARD, ABILITY, LEAF
         }
         HashMap<UUID, String> children;
+        // the same edges as children, as node references for getStateHash (in insertion order)
+        final List<Node> childNodes = new ArrayList<>();
+        final List<String> childEdges = new ArrayList<>();
+        int index; // position in getStateHash's arrays
         public Node(String n, int i) {
             name = n;
             id = i;
@@ -55,6 +59,23 @@ public class FeatureGraph {
         state = new HashMap<UUID, Node>(fg.state);
         graphArrays = fg.graphArrays;
         stateHash = fg.stateHash;
+    }
+
+    /**
+     * Adds (or relabels) the edge parent -> child; child must be the node stored under childId
+     */
+    public static void addChild(Node parent, UUID childId, Node child, String edge) {
+        String previous = parent.children.put(childId, edge);
+        if (previous == null) {
+            parent.childNodes.add(child);
+            parent.childEdges.add(edge);
+        } else if (!previous.equals(edge)) {
+            for (int i = 0; i < parent.childNodes.size(); i++) {
+                if (parent.childNodes.get(i) == child) {
+                    parent.childEdges.set(i, edge);
+                }
+            }
+        }
     }
 
     public void put(UUID uuid, Node node) {
@@ -88,9 +109,8 @@ public class FeatureGraph {
         if (stateHash == -1) {
             // flat arrays: edge label hashes and child lookups don't change between rounds, so resolve them once
             Node[] nodes = state.values().toArray(new Node[0]);
-            Map<Node, Integer> index = new IdentityHashMap<>(nodes.length);
             for (int i = 0; i < nodes.length; i++) {
-                index.put(nodes[i], i);
+                nodes[i].index = i;
             }
             Map<String, Long> labelHashes = new HashMap<>();
             int[][] children = new int[nodes.length][];
@@ -98,12 +118,11 @@ public class FeatureGraph {
             long[] oldHash = new long[nodes.length];
             for (int n = 0; n < nodes.length; n++) {
                 Node node = nodes[n];
-                int[] c = new int[node.children.size()];
+                int[] c = new int[node.childNodes.size()];
                 long[] l = new long[c.length];
-                int i = 0;
-                for (Map.Entry<UUID, String> entry : node.children.entrySet()) {
-                    c[i] = index.get(state.get(entry.getKey()));
-                    l[i++] = labelHashes.computeIfAbsent(entry.getValue(), StateEncoder::hash64);
+                for (int i = 0; i < c.length; i++) {
+                    c[i] = node.childNodes.get(i).index;
+                    l[i] = labelHashes.computeIfAbsent(node.childEdges.get(i), StateEncoder::hash64);
                 }
                 children[n] = c;
                 labels[n] = l;

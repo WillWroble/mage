@@ -719,15 +719,16 @@ public class StateEncoder {
     private boolean addFeature(String name, long nameHash, UUID id, UUID parentId, String  edge) {
         boolean result = false;
         int hash = indexFor(nameHash);
-        if(!featureGraph.containsKey(id)) {
-            FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash);
-            featureGraph.put(id, newNode);
+        Node node = featureGraph.get(id);
+        if(node == null) {
+            node = new FeatureGraph.Node(name, hash);
+            featureGraph.put(id, node);
             result = true;
         }
         if(parentId != null) {
             Node parent = featureGraph.get(parentId);
             if(parent != null) {
-                parent.children.put(id, edge);
+                FeatureGraph.addChild(parent, id, node, edge);
             } else {
                 logger.error("missing parent reference for " + name);
             }
@@ -746,14 +747,15 @@ public class StateEncoder {
         }
         int hash = indexFor(hash64(name));
         UUID key = stringToUUID(name+"@"+num);
-        if(!featureGraph.containsKey(key)) {
-            FeatureGraph.Node newNode = new FeatureGraph.Node(name, hash, num);
-            featureGraph.put(key, newNode);
+        Node node = featureGraph.get(key);
+        if(node == null) {
+            node = new FeatureGraph.Node(name, hash, num);
+            featureGraph.put(key, node);
         }
         if(parentId != null) {
             Node parent = featureGraph.get(parentId);
             if(parent != null) {
-                parent.children.put(key, edge);
+                FeatureGraph.addChild(parent, key, node, edge);
             } else {
                 logger.error("missing parent reference for " + name);
             }

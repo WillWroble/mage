@@ -158,6 +158,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int illegalPurged = 0;
         int validDuplicatesPurged = 0;
         int invalidDuplicatesPurged = 0;
+        // root.size() and root.maxDepth(), kept up to date across iterations; a full walk only after a prune
+        int[] sizeAndDepth = null;
 
 
         while (true) {
@@ -165,11 +167,14 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 logger.warn("force time out after one minute - couldn't find legal move");
                 break;
             }
-            if(root.size() >= MAX_TREE_NODES) {
+            if(sizeAndDepth == null) {
+                sizeAndDepth = root.sizeAndDepth(MAX_TREE_NODES);
+            }
+            if(sizeAndDepth[0] >= MAX_TREE_NODES) {
                 logger.info("too many nodes in tree, ending search");
                 break;
             }
-            if(root.maxDepth() >= MAX_TREE_DEPTH) {
+            if(sizeAndDepth[1] >= MAX_TREE_DEPTH) {
                 logger.info("tree is too deep, ending search");
                 break;
             }
@@ -203,6 +208,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     if (current.getPlayer().scriptFailed) {
                         illegalPurged++;
                         current.getParent().prune(current);
+                        sizeAndDepth = null;
                         continue;
                     }
                     //remove child if node is already in the tree
@@ -216,12 +222,14 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                             validDuplicatesPurged++;
                             current.backpropagate(match.getMeanScore());
                             current.getParent().prune(current);
+                            sizeAndDepth = null;
                             current = null;
                             break;
                         } else {
                             //prune old
                             invalidDuplicatesPurged++;
                             match.getParent().prune(match);
+                            sizeAndDepth = null;
                             match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.featureGraph, current.parent.playerId);
                         }
                     }
@@ -235,7 +243,13 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 // eval
                 current.evaluate();
                 //expand
+                int childrenBefore = current.getChildren().size();
                 current.expand();
+                int added = current.getChildren().size() - childrenBefore;
+                if(sizeAndDepth != null && added > 0) {
+                    sizeAndDepth[0] += added;
+                    sizeAndDepth[1] = Math.max(sizeAndDepth[1], current.depthFromRoot() + 1);
+                }
                 //temporary result (virtual loss)
                 result = -1;
 
