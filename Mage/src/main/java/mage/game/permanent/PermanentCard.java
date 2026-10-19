@@ -98,7 +98,11 @@ public class PermanentCard extends PermanentImpl {
     }
 
     protected PermanentCard(final PermanentCard permanent) {
-        super(permanent);
+        this(permanent, true);
+    }
+
+    protected PermanentCard(final PermanentCard permanent, boolean copyAbilities) {
+        super(permanent, copyAbilities);
         // card is a read-only template (reset copies from it), so copies share one snapshot of it
         this.card = permanent.cardSnapshot ? permanent.card : permanent.card.copy();
         this.cardSnapshot = true;
@@ -176,6 +180,11 @@ public class PermanentCard extends PermanentImpl {
     @Override
     public PermanentCard copy() {
         return new PermanentCard(this);
+    }
+
+    @Override
+    public PermanentCard copyWithoutAbilities() {
+        return new PermanentCard(this, false);
     }
 
     public int getMaxLevelCounters() {

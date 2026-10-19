@@ -146,7 +146,11 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     }
 
     protected PermanentImpl(final PermanentImpl permanent) {
-        super(permanent);
+        this(permanent, true);
+    }
+
+    protected PermanentImpl(final PermanentImpl permanent, boolean copyAbilities) {
+        super(permanent, copyAbilities);
         this.tapped = permanent.tapped;
         this.flipped = permanent.flipped;
         this.originalControllerId = permanent.originalControllerId;

@@ -488,6 +488,12 @@ public interface Permanent extends Card, Controllable {
     @Override
     Permanent copy();
 
+    /**
+     * Copy with no abilities, for a state whose permanents are reset before use: reset rebuilds the abilities
+     * (see GameState.snapshotCopy)
+     */
+    Permanent copyWithoutAbilities();
+
     // Simple int counter to set a timewise create order , the lower the number the earlier the object was created
     // if objects enter the battlefield at the same time they can get (and should) get the same number.
     int getCreateOrder();

@@ -50,7 +50,11 @@ public class PermanentToken extends PermanentImpl {
     }
 
     protected PermanentToken(final PermanentToken permanent) {
-        super(permanent);
+        this(permanent, true);
+    }
+
+    protected PermanentToken(final PermanentToken permanent, boolean copyAbilities) {
+        super(permanent, copyAbilities);
         this.token = permanent.token.copy();
     }
 
@@ -129,6 +133,11 @@ public class PermanentToken extends PermanentImpl {
     @Override
     public PermanentToken copy() {
         return new PermanentToken(this);
+    }
+
+    @Override
+    public PermanentToken copyWithoutAbilities() {
+        return new PermanentToken(this, false);
     }
 
     @Override

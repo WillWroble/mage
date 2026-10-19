@@ -70,6 +70,11 @@ public abstract class MageObjectImpl implements MageObject {
     }
 
     protected MageObjectImpl(final MageObjectImpl object) {
+        this(object, true);
+    }
+
+    // copyAbilities false: the copy starts with no abilities (see Permanent.copyWithoutAbilities)
+    protected MageObjectImpl(final MageObjectImpl object, boolean copyAbilities) {
         objectId = object.objectId;
         name = object.name;
         manaCost = object.manaCost.copy();
@@ -86,7 +91,7 @@ public abstract class MageObjectImpl implements MageObject {
         toughness = object.toughness.copy();
         startingLoyalty = object.startingLoyalty;
         startingDefense = object.startingDefense;
-        abilities = object.abilities.copy();
+        abilities = copyAbilities ? object.abilities.copy() : new AbilitiesImpl<>();
         this.cardType.addAll(object.cardType);
         this.subtype.copyFrom(object.subtype);
         supertype.addAll(object.supertype);

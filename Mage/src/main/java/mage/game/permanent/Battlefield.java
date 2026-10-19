@@ -22,14 +22,22 @@ public class Battlefield implements Serializable {
     public Battlefield() {
     }
 
-    protected Battlefield(final Battlefield battlefield) {
+    protected Battlefield(final Battlefield battlefield, boolean copyAbilities) {
         for (Entry<UUID, Permanent> entry : battlefield.field.entrySet()) {
-            field.put(entry.getKey(), entry.getValue().copy());
+            Permanent permanent = entry.getValue();
+            field.put(entry.getKey(), copyAbilities ? permanent.copy() : permanent.copyWithoutAbilities());
         }
     }
 
     public Battlefield copy() {
-        return new Battlefield(this);
+        return new Battlefield(this, true);
+    }
+
+    /**
+     * Copy whose permanents have no abilities, see GameState.snapshotCopy
+     */
+    public Battlefield copyWithoutAbilities() {
+        return new Battlefield(this, false);
     }
 
     public void reset(Game game) {

@@ -116,7 +116,11 @@ public abstract class CardImpl extends MageObjectImpl implements Card {
     }
 
     protected CardImpl(final CardImpl card) {
-        super(card);
+        this(card, true);
+    }
+
+    protected CardImpl(final CardImpl card, boolean copyAbilities) {
+        super(card, copyAbilities);
         ownerId = card.ownerId;
         rarity = card.rarity;
 

@@ -337,11 +337,12 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     protected GameState(final GameState state) {
-        this(state, false);
+        this(state, false, true);
     }
 
     // lazy: share the lazy components with state and copy each one on first access (see shared); state must not change afterwards
-    protected GameState(final GameState state, boolean lazy) {
+    // permanentAbilities false: permanents are copied without their abilities (see snapshotCopy)
+    private GameState(final GameState state, boolean lazy, boolean permanentAbilities) {
         this.shared = lazy ? ALL_SHARED : 0;
         this.gameLocalRandom = RandomUtil.deepCopy(state.gameLocalRandom);
         this.players = lazy ? state.players : state.players.copy();
@@ -368,7 +369,8 @@ public class GameState implements Serializable, Copyable<GameState> {
         this.designations.addAll(state.designations);
         this.helperEmblems = lazy ? state.helperEmblems : CardUtil.deepCopyObject(state.helperEmblems);
         this.exile = lazy ? state.exile : state.exile.copy();
-        this.battlefield = lazy ? state.battlefield : state.battlefield.copy();
+        this.battlefield = lazy ? state.battlefield
+                : permanentAbilities ? state.battlefield.copy() : state.battlefield.copyWithoutAbilities();
         this.turnNum = state.turnNum;
         this.stepNum = state.stepNum;
         this.extraTurnId = state.extraTurnId;
@@ -502,7 +504,16 @@ public class GameState implements Serializable, Copyable<GameState> {
      * node snapshot): until then the copy shares the source's objects.
      */
     public GameState lazyCopy() {
-        return new GameState(this, true);
+        return new GameState(this, true, true);
+    }
+
+    /**
+     * Copy for an MCTS node snapshot, which is only restored through lazyCopy followed by applyEffects
+     * (MCTSNode.resetRootGame). Its permanents have no abilities: that applyEffects resets every permanent, which
+     * rebuilds them from the permanent's card or token.
+     */
+    public GameState snapshotCopy() {
+        return new GameState(this, false, false);
     }
 
     @Override

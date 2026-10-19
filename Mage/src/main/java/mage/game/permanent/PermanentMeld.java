@@ -15,7 +15,11 @@ public class PermanentMeld extends PermanentCard {
     }
 
     private PermanentMeld(final PermanentMeld permanent) {
-        super(permanent);
+        this(permanent, true);
+    }
+
+    private PermanentMeld(final PermanentMeld permanent, boolean copyAbilities) {
+        super(permanent, copyAbilities);
     }
 
     @Override
@@ -35,5 +39,10 @@ public class PermanentMeld extends PermanentCard {
     @Override
     public PermanentMeld copy() {
         return new PermanentMeld(this);
+    }
+
+    @Override
+    public PermanentMeld copyWithoutAbilities() {
+        return new PermanentMeld(this, false);
     }
 }

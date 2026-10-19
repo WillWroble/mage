@@ -129,7 +129,7 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         // the playable calc runs in place on this working game, so keep a copy from before it for the node
-        GameState beforePlayable = game.getState().copy();
+        GameState beforePlayable = game.getState().snapshotCopy();
         playables = getPlayableAbilities(game);
         if(playables.size() == 1 && !game.isCheckPoint(playerId)) {
             pass(game);
