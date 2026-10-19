@@ -452,3 +452,67 @@ Before this work `GameState.copy()` was 155–510 µs. The outliers are GC pause
 - Manual tap.
 - Win rate is one 64-game run; 16-game cases are too small to see a per-deck shift.
 - The commander and minimax cases.
+
+## 2026-10-19 — applyEffects, first pass (autotap)
+
+### Where applyEffects time goes
+
+Temporary per-call-site counters in `GameImpl.applyEffects` (not committed), 3-minute UB probe at `814f5992`,
+4 threads, 56,316 simulations:
+
+| call site | calls per simulation | µs per call |
+|---|---|---|
+| `MCTSNode.resetRootGame` | 2.6 | 481 (it also pays for the lazy restore copy) |
+| `GameImpl.playPriority`, before each priority | 7.5 | 158 |
+| `GameImpl.playPriority`, top of the loop | 4.1 | 162 |
+| `processAction` after a mana ability resolves | 2.2 | 157 |
+| `AbilityImpl.activate` | 1.8 | 168 |
+| others (`playPriority` after resolve, untap, draw, moveCards, end of turn) | 2.3 | ~150 |
+
+About 19 calls and 4 ms of thread time per simulation. Inside one call (JFR at `814f5992`):
+
+- rebuilding permanents from their cards (`PermanentCard.copyFromCard`, mostly copying the card's abilities): 11.5% of
+  all samples;
+- `ContinuousEffects.apply`: 17.7%, of which `getLayeredEffects` (called again after every applied effect) 11%,
+  `removeInactiveEffects` 3%.
+
+A per-call benchmark on one core (`docs/perf/applybench.patch`, 1,000 calls on a simulation copy at each game's
+first priority search on turns 5–8) gives 37–55 µs per call at turn 5, with 4–10 permanents. That is about 3× less
+than inside the search, where the objects are cold in cache.
+
+### Changes
+
+| commit | change | measured |
+|---|---|---|
+| `814f5992` | `GameEvent` ids from `ThreadLocalRandom` instead of `UUID.randomUUID`, whose shared `SecureRandom` is slow and contended across game threads (`randomUUID` was 3.8% of samples). `GameState.getCardState` uses `computeIfAbsent` instead of allocating a `CardState` per call. `PermanentImpl.hasAbility` checks the base and card-state lists directly instead of building the combined list. All give the same results. | probe 180.8 → 205.5 |
+| `68268a06` | Mana cost copies share their `options` set. It is set when the cost is built and never changed in place; `setPhyrexian` now replaces it. | JFR: `ManaOptions` copies 4.3% → 0.2% of samples; probe inside noise |
+| `13b10b66` | MCTS restores skip `playPriority`'s opening `applyEffects`. `resetRootGame` has just applied effects, and only a `PhaseChangedEvent` fires in between. A mark on the state, cleared by any other `applyEffects`, limits this to that path; real games never set it. A call-sequence change, agreed with Will: a restored node now applies effects twice before its decision, where the original game applied them once. | probe 198.1 / 212.8 |
+
+
+Probe noise: the same build gave 181.3 and 205.5 on different runs, and the probe plays different random games each run. One
+probe can't resolve changes under about 10%; JFR sample shares can.
+
+### Correctness at `13b10b66`
+
+- Full gate (`GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh autotap gate-ae1`): 4/4 pass, 35 min.
+
+  | case | win rate | sims/s |
+  |---|---|---|
+  | UB | 2/16 | 165.4 |
+  | 5C | 4/16 | 190.8 |
+  | UR | 3/16 | 220.8 |
+  | GW | 1/16 | 167.2 |
+  | all | **10/64** (15.6%) | 180.2 (178.6 at `6bfaeae7`) |
+
+  ERROR/FATAL: 5 × `StateEncoder.addFeature: missing parent reference` (GW), the baseline's only kind (baseline 3,
+  batch 2 4). No new kinds.
+- Win rate across runs: baseline 11/63 and 22/64, batch 2 19/64, `6bfaeae7` 14/64, `13b10b66` 10/64. The last two are
+  below the batch-2 and second baseline runs but inside the baseline's own spread. With 64 games per run, this can't
+  tell a behaviour change from noise (binomial sd ≈ 3.5 games). **Needs more games before merging.**
+- Mage.Tests: 157 failures + 3 errors, all in earlier baseline runs. No new failures.
+
+### Not done
+
+- Manual tap.
+- The bigger applyEffects wins need dirty tracking (rebuild only what changed, like gorge's memoized layers);
+  not started.
