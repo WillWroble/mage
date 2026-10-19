@@ -46,6 +46,7 @@ import mage.target.targetadjustment.GenericTargetAdjuster;
 import mage.target.targetadjustment.TargetAdjuster;
 import mage.util.CardUtil;
 import mage.util.GameLog;
+import mage.util.SharedPart;
 import mage.util.ThreadLocalStringBuilder;
 import mage.watchers.Watcher;
 import org.apache.log4j.Logger;
@@ -66,10 +67,11 @@ public abstract class AbilityImpl implements Ability {
     protected AbilityType abilityType;
     protected UUID controllerId;
     protected UUID sourceId;
-    private final ManaCosts<ManaCost> manaCosts;
-    private final ManaCosts<ManaCost> manaCostsToPay;
-    private final Costs<Cost> costs;
-    private final Modes modes; // access to it by GetModes only (it can be overridden by some abilities)
+    // parts shared by copies until accessed (see SharedPart): access them through their getters only
+    private SharedPart<ManaCosts<ManaCost>> manaCosts;
+    private SharedPart<ManaCosts<ManaCost>> manaCostsToPay;
+    private SharedPart<Costs<Cost>> costs;
+    private SharedPart<Modes> modes; // access to it by GetModes only (it can be overridden by some abilities)
     protected Zone zone;
     protected String name;
     protected AbilityWord abilityWord;
@@ -82,29 +84,29 @@ public abstract class AbilityImpl implements Ability {
     private boolean worksFaceDown = false;
     private boolean worksPhasedOut = false;
     private int sourceObjectZoneChangeCounter;
-    private List<Watcher> watchers = new ArrayList<>(); // access to it by GetWatchers only (it can be overridden by some abilities)
-    private List<Ability> subAbilities = null;
+    private SharedPart<List<Watcher>> watchers = new SharedPart<>(new ArrayList<>()); // access to it by GetWatchers only (it can be overridden by some abilities)
+    private SharedPart<List<Ability>> subAbilities = new SharedPart<>(null);
     private boolean canFizzle = true; // for Gilded Drake
     private boolean canBeCopied = true;
     private TargetAdjuster targetAdjuster = null;
     private CostAdjuster costAdjuster = null;
-    private List<Hint> hints = new ArrayList<>();
-    protected List<CardIcon> icons = new ArrayList<>();
+    private SharedPart<List<Hint>> hints = new SharedPart<>(new ArrayList<>());
+    private SharedPart<List<CardIcon>> icons = new SharedPart<>(new ArrayList<>());
     private Outcome customOutcome = null; // uses for AI decisions instead effects
     private MageIdentifier identifier = MageIdentifier.Default; // used to identify specific ability (e.g. to match with corresponding watcher)
     private String appendToRule = null;
     private int sourcePermanentTransformCount = 0;
-    private Map<String, Object> costsTagMap = null;
+    private SharedPart<Map<String, Object>> costsTagMap = new SharedPart<>(null);
 
     protected AbilityImpl(AbilityType abilityType, Zone zone) {
         this.id = UUID.randomUUID();
         this.originalId = id;
         this.abilityType = abilityType;
         this.zone = zone;
-        this.manaCosts = new ManaCostsImpl<>();
-        this.manaCostsToPay = new ManaCostsImpl<>();
-        this.costs = new CostsImpl<>();
-        this.modes = new Modes();
+        this.manaCosts = new SharedPart<>(new ManaCostsImpl<>());
+        this.manaCostsToPay = new SharedPart<>(new ManaCostsImpl<>());
+        this.costs = new SharedPart<>(new CostsImpl<>());
+        this.modes = new SharedPart<>(new Modes());
     }
 
     protected AbilityImpl(final AbilityImpl ability) {
@@ -116,13 +118,13 @@ public abstract class AbilityImpl implements Ability {
         this.zone = ability.zone;
         this.name = ability.name;
         this.usesStack = ability.usesStack;
-        this.manaCosts = ability.manaCosts.copy();
-        this.manaCostsToPay = ability.manaCostsToPay.copy();
-        this.costs = ability.costs.copy();
-        this.watchers = CardUtil.deepCopyObject(ability.watchers);
+        this.manaCosts = ability.manaCosts.share(ManaCosts::copy);
+        this.manaCostsToPay = ability.manaCostsToPay.share(ManaCosts::copy);
+        this.costs = ability.costs.share(Costs::copy);
+        this.watchers = ability.watchers.share(CardUtil::deepCopyObject);
 
-        this.subAbilities = CardUtil.deepCopyObject(ability.subAbilities);
-        this.modes = ability.getModes().copy();
+        this.subAbilities = ability.subAbilities.share(CardUtil::deepCopyObject);
+        this.modes = ability.modes.share(Modes::copy);
         this.ruleAtTheTop = ability.ruleAtTheTop;
         this.ruleVisible = ability.ruleVisible;
         this.ruleAdditionalCostsVisible = ability.ruleAdditionalCostsVisible;
@@ -135,14 +137,14 @@ public abstract class AbilityImpl implements Ability {
         this.canBeCopied = ability.canBeCopied;
         this.targetAdjuster = ability.targetAdjuster;
         this.costAdjuster = ability.costAdjuster;
-        this.hints = CardUtil.deepCopyObject(ability.hints);
-        this.icons = CardUtil.deepCopyObject(ability.icons);
+        this.hints = ability.hints.share(CardUtil::deepCopyObject);
+        this.icons = ability.icons.share(CardUtil::deepCopyObject);
         this.customOutcome = ability.customOutcome;
         this.identifier = ability.identifier;
         this.activated = ability.activated;
         this.appendToRule = ability.appendToRule;
         this.sourcePermanentTransformCount = ability.sourcePermanentTransformCount;
-        this.costsTagMap = CardUtil.deepCopyObject(ability.costsTagMap);
+        this.costsTagMap = ability.costsTagMap.share(CardUtil::deepCopyObject);
     }
 
     @Override
@@ -386,7 +388,7 @@ public abstract class AbilityImpl implements Ability {
             if (cost instanceof ManaCost) {
                 this.addManaCostsToPay((ManaCost) cost.copy());
             } else if (cost != null) {
-                this.costs.add(cost.copy());
+                this.getCosts().add(cost.copy());
             }
         }
 
@@ -873,8 +875,8 @@ public abstract class AbilityImpl implements Ability {
             watcher.setControllerId(controllerId);
         }
 
-        if (subAbilities != null) {
-            for (Ability subAbility : subAbilities) {
+        if (subAbilities.get() != null) {
+            for (Ability subAbility : getSubAbilities()) {
                 subAbility.setControllerId(controllerId);
             }
         }
@@ -892,8 +894,8 @@ public abstract class AbilityImpl implements Ability {
         } else if (!(this instanceof MageSingleton)) {
             this.sourceId = sourceId;
         }
-        if (subAbilities != null) {
-            for (Ability subAbility : subAbilities) {
+        if (subAbilities.get() != null) {
+            for (Ability subAbility : getSubAbilities()) {
                 subAbility.setSourceId(sourceId);
             }
         }
@@ -905,12 +907,14 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public Costs<Cost> getCosts() {
-        return costs;
+        costs = costs.owned(Costs::copy);
+        return costs.get();
     }
 
     @Override
     public ManaCosts<ManaCost> getManaCosts() {
-        return manaCosts;
+        manaCosts = manaCosts.owned(ManaCosts::copy);
+        return manaCosts.get();
     }
 
     /**
@@ -922,19 +926,22 @@ public abstract class AbilityImpl implements Ability {
      */
     @Override
     public ManaCosts<ManaCost> getManaCostsToPay() {
-        return manaCostsToPay;
+        manaCostsToPay = manaCostsToPay.owned(ManaCosts::copy);
+        return manaCostsToPay.get();
     }
 
     @Override
     public Map<String, Object> getCostsTagMap() {
-        return costsTagMap;
+        costsTagMap = costsTagMap.owned(CardUtil::deepCopyObject);
+        return costsTagMap.get();
     }
 
     public void setCostsTag(String tag, Object value) {
-        if (costsTagMap == null) {
-            costsTagMap = new HashMap<>();
+        costsTagMap = costsTagMap.owned(CardUtil::deepCopyObject);
+        if (costsTagMap.get() == null) {
+            costsTagMap = new SharedPart<>(new HashMap<>());
         }
-        costsTagMap.put(tag, value);
+        costsTagMap.get().put(tag, value);
     }
     @Override
     public Effects getEffects() {
@@ -969,7 +976,8 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public List<Watcher> getWatchers() {
-        return watchers;
+        watchers = watchers.owned(CardUtil::deepCopyObject);
+        return watchers.get();
     }
 
     @Override
@@ -981,8 +989,9 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public List<Ability> getSubAbilities() {
-        if (subAbilities != null) {
-            return subAbilities;
+        subAbilities = subAbilities.owned(CardUtil::deepCopyObject);
+        if (subAbilities.get() != null) {
+            return subAbilities.get();
         } else {
             return emptyAbilities;
         }
@@ -990,12 +999,12 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public void addSubAbility(Ability ability) {
-        if (subAbilities == null) {
-            subAbilities = new ArrayList<>();
+        if (subAbilities.get() == null) {
+            subAbilities = new SharedPart<>(new ArrayList<>());
         }
         ability.setSourceId(this.sourceId);
         ability.setControllerId(this.controllerId);
-        subAbilities.add(ability);
+        getSubAbilities().add(ability);
     }
 
     @Override
@@ -1083,10 +1092,10 @@ public abstract class AbilityImpl implements Ability {
         } else {
             // as single cost
             if (cost instanceof ManaCost) {
-                manaCosts.add((ManaCost) cost);
-                manaCostsToPay.add((ManaCost) cost);
+                getManaCosts().add((ManaCost) cost);
+                getManaCostsToPay().add((ManaCost) cost);
             } else {
-                costs.add(cost);
+                getCosts().add(cost);
             }
         }
     }
@@ -1097,9 +1106,9 @@ public abstract class AbilityImpl implements Ability {
             return;
         }
         if (manaCost instanceof ManaCosts) {
-            manaCostsToPay.addAll((ManaCosts) manaCost);
+            getManaCostsToPay().addAll((ManaCosts) manaCost);
         } else {
-            manaCostsToPay.add(manaCost);
+            getManaCostsToPay().add(manaCost);
         }
     }
 
@@ -1229,7 +1238,12 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public Modes getModes() {
-        return modes;
+        return getOwnModes();
+    }
+
+    private Modes getOwnModes() {
+        modes = modes.owned(Modes::copy);
+        return modes.get();
     }
 
     @Override
@@ -1493,13 +1507,13 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public Ability withFirstModeFlavorWord(String flavorWord) {
-        this.modes.getMode().withFlavorWord(flavorWord);
+        getOwnModes().getMode().withFlavorWord(flavorWord);
         return this;
     }
 
     @Override
     public Ability withFirstModeCost(Cost cost) {
-        this.modes.getMode().withCost(cost);
+        getOwnModes().getMode().withCost(cost);
         return this;
     }
 
@@ -1841,12 +1855,14 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public List<Hint> getHints() {
-        return this.hints;
+        hints = hints.owned(CardUtil::deepCopyObject);
+        return hints.get();
     }
 
     @Override
     public Ability addHint(Hint hint) {
-        this.hints.add(hint);
+        hints = hints.owned(CardUtil::deepCopyObject);
+        hints.get().add(hint);
         return this;
     }
 
@@ -1867,12 +1883,14 @@ public abstract class AbilityImpl implements Ability {
 
     @Override
     public List<CardIcon> getIcons(Game game) {
-        return this.icons;
+        icons = icons.owned(CardUtil::deepCopyObject);
+        return icons.get();
     }
 
     @Override
     public Ability addIcon(CardIcon cardIcon) {
-        this.icons.add(cardIcon);
+        icons = icons.owned(CardUtil::deepCopyObject);
+        icons.get().add(cardIcon);
         return this;
     }
 

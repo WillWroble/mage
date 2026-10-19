@@ -39,7 +39,7 @@ public class ClassReminderAbility extends StaticAbility {
     @Override
     public List<CardIcon> getIcons(Game game) {
         if (game == null) {
-            return this.icons;
+            return super.getIcons(null);
         }
 
         // dynamic GUI icon with current level
