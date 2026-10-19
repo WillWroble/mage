@@ -137,6 +137,9 @@ public final class RandomUtil {
      * @return A new Random object with the identical state.
      */
     public static Random deepCopy(Random original) {
+        if (original instanceof CopyableRandom) {
+            return ((CopyableRandom) original).copy();
+        }
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             ObjectOutputStream oos = new ObjectOutputStream(bos);

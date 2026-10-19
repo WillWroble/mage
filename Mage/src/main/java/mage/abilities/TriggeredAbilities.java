@@ -12,6 +12,7 @@ import mage.util.Copyable;
 import org.apache.log4j.Logger;
 
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -22,6 +23,11 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
     private static final Logger logger = Logger.getLogger(TriggeredAbilities.class);
 
     private final Map<String, List<UUID>> sources = new HashMap<>();
+
+    // abilities this map created (added, or copied by it); only these may change through this map. The others are
+    // shared with the map they came from, which never changes them, and are copied before a trigger check can
+    // change them (copy-on-write)
+    private final Set<TriggeredAbility> owned = Collections.newSetFromMap(new IdentityHashMap<>());
 
     // data integrity check for triggers
     // reason: game engine can generate additional events and triggers while checking another one,
@@ -44,10 +50,21 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
     }
 
     protected TriggeredAbilities(final TriggeredAbilities abilities) {
+        this(abilities, false);
+    }
+
+    // shareAll: also share the abilities the source created, see copyShared
+    private TriggeredAbilities(final TriggeredAbilities abilities, boolean shareAll) {
         makeSureNotProcessing(null);
 
         for (Map.Entry<String, TriggeredAbility> entry : abilities.entrySet()) {
-            this.put(entry.getKey(), entry.getValue().copy());
+            TriggeredAbility ability = entry.getValue();
+            if (!shareAll && abilities.owned.contains(ability)) {
+                // the source can still change it
+                ability = ability.copy();
+                owned.add(ability);
+            }
+            this.put(entry.getKey(), ability);
         }
         for (Map.Entry<String, List<UUID>> entry : abilities.sources.entrySet()) {
             sources.put(entry.getKey(), entry.getValue());
@@ -86,7 +103,7 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
             for (Iterator<TriggeredAbility> it = this.values().iterator(); it.hasNext(); ) {
                 TriggeredAbility ability = it.next();
                 if (ability instanceof StateTriggeredAbility && ((StateTriggeredAbility) ability).canTrigger(game)) {
-                    checkTrigger(ability, null, game);
+                    checkTrigger(own(ability), null, game);
                 }
                 this.processingDone(ability);
             }
@@ -107,7 +124,7 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
         try {
             for (TriggeredAbility ability : currentTriggers) {
                 if (ability.checkEventType(event, game)) {
-                    checkTrigger(ability, event, game);
+                    checkTrigger(own(ability), event, game);
                 }
                 this.processingDone(ability);
             }
@@ -118,6 +135,20 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
         } finally {
             processingEnd(needErrorChecksOnEnd);
         }
+    }
+
+    /**
+     * Returns the ability this map can change: the ability itself if only this map refers to it, otherwise a copy
+     * that replaces it under the same keys
+     */
+    private TriggeredAbility own(TriggeredAbility ability) {
+        if (owned.contains(ability)) {
+            return ability;
+        }
+        TriggeredAbility copy = ability.copy();
+        this.replaceAll((key, value) -> value == ability ? copy : value);
+        owned.add(copy);
+        return copy;
     }
 
     private void makeSureNotProcessing(GameEvent newEvent) {
@@ -294,6 +325,7 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
             add(ability, attachedTo);
         } else if (attachedTo == null) {
             this.put(ability.getId() + "_" + sourceId, ability);
+            owned.add(ability);
         } else {
             this.add(ability, attachedTo);
             List<UUID> uuidList = new LinkedList<>();
@@ -307,6 +339,18 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
     public void add(TriggeredAbility ability, MageObject attachedTo) {
         makeSureNotProcessing(null);
         this.put(getKey(ability, attachedTo), ability);
+        owned.add(ability);
+    }
+
+    // removed abilities are no longer this map's to change (one still under another key gets copied on its next change)
+    private void removeEntriesIf(Predicate<Map.Entry<String, TriggeredAbility>> filter) {
+        entrySet().removeIf(entry -> {
+            if (filter.test(entry)) {
+                owned.remove(entry.getValue());
+                return true;
+            }
+            return false;
+        });
     }
 
     private String getKey(TriggeredAbility ability, MageObject target) {
@@ -318,11 +362,11 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
     }
 
     public void removeAbilitiesOfSource(UUID sourceId) {
-        keySet().removeIf(key -> key.endsWith(sourceId.toString()));
+        removeEntriesIf(entry -> entry.getKey().endsWith(sourceId.toString()));
     }
 
     public void removeAllGainedAbilities() {
-        this.keySet().removeAll(sources.keySet());
+        removeEntriesIf(entry -> sources.containsKey(entry.getKey()));
         sources.clear();
     }
 
@@ -332,13 +376,21 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
 
     public void removeAbilitiesOfNonExistingSources(Game game) {
         // e.g. Token that had triggered abilities
-        entrySet().removeIf(entry -> game.getObject(entry.getValue().getSourceId()) == null
+        removeEntriesIf(entry -> game.getObject(entry.getValue().getSourceId()) == null
                 && game.getState().getHelperEmblems().stream().noneMatch(emblem -> emblem.getId().equals(entry.getValue().getSourceId()))
                 && game.getState().getDesignations().stream().noneMatch(designation -> designation.getId().equals(entry.getValue().getSourceId())));
     }
 
     @Override
     public TriggeredAbilities copy() {
-        return new TriggeredAbilities(this);
+        return new TriggeredAbilities(this, false);
+    }
+
+    /**
+     * Copy that shares all abilities with this map. Only for a map that never changes afterwards (a stored MCTS
+     * node state), so it never changes the abilities this map created.
+     */
+    public TriggeredAbilities copyShared() {
+        return new TriggeredAbilities(this, true);
     }
 }
