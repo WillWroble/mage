@@ -63,21 +63,26 @@ public class ContinuousEffects implements Serializable {
     }
 
     protected ContinuousEffects(final ContinuousEffects effect) {
+        this(effect, true);
+    }
+
+    // withTemporary false: leaves out what removeAllTemporaryEffects would remove (see copyWithoutTemporary)
+    private ContinuousEffects(final ContinuousEffects effect, boolean withTemporary) {
         applyStatus = effect.applyStatus.copy();
         auraReplacementEffect = effect.auraReplacementEffect.copy();
-        layeredEffects = effect.layeredEffects.copy();
-        continuousRuleModifyingEffects = effect.continuousRuleModifyingEffects.copy();
-        replacementEffects = effect.replacementEffects.copy();
-        preventionEffects = effect.preventionEffects.copy();
-        requirementEffects = effect.requirementEffects.copy();
-        restrictionEffects = effect.restrictionEffects.copy();
-        restrictionUntapNotMoreThanEffects = effect.restrictionUntapNotMoreThanEffects.copy();
+        layeredEffects = copy(effect.layeredEffects, withTemporary);
+        continuousRuleModifyingEffects = copy(effect.continuousRuleModifyingEffects, withTemporary);
+        replacementEffects = copy(effect.replacementEffects, withTemporary);
+        preventionEffects = copy(effect.preventionEffects, withTemporary);
+        requirementEffects = copy(effect.requirementEffects, withTemporary);
+        restrictionEffects = copy(effect.restrictionEffects, withTemporary);
+        restrictionUntapNotMoreThanEffects = copy(effect.restrictionUntapNotMoreThanEffects, withTemporary);
         for (Map.Entry<AsThoughEffectType, ContinuousEffectsList<AsThoughEffect>> entry : effect.asThoughEffectsMap.entrySet()) {
-            asThoughEffectsMap.put(entry.getKey(), entry.getValue().copy());
+            asThoughEffectsMap.put(entry.getKey(), copy(entry.getValue(), withTemporary));
         }
 
-        costModificationEffects = effect.costModificationEffects.copy();
-        spliceCardEffects = effect.spliceCardEffects.copy();
+        costModificationEffects = copy(effect.costModificationEffects, withTemporary);
+        spliceCardEffects = copy(effect.spliceCardEffects, withTemporary);
         for (Map.Entry<String, ContinuousEffectsList<ContinuousEffect>> entry : effect.lastEffectsListOnLayer.entrySet()) {
             lastEffectsListOnLayer.put(entry.getKey(), entry.getValue().copy());
         }
@@ -102,6 +107,18 @@ public class ContinuousEffects implements Serializable {
 
     public ContinuousEffects copy() {
         return new ContinuousEffects(this);
+    }
+
+    /**
+     * Copy without the temporary effects, as if removeAllTemporaryEffects had run on it. For a state that is
+     * restored only through applyEffects, which removes them first anyway (see GameState.snapshotCopy).
+     */
+    public ContinuousEffects copyWithoutTemporary() {
+        return new ContinuousEffects(this, false);
+    }
+
+    private static <T extends ContinuousEffect> ContinuousEffectsList<T> copy(ContinuousEffectsList<T> effects, boolean withTemporary) {
+        return withTemporary ? effects.copy() : effects.copyWithoutTemporary();
     }
 
     public List<RequirementEffect> getRequirementEffects() {

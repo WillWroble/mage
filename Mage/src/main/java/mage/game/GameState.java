@@ -338,12 +338,12 @@ public class GameState implements Serializable, Copyable<GameState> {
     }
 
     protected GameState(final GameState state) {
-        this(state, false, true);
+        this(state, false, false);
     }
 
     // lazy: share the lazy components with state and copy each one on first access (see shared); state must not change afterwards
-    // permanentAbilities false: permanents are copied without their abilities (see snapshotCopy)
-    private GameState(final GameState state, boolean lazy, boolean permanentAbilities) {
+    // snapshot: leave out what the restore's applyEffects rebuilds (see snapshotCopy)
+    private GameState(final GameState state, boolean lazy, boolean snapshot) {
         this.shared = lazy ? ALL_SHARED : 0;
         this.gameLocalRandom = RandomUtil.deepCopy(state.gameLocalRandom);
         this.players = lazy ? state.players : state.players.copy();
@@ -371,13 +371,15 @@ public class GameState implements Serializable, Copyable<GameState> {
         this.helperEmblems = lazy ? state.helperEmblems : CardUtil.deepCopyObject(state.helperEmblems);
         this.exile = lazy ? state.exile : state.exile.copy();
         this.battlefield = lazy ? state.battlefield
-                : permanentAbilities ? state.battlefield.copy() : state.battlefield.copyWithoutAbilities();
+                : snapshot ? state.battlefield.copyWithoutAbilities() : state.battlefield.copy();
         this.turnNum = state.turnNum;
         this.stepNum = state.stepNum;
         this.extraTurnId = state.extraTurnId;
-        this.effects = lazy ? state.effects : state.effects.copy();
+        this.effects = lazy ? state.effects
+                : snapshot ? state.effects.copyWithoutTemporary() : state.effects.copy();
         this.triggered = lazy ? state.triggered : CardUtil.deepCopyObject(state.triggered);
-        this.triggers = lazy ? state.triggers : state.triggers.copy();
+        this.triggers = lazy ? state.triggers
+                : snapshot ? state.triggers.copyWithoutGained() : state.triggers.copy();
         this.delayed = lazy ? state.delayed : state.delayed.copy();
         this.specialActions = lazy ? state.specialActions : state.specialActions.copy();
         this.combat = lazy ? state.combat : state.combat.copy();
@@ -505,16 +507,17 @@ public class GameState implements Serializable, Copyable<GameState> {
      * node snapshot): until then the copy shares the source's objects.
      */
     public GameState lazyCopy() {
-        return new GameState(this, true, true);
+        return new GameState(this, true, false);
     }
 
     /**
      * Copy for an MCTS node snapshot, which is only restored through lazyCopy followed by applyEffects
-     * (MCTSNode.resetRootGame). Its permanents have no abilities: that applyEffects resets every permanent, which
-     * rebuilds them from the permanent's card or token.
+     * (MCTSNode.resetRootGame). It leaves out what that applyEffects rebuilds before reading it: permanents'
+     * abilities (each permanent is reset from its card or token), temporary continuous effects and gained
+     * triggered abilities (both removed first, then added again by the effects that grant them).
      */
     public GameState snapshotCopy() {
-        return new GameState(this, false, false);
+        return new GameState(this, false, true);
     }
 
     @Override

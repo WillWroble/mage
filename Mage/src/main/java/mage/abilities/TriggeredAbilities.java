@@ -55,9 +55,17 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
 
     // shareAll: also share the abilities the source created, see copyShared
     private TriggeredAbilities(final TriggeredAbilities abilities, boolean shareAll) {
+        this(abilities, shareAll, true);
+    }
+
+    // withGained false: leaves out what removeAllGainedAbilities would remove, see copyWithoutGained
+    private TriggeredAbilities(final TriggeredAbilities abilities, boolean shareAll, boolean withGained) {
         makeSureNotProcessing(null);
 
         for (Map.Entry<String, TriggeredAbility> entry : abilities.entrySet()) {
+            if (!withGained && abilities.sources.containsKey(entry.getKey())) {
+                continue;
+            }
             TriggeredAbility ability = entry.getValue();
             if (!shareAll && abilities.owned.contains(ability)) {
                 // the source can still change it
@@ -66,8 +74,10 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
             }
             this.put(entry.getKey(), ability);
         }
-        for (Map.Entry<String, List<UUID>> entry : abilities.sources.entrySet()) {
-            sources.put(entry.getKey(), entry.getValue());
+        if (withGained) {
+            for (Map.Entry<String, List<UUID>> entry : abilities.sources.entrySet()) {
+                sources.put(entry.getKey(), entry.getValue());
+            }
         }
 
         this.enableIntegrityChecks = abilities.enableIntegrityChecks;
@@ -392,5 +402,13 @@ public class TriggeredAbilities extends LinkedHashMap<String, TriggeredAbility> 
      */
     public TriggeredAbilities copyShared() {
         return new TriggeredAbilities(this, true);
+    }
+
+    /**
+     * Copy without the gained abilities, as if removeAllGainedAbilities had run on it. For a state that is
+     * restored only through applyEffects, which removes them first anyway (see GameState.snapshotCopy).
+     */
+    public TriggeredAbilities copyWithoutGained() {
+        return new TriggeredAbilities(this, false, false);
     }
 }

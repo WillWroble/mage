@@ -28,11 +28,24 @@ public class ContinuousEffectsList<T extends ContinuousEffect> extends ArrayList
     }
 
     public ContinuousEffectsList(final ContinuousEffectsList<T> effects) {
+        this(effects, true);
+    }
+
+    // withTemporary false: leaves out what removeTemporaryEffects would remove
+    private ContinuousEffectsList(final ContinuousEffectsList<T> effects, boolean withTemporary) {
         this.ensureCapacity(effects.size());
+        Set<UUID> temporaryIds = new HashSet<>();
         for (ContinuousEffect cost : effects) {
+            if (!withTemporary && cost.isTemporary()) {
+                temporaryIds.add(cost.getId());
+                continue;
+            }
             this.add((T) cost.copy());
         }
         for (Map.Entry<UUID, Set<Ability>> entry : effects.effectAbilityMap.entrySet()) {
+            if (temporaryIds.contains(entry.getKey())) {
+                continue;
+            }
             Set<Ability> newSet = new HashSet<>();
             for (Ability ability : entry.getValue()) {
                 newSet.add(ability.copy());
@@ -43,6 +56,13 @@ public class ContinuousEffectsList<T extends ContinuousEffect> extends ArrayList
 
     public ContinuousEffectsList<T> copy() {
         return new ContinuousEffectsList<>(this);
+    }
+
+    /**
+     * Copy without the temporary effects, as if removeTemporaryEffects had run on it
+     */
+    public ContinuousEffectsList<T> copyWithoutTemporary() {
+        return new ContinuousEffectsList<>(this, false);
     }
 
     public void removeEndOfTurnEffects(Game game) {
