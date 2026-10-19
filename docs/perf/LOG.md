@@ -628,5 +628,5 @@ needs structural changes, each a design decision: drop the restore's `applyEffec
 keep everything again), match dedup on the hash alone instead of the state string, and dirty tracking in
 `applyEffects`.
 
-**Checkpoint (2026-10-19): `92fd2a8f`.** Manual-tap step without encoder ~1.9–2.1 ms on one core; gate 4/4
-in both tapping modes. Return here if later work regresses.
+**Checkpoint (2026-10-19): `92fd2a8f`.** Manual-tap step without encoder ~1.9–2.1 ms on one core; manual-tap gate 4/4 at `41e8d91a`
+(the last autotap gate ran at `13b10b66`, before the overnight changes). Return here if later work regresses.
