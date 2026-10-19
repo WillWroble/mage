@@ -309,8 +309,9 @@ public class AbilitiesImpl<T extends Ability> extends ArrayList<T> implements Ab
     public String getValue() {
         List<String> abilities = new ArrayList<>();
         for (T ability : this) {
-            if (ability.toString() != null) {
-                abilities.add(ability.toString());
+            String rule = ability.toString();
+            if (rule != null) {
+                abilities.add(rule);
             }
         }
         Collections.sort(abilities);

@@ -231,8 +231,11 @@ public class StateEncoder {
             addNode(FeatureGraph.Node.Type.CARD, pairedCard.getName(), pairedCard.getId(), parentId, "paired");
         }
         //process special exile zone (oblivion ring effect)
-        UUID exileId = CardUtil.getExileZoneId(game, p.getId(), p.getZoneChangeCounter(game));
-        ExileZone exileZone = game.getExile().getExileZone(exileId);
+        // look the id up only: CardUtil.getExileZoneId would create and store one for every permanent, and no zone
+        // can exist under a new id
+        Object exileId = game.getState().getValue(CardUtil.getObjectZoneString(CardUtil.SOURCE_EXILE_ZONE_TEXT,
+                p.getId(), game, p.getZoneChangeCounter(game), false));
+        ExileZone exileZone = exileId instanceof UUID ? game.getExile().getExileZone((UUID) exileId) : null;
 
         if (exileZone != null) {
             if (addNode(FeatureGraph.Node.Type.ZONE, cleanString(exileZone.getName()), exileZone.getId(), parentId, "exiled")) {
