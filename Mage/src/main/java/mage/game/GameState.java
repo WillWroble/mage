@@ -120,6 +120,7 @@ public class GameState implements Serializable, Copyable<GameState> {
     public int priorityCounter = 0;
 
     private int applyEffectsCounter; // Upcounting number of each applyEffects execution
+    private boolean effectsAppliedForResume; // effects were applied right before a resume, see GameImpl.playPriority
 
     // components still shared with the snapshot this state was lazily copied from (lazyCopy), one bit each;
     // the first access through the accessors below copies the component, so a lazy copy never touches the snapshot's objects
@@ -902,6 +903,7 @@ public class GameState implements Serializable, Copyable<GameState> {
 
     void applyEffects(Game game) {
         applyEffectsCounter++;
+        effectsAppliedForResume = false;
         for (Player player : players().values()) {
             player.reset();
         }
@@ -1920,6 +1922,23 @@ public class GameState implements Serializable, Copyable<GameState> {
 
     public int getApplyEffectsCounter() {
         return applyEffectsCounter;
+    }
+
+    /**
+     * Marks that effects were just applied before resuming this state (MCTS node restores), so the resumed
+     * priority loop does not apply them again. Any later applyEffects clears it.
+     */
+    public void setEffectsAppliedForResume() {
+        this.effectsAppliedForResume = true;
+    }
+
+    /**
+     * @return whether effects were applied right before a resume; clears the mark
+     */
+    public boolean takeEffectsAppliedForResume() {
+        boolean applied = effectsAppliedForResume;
+        effectsAppliedForResume = false;
+        return applied;
     }
 
     public void addPowerInsteadOfToughnessForDamageLethalityFilter(UUID source, FilterCreaturePermanent filter) {

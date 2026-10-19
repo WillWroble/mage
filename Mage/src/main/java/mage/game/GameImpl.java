@@ -1897,7 +1897,10 @@ public abstract class GameImpl implements Game {
         int rollbackBookmarkOnPriorityStart = 0;
         clearAllBookmarks();
         try {
-            applyEffects();
+            // an MCTS node restore applies effects right before resuming (MCTSNode.resetRootGame)
+            if (!state.takeEffectsAppliedForResume() || !resuming) {
+                applyEffects();
+            }
             while (!isPaused() && !checkIfGameIsOver() && !this.getTurn().isEndTurnRequested()) {
                 if (!resuming) {
                     state.getPlayers().resetPassed();
