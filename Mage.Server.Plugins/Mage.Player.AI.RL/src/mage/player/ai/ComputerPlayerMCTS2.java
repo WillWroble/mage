@@ -158,8 +158,10 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int illegalPurged = 0;
         int validDuplicatesPurged = 0;
         int invalidDuplicatesPurged = 0;
-        // root.size() and root.maxDepth(), kept up to date across iterations; a full walk only after a prune
+        // upper bounds of root.size() and root.maxDepth(), exact after a full walk: expansions add to them and
+        // prunes only make the tree smaller, so a full walk is needed only when a bound reaches its limit
         int[] sizeAndDepth = null;
+        boolean exact = false;
 
 
         while (true) {
@@ -167,8 +169,9 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 logger.warn("force time out after one minute - couldn't find legal move");
                 break;
             }
-            if(sizeAndDepth == null) {
+            if(sizeAndDepth == null || (!exact && (sizeAndDepth[0] >= MAX_TREE_NODES || sizeAndDepth[1] >= MAX_TREE_DEPTH))) {
                 sizeAndDepth = root.sizeAndDepth(MAX_TREE_NODES);
+                exact = true;
             }
             if(sizeAndDepth[0] >= MAX_TREE_NODES) {
                 logger.info("too many nodes in tree, ending search");
@@ -208,7 +211,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     if (current.getPlayer().scriptFailed) {
                         illegalPurged++;
                         current.getParent().prune(current);
-                        sizeAndDepth = null;
+                        exact = false;
                         continue;
                     }
                     //remove child if node is already in the tree
@@ -222,14 +225,14 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                             validDuplicatesPurged++;
                             current.backpropagate(match.getMeanScore());
                             current.getParent().prune(current);
-                            sizeAndDepth = null;
+                            exact = false;
                             current = null;
                             break;
                         } else {
                             //prune old
                             invalidDuplicatesPurged++;
                             match.getParent().prune(match);
-                            sizeAndDepth = null;
+                            exact = false;
                             match = (MCTSNode2) current.getPlayerScope(current.parent.playerId).getMatchingStateInScope(current.featureGraph, current.parent.playerId);
                         }
                     }

@@ -1696,7 +1696,6 @@ public class ComputerPlayer extends PlayerImpl {
         }
 
         // Battlefield (activated abilities and special actions)
-        Map<String, ActivatedAbility> unique = new HashMap<>();
         List<ActivatedAbility> activatedAll = new ArrayList<>();
         for (Permanent permanent : game.getBattlefield().getAllActivePermanents()) {
             boolean canUseActivated = permanent.canUseActivatedAbilities(game);
@@ -1704,7 +1703,6 @@ public class ComputerPlayer extends PlayerImpl {
             getPlayableFromObjectAll(game, Zone.BATTLEFIELD, permanent, availableMana, current);
             for (ActivatedAbility a : current) {
                 if (a instanceof SpecialAction || canUseActivated) {
-                    unique.putIfAbsent(a.toString(), a);
                     activatedAll.add(a);
                 }
             }
@@ -1714,20 +1712,14 @@ public class ComputerPlayer extends PlayerImpl {
         for (StackObject so : game.getState().getStack()) {
             List<ActivatedAbility> current = new ArrayList<>();
             getPlayableFromObjectAll(game, Zone.STACK, so, availableMana, current);
-            for (ActivatedAbility a : current) {
-                unique.put(a.toString(), a);
-                activatedAll.add(a);
-            }
+            activatedAll.addAll(current);
         }
 
         // Command zone (emblems, commanders)
         for (CommandObject co : game.getState().getCommand()) {
             List<ActivatedAbility> current = new ArrayList<>();
             getPlayableFromObjectAll(game, Zone.COMMAND, co, availableMana, current);
-            for (ActivatedAbility a : current) {
-                unique.put(a.toString(), a);
-                activatedAll.add(a);
-            }
+            activatedAll.addAll(current);
         }
 
         // Keep duplicates (AI often wants all copies)
