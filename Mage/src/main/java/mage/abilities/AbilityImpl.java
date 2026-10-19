@@ -282,7 +282,10 @@ public abstract class AbilityImpl implements Ability {
         if (controller == null) {
             return false;
         }
-        game.applyEffects();
+        // after an MCTS node restore nothing may have happened since effects were applied (see GameImpl.playPriority)
+        if (!game.getState().takeEffectsAppliedForResume()) {
+            game.applyEffects();
+        }
 
         MageObject sourceObject = getSourceObject(game);
         initSourceObjectZoneChangeCounter(game, false);

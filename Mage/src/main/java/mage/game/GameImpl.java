@@ -1921,8 +1921,9 @@ public abstract class GameImpl implements Game {
                             if (!resuming) {
                                 // 603.3. Once an ability has triggered, its controller puts it on the stack as an object that's not a card the next time a player would receive priority
                                 // after an MCTS node restore nothing may have happened since effects were applied
-                                // (any change applies effects, which clears the mark)
-                                if (checkStateAndTriggered() | !state.takeEffectsAppliedForResume()) {
+                                // (any change applies effects, which clears the mark); the mark stays for the
+                                // activation that follows (AbilityImpl.activate)
+                                if (checkStateAndTriggered() || !state.isEffectsAppliedForResume()) {
                                     applyEffects();
                                 }
                                 if (state.getStack().isEmpty()) {
