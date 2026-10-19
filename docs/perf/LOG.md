@@ -725,3 +725,18 @@ found, `SourceId NOT found in LKI`).
 
 GW rerun 3 times (`gate-auto-gw1..3`, 48 games): 2/16, 4/16, 1/16, no NPE, only the baseline
 `missing parent reference`. Open: the cause is not found, and it did not reproduce.
+
+### Gates at `3037a87d` (ability copy-on-access)
+
+Rules tests, the 10 packages most touched by ability copies (`org.mage.test.cards.{abilities,modal,cost,copy,
+continuous,triggers,mana,targets,watchers,control}`), `mvn -B -o test -pl Mage.Tests -am -Dtest=...`:
+- 2653 run.
+- 70 failures and 1 error, identical to the same set at `e5f4a874` (the commit before).
+- The one difference, `LazotepConvertTest.testInvastionAmonkhetTransformed`, fails alone on both builds. Its
+  result depends on test order.
+
+Autotap gate (`GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh autotap gate-auto-cow`): 4/4 pass.
+- Win rates: UB 3/16, 5C 1/16, UR 3/16, GW 3/16, total 10/64.
+- Earlier autotap gates: 10/64 (`gate-ae1`), 14/64 (`gate-cow1`), 22/63 (`gate-auto-fz`). The total is in that
+  range; single cases swing widely at 16 games (5C from 2/16 to 8/16).
+- ERROR/FATAL: only the baseline `missing parent reference` (3 events).
