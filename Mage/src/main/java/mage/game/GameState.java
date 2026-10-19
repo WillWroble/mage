@@ -1943,8 +1943,12 @@ public class GameState implements Serializable, Copyable<GameState> {
         this.effectsAppliedForResume = true;
     }
 
+    public boolean isEffectsAppliedForResume() {
+        return effectsAppliedForResume;
+    }
+
     /**
-     * @return whether effects were applied right before a resume; clears the mark
+     * @return whether effects were applied right before a resume and not since; clears the mark
      */
     public boolean takeEffectsAppliedForResume() {
         boolean applied = effectsAppliedForResume;
