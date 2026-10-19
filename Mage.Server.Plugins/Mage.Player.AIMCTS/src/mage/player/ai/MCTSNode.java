@@ -130,7 +130,7 @@ public class MCTSNode {
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.featureGraph.getStateHash() == state.getStateHash() && stateString.equals(current.stateString)) {
+            if(current.featureGraph.getLabelSum() == state.getLabelSum() && current.featureGraph.getStateHash() == state.getStateHash() && stateString.equals(current.stateString)) {
                 return current;
             }
             queue.addAll(current.children);
@@ -150,7 +150,7 @@ public class MCTSNode {
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.featureGraph.getStateHash() == state.getStateHash()) {
+            if(current.featureGraph.getLabelSum() == state.getLabelSum() && current.featureGraph.getStateHash() == state.getStateHash()) {
                 return current;
             }
             if(current.playerId.equals(scopePlayerId) || current.children.size()==1) {

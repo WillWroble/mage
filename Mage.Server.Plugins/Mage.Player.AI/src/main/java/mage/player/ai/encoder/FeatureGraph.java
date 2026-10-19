@@ -23,6 +23,7 @@ public class FeatureGraph {
         public int value = 0;
         public long hash = -1;
         public long oldHash = -1;
+        final long initialHash; // oldHash before getStateHash's rounds
         public enum Type {
             PLAYER, ZONE, STACK_OBJECT, PERMANENT, CARD, ABILITY, LEAF
         }
@@ -35,6 +36,7 @@ public class FeatureGraph {
             name = n;
             id = i;
             oldHash = i;
+            initialHash = oldHash;
             hash = oldHash;
             children = new HashMap<>();
         }
@@ -43,6 +45,7 @@ public class FeatureGraph {
             id = i;
             value = v;
             oldHash = StateEncoder.mix64(id) ^ value;
+            initialHash = oldHash;
             hash = oldHash;
             children = new HashMap<>();
         }
@@ -50,6 +53,8 @@ public class FeatureGraph {
     private final HashMap<UUID, Node> state;
     private GraphArrays graphArrays = null;
     private long stateHash = -1;
+    private long labelSum;
+    private boolean hasLabelSum = false;
 
     public FeatureGraph() {
         state = new HashMap<UUID, Node>();
@@ -59,6 +64,25 @@ public class FeatureGraph {
         state = new HashMap<UUID, Node>(fg.state);
         graphArrays = fg.graphArrays;
         stateHash = fg.stateHash;
+        labelSum = fg.labelSum;
+        hasLabelSum = fg.hasLabelSum;
+    }
+
+    /**
+     * Cheap summary of the nodes' labels and child counts (the input of getStateHash's first round). Graphs with
+     * different sums differ, so their state hashes differ too, except for a 64-bit hash collision: compare it
+     * first to skip computing getStateHash for most comparisons.
+     */
+    public long getLabelSum() {
+        if (!hasLabelSum) {
+            long sum = 0;
+            for (Node node : state.values()) {
+                sum += StateEncoder.mix64(node.initialHash ^ ((long) node.children.size() << 32));
+            }
+            labelSum = sum;
+            hasLabelSum = true;
+        }
+        return labelSum;
     }
 
     /**
@@ -91,6 +115,7 @@ public class FeatureGraph {
         state.clear();
         state.put(GAME_ROOT_ID, new Node("root", 0, 0));
         stateHash = -1;
+        hasLabelSum = false;
         graphArrays = null;
     }
     public void mixHash() {
