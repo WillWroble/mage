@@ -516,3 +516,51 @@ probe can't resolve changes under about 10%; JFR sample shares can.
 - Manual tap.
 - The bigger applyEffects wins need dirty tracking (rebuild only what changed, like gorge's memoized layers);
   not started.
+
+## 2026-10-19 — Encoder, first pass; manual tap from here on
+
+Manual tap is now the mode for step-to-step comparisons with gorge: `PROBE_MODE=manual docs/perf/probe.sh <run>`.
+
+### Single-core manual-tap step (at `1ddf7dd6`)
+
+`taskset -c 1`, `-Dgate.threads=1 -XX:ActiveProcessorCount=1`, ParallelGC, UB case, 12 minutes, with
+`docs/perf/stepbench.patch` applied (encoder timers):
+
+- 140,464 simulations in 695 s of search, **4.95 ms per simulation** (gorge: ~200 µs per step).
+- Encoder: 218,412 calls, 1.55 per simulation, **812 µs per call**, 1.26 ms per simulation (25%).
+- State hash (`FeatureGraph.getStateHash`, computed once per graph): 128 µs per call.
+
+Simulation counts here come from the cumulative `Total:` lines of every game in the window, including the game
+still running. `summarize.py` counts only finished games: 17,524 simulations, 189 sims/s, for the same run.
+
+### Dedup cost (`getMatchingState`)
+
+JFR, 3-minute UB probes, share of all samples:
+
+| | autotap | manual tap |
+|---|---|---|
+| `getMatchingState` / `getMatchingStateInScope` | 6.2% | 7.4–9.5% |
+| … of which the first computation of the state hash (16-round graph hash, done lazily here) | 5.9% | |
+| … the tree walk itself | 0.2% | |
+| exact-match state string (`GameState.getValue` in `validateState`) | 3.4–3.9% | 5.0–5.5% |
+
+### Changes
+
+| commit | change | measured (JFR, 3-minute manual-tap UB probe) |
+|---|---|---|
+| `1ddf7dd6` | `cleanString` returns the input when it has no `[` or `<`; `addFeature` hashes a name once; `getStateHash` runs its rounds over flat arrays | `cleanString` 3.4% → 1.0%, `getStateHash` 7.8% → 6.6% of samples |
+| `aca0095c` | the encoder looks a permanent's exile-zone id up instead of `getExileZoneId`, which created and stored an id in the game state for every permanent; `AbilitiesImpl.getValue` calls `toString` once per ability | `AbilitiesImpl.getValue` 2.5% → 1.5%, `getExileZoneId` 0.6% → 0 |
+| dropped | `hash64` over the string's chars instead of `getBytes` | slower: 2.5% → 4.5% (the JDK's `getBytes` and `ByteBuffer.getLong` are intrinsics) |
+
+Equality checks: 2M random strings (including non-ASCII) gave identical `cleanString` and `hash64` results; a
+4-minute probe compared 220,000 state hashes against the previous algorithm (0 mismatches); a 4-minute UB/GW
+probe compared both exile-zone lookups on every permanent (0 mismatches, 8,960 real zones found).
+
+### Still in the encoder (man-enc2, share of all samples)
+
+- `SpellAbility`/`ActivatedAbility.canActivate` on a copy of every activated ability ("CanActivate"): ~5% (copy plus check).
+- Ability text (`toString` / `getRule`) for every ability node: ~4%.
+- `Modes.getAvailableModes` (target checks) for every ability: ~2%.
+- Graph bookkeeping (`HashMap` lookups and puts in `addFeature`): ~3–4%.
+- `FeatureMap.addFeature`: 3.5%, because `Mage.Tests/config/config.yml` has `log_feature_hash: true` (research
+  logging; `Mage.MageZero/config/config.yml` has it off). Not changed.
