@@ -2169,6 +2169,10 @@ public abstract class GameImpl implements Game {
 
     @Override
     public synchronized void applyEffects() {
+        // MCTS simulations skip a reapply when no event happened since the last one (real games always apply)
+        if (isMCTSSimulation() && state.isQuietSinceApply()) {
+            return;
+        }
         state.applyEffects(this);
     }
 
