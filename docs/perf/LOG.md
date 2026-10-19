@@ -379,3 +379,76 @@ corpus at the Makefile pin (all 60+60 cards resolve). XMage at `e8263c5e` (this 
   directly, which is why our "skip quiet `applyEffects`" experiment found changes no event announced.
 - **gorge has no feature encoder in the step.** Ours costs about 1.1 ms per call: the whole graph is rebuilt from
   ability text at every decision.
+
+## 2026-10-19 — Copy-on-write for GameState (autotap)
+
+Machine and flags as above: 4 vCPU Xeon @ 2.10 GHz, 15 GiB, JDK 21, ParallelGC, `-Xmx10g`.
+
+### Changes
+
+| commit | change | why |
+|---|---|---|
+| `90a17e4c` | `GameState.lazyCopy`: shares the 21 big components with the source and copies each one on first access. `MCTSNode.validateState` restores from it. | A node snapshot never changes after it is stored, so a restore can share it. On its own this moved nothing (136.9 sims/s): counters showed every restore touches almost every component (`applyEffects` resets players, permanents, triggers, effects). |
+| `cb60606d` | `TriggeredAbilities` copy-on-write per ability: a map owns the abilities it added or copied. A copy shares the source's non-owned abilities. An ability is copied only when a trigger check is about to change it (`checkEventType` passed). A lazy restore shares all of a node's abilities (`copyShared`). | Triggers were 38% of `GameState` copy time. A trigger check is the only place an ability in this map changes (`getTriggers` has three engine callers; `checkEventType` bodies scanned: none mutate). |
+| `cb60606d` | `CopyableRandom`: `java.util.Random`'s exact LCG and gaussian cache, with a direct copy. `RandomUtil.deepCopy` uses it instead of a serialization round trip. | The RNG round trip was 5.7% of copy time. The sequence is identical by construction. |
+| `cb60606d` | `Watcher.copy` caches the constructor and field lookups per class. | It did reflection lookups on every copy. Copy semantics unchanged. |
+| `6bfaeae7` | `GameState.snapshotCopy`: priority snapshots (`MCTSPlayer.priority`) copy permanents without their abilities (`Permanent.copyWithoutAbilities`). | A snapshot is only restored through `lazyCopy` then `applyEffects`, which resets every permanent. Reset rebuilds the abilities from the permanent's card or token, so they are dead weight in a snapshot. Abilities were 79% of permanent copy time. |
+
+### Speed
+
+5-minute UB probe (4 threads): `docs/perf/probe.sh <run>` with `GATE_GC="-XX:+UseParallelGC"`.
+
+| build | sims/s |
+|---|---|
+| `e8263c5e` (before) | 142.4 |
+| `90a17e4c` lazy restore | 136.9 |
+| `cb60606d` + triggers, RNG, watchers | 167.5 |
+| `6bfaeae7` + snapshot copies | 180.8 |
+
+Single core (`taskset -c 1`, `-Dgate.threads=1 -XX:ActiveProcessorCount=1`, UB case, 12 minutes; same setup as
+the gorge comparison): 136 sims/s at `e8263c5e`, 220.0 / 235.8 at `6bfaeae7` (two runs). That is 4.2–4.5 ms per
+simulation, against gorge's ~200 µs step.
+
+Profile share (JFR execution samples, 3-minute probe) of state copying: about 27% at `90a17e4c` (15.3% priority
+snapshot, 10.9% restore), 19% at `cb60606d`. Others at `cb60606d`: `applyEffects` 33%, encoder 22%,
+`getPlayable` 10%.
+
+### Clone cost per call
+
+`docs/perf/copybench.patch` (temporary, `git apply` it for the run): at each game's first priority search on turns
+5–8, 1,000 calls of each after 300 warm-up rounds, `System.nanoTime` and `ThreadMXBean` allocation. Single core,
+same command as above, at `6bfaeae7`. 14 samples, all turn 5 with 4–9 permanents. Median (range):
+
+| call | time | allocated |
+|---|---|---|
+| `GameState.copy()` | 132 µs (113–705) | 424 KB |
+| `snapshotCopy()` (priority snapshot) | 128 µs (113–614) | 397 KB |
+| `lazyCopy()` + first access of every component (restore) | 58 µs (51–144) | 190 KB |
+| gorge `Engine.Clone`, turns 5–8, GC on (from the comparison above) | 65–74 µs | 210 KB |
+
+Before this work `GameState.copy()` was 155–510 µs. The outliers are GC pauses inside the timed loop.
+
+### Correctness
+
+- Full gate at `6bfaeae7` (`GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh autotap gate-cow1`): 4/4 pass,
+  36 min wall time (56 for batch 2).
+
+  | case | win rate | sims/s |
+  |---|---|---|
+  | UB | 1/16 | 180.6 |
+  | 5C | 2/16 | 171.0 |
+  | UR | 8/16 | 196.8 |
+  | GW | 3/16 | 171.3 |
+  | all | 14/64 (21.9%); baseline 11/63 and 22/64, batch 2 19/64 | **178.6** (batch 2: 139.2) |
+
+  ERROR/FATAL: 3 × `StateEncoder.addFeature: missing parent reference`, the baseline's kind and count. No new
+  kinds. No search hit the 300 s cap.
+- Mage.Tests at `6bfaeae7` (`docs/perf/run-junit.sh`): 157 failures + 3 errors. Every failing test also failed in
+  at least one earlier baseline run (harness runs h1 / h2, batch 2). `DoublingSeasonTest...PirFirst` is outside
+  the union of h1 / h2 / batch 2 but failed in 5 earlier runs. No new failures.
+
+### Not tested
+
+- Manual tap.
+- Win rate is one 64-game run; 16-game cases are too small to see a per-deck shift.
+- The commander and minimax cases.
