@@ -330,6 +330,7 @@ public class MCTSNode {
         rootGame.resetLKI();
         rootGame.resetShortLivingLKI();
         rootGame.applyEffects(); // rebuild layers/CEs
+        rootGame.getState().setEffectsAppliedForResume(); // so the resumed priority loop doesn't apply them again
         //for sanity
         for (Player p : rootGame.getPlayers().values()) {
             MCTSPlayer mp = (MCTSPlayer) p;
