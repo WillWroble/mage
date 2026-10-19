@@ -564,3 +564,66 @@ probe compared both exile-zone lookups on every permanent (0 mismatches, 8,960 r
 - Graph bookkeeping (`HashMap` lookups and puts in `addFeature`): ~3–4%.
 - `FeatureMap.addFeature`: 3.5%, because `Mage.Tests/config/config.yml` has `log_feature_hash: true` (research
   logging; `Mage.MageZero/config/config.yml` has it off). Not changed.
+
+## 2026-10-19 — Overnight: manual-tap step (encoder excluded)
+
+All measurements in manual tap. Commits, in order:
+
+| commit | change | evidence |
+|---|---|---|
+| `ae3c4df1` | manual-tap playable calc (`ComputerPlayer.getPlayableAbilities`) runs in place on MCTS working games instead of copying the whole game; incremental tree size/depth limits; graph nodes keep child references for the state hash | JFR: playable calc 14.4% → 7.6% of samples, its game copy 6.0% → 0.1%; 300,000 incremental tree counts and 300,000 state hashes matched the old code |
+| `29bcc5f55` | MCTS resumes skip the pre-priority `applyEffects` when nothing changed since the restore | JFR: other `applyEffects` 17.7% → 13.0% |
+| `b72a13e1` | snapshots also leave out temporary effects and gained triggers (rebuilt by the restore's `applyEffects`) | 300,000 restores compared full vs reduced snapshot after `applyEffects`: identical except one regenerated random ability id (12,169 cases) |
+| `683bf0e4` | tree limits from upper bounds (no walk after prunes); unused rule-text map in the playable calc removed | |
+| `5bfb9ce6` | dedup compares a cheap label sum before the state hash | 29.4M comparisons, same results as the hash alone; `getStateHash` 4.8% → 2.4% |
+| `41e8d91a` | MCTS resumes also skip the activation's `applyEffects` right after the restore | JFR: other `applyEffects` 14.6% → 10.0% |
+
+
+The two `applyEffects` skips extend the call-sequence change Will approved for `13b10b66` (a restored node now
+applies effects once before its decision, as the original game did).
+
+### Single-core step, encoder excluded
+
+`taskset -c 1`, `-Dgate.threads=1 -XX:ActiveProcessorCount=1`, ParallelGC, UB case, 12 minutes,
+`docs/perf/stepbench.patch` applied. One validation (restore, run to the next decision, encode) is the unit
+comparable to gorge's step (clone, submit, run to the next choice): pruned duplicates and failed scripts are
+validations that do not count as simulations.
+
+| build | µs per validation without encoder | encoder µs per call | ratio |
+|---|---|---|---|
+| `aca0095c` (start of the night), run 1 | 2026 | 823 | 2.46 |
+| `aca0095c`, run 2 | 2333 | 951 | 2.45 |
+| `41e8d91a`, run 1 | 2100 | 1063 | 1.98 |
+| `41e8d91a`, run 2 | 1924 | 1035 | 1.86 |
+
+Each run plays different games, and the cost per step moves with the board: the encoder, whose code did not
+change, ranges from 812 to 1063 µs per call. Normalized by the encoder cost, the non-encoder part dropped by
+about 22%. In absolute terms it is about **1.9–2.1 ms per step, about 10× gorge's ~200 µs**. The 1 ms target
+was not reached.
+
+### Manual-tap gate at `41e8d91a`
+
+`GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh manual gate-man1` (GW ran separately as `gate-man1-gw`
+after the first run hit the 2-hour task limit):
+
+| case | win rate | sims/s |
+|---|---|---|
+| UB | 3/16 | 238.9 |
+| 5C | 1/16 | 231.2 |
+| UR | 6/16 | 234.3 |
+| GW | 4/16 | 211.3 |
+| all | 14/64 | |
+
+4/4 pass. There is no manual-tap baseline, so win rates have nothing to compare against. ERROR lines: the
+baseline's `missing parent reference` kind, plus 2 events (UR, one game) of a kind never seen in autotap runs:
+`MageObjectReference`: a stack ability's source is not found, not even in LKI. Hypothesis, not verified:
+`MCTSNode.resetRootGame` clears LKI on every restore, so a node restored with such an ability on the stack
+can't find its source; manual tap stops at more mid-stack points.
+
+### What is left, without the encoder (JFR at `41e8d91a`, share of the non-encoder step)
+
+restore 24% (its `applyEffects` plus copying components out of the snapshot), other `applyEffects` 17%, playable
+calc 14%, priority snapshot copy 10%, exact-match state string for dedup 7.5%, state hash 5%. Under 1 ms
+needs structural changes, each a design decision: drop the restore's `applyEffects` (snapshots would have to
+keep everything again), match dedup on the hash alone instead of the state string, and dirty tracking in
+`applyEffects`.
