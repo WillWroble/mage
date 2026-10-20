@@ -740,3 +740,25 @@ Autotap gate (`GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh autotap gate-a
 - Earlier autotap gates: 10/64 (`gate-ae1`), 14/64 (`gate-cow1`), 22/63 (`gate-auto-fz`). The total is in that
   range; single cases swing widely at 16 games (5C from 2/16 to 8/16).
 - ERROR/FATAL: only the baseline `missing parent reference` (3 events).
+
+Manual-tap gate at `3037a87d`. Command: `GATE_GC="-XX:+UseParallelGC" docs/perf/run-gate.sh manual gate-man-cow`
+with `GATE_DECKS=UB,5C,UR`, then GW alone as `gate-man-cow-gw`, to stay under the 2-hour task limit. 4/4 pass.
+
+| case | win rate | sims/s | at `41e8d91a` |
+|---|---|---|---|
+| UB | 2/16 | 320.2 | 3/16, 238.9 |
+| 5C | 2/16 | 326.0 | 1/16, 231.2 |
+| UR | 5/16 | 428.8 | 6/16, 234.3 |
+| GW | 3/16 | 284.4 | 4/16, 211.3 |
+| all | 12/64 | | 14/64 |
+
+ERROR lines:
+- UB, 5C, GW: only the baseline `missing parent reference`.
+- UR: 42 events of the `MageObjectReference` kind (source not found, not even in LKI), against 2 at `41e8d91a`.
+  All 42 are on one thread within about a minute: one position (Opt and a Prowess trigger on the stack), whose
+  restore fails once per simulation of that search.
+- UR rerun at HEAD (`ur-head`): 16 games, 8/16, 0 events. The run at `e5f4a874` for comparison had its fork
+  crash, so it gave no number.
+
+The kind is rare and pre-existing. It reproduces neither here nor in the UR rerun; whether copy-on-access changes
+how often it happens is not measured. Open, with the hypothesis that `resetRootGame` clears LKI on every restore.
