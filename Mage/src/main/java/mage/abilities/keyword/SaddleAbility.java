@@ -173,7 +173,8 @@ class SaddleCost extends CostImpl {
     @Override
     public boolean canPay(Ability ability, Ability source, UUID controllerId, Game game) {
         int sumPower = 0;
-        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(filter, controllerId, game)) {
+        // with source, so the filter's "another" leaves out the Mount itself (as the payment's target does)
+        for (Permanent permanent : game.getBattlefield().getActivePermanents(filter, controllerId, source, game)) {
             sumPower += Math.max(getSaddlePower(permanent, game), 0);
             if (sumPower >= value) {
                 return true;

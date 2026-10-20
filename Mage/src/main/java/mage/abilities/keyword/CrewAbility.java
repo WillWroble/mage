@@ -194,7 +194,8 @@ class CrewCost extends CostImpl {
             return true;
         }
         int sumPower = 0;
-        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(filter, controllerId, game)) {
+        // with source, so the filter's "another" leaves out the Vehicle itself (as the payment's target does)
+        for (Permanent permanent : game.getBattlefield().getActivePermanents(filter, controllerId, source, game)) {
             int powerToAdd = getCrewPower(permanent, game);
 
             if (powerToAdd > 0) {
