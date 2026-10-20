@@ -762,3 +762,33 @@ ERROR lines:
 
 The kind is rare and pre-existing. It reproduces neither here nor in the UR rerun; whether copy-on-access changes
 how often it happens is not measured. Open, with the hypothesis that `resetRootGame` clears LKI on every restore.
+
+## 2026-10-20 — Full gate (DECK_POOL + commander), against `cfbfb733`
+
+`docs/perf/run-full-gate.sh autotap|manual <prefix>`: `MCTSDeckValidationTest#fullGate` (the 16 `DECK_POOL` decks
+against Standard-MonoB) and `#fullGateCommander` (Commander-MonoG), 16 games each, one case per JVM, resumable.
+
+Baselines run from a `cfbfb733` worktree with only the gate harness overlaid: this test file, `config.yml`
+(search budget 300) and `docs/perf` scripts. `cfbfb733` already dealt opening hands in MageZero games (the static
+`drawHand`), so the `drawHandInTestMode` option at HEAD changes nothing for these games.
+
+Machine notes:
+- One gate JVM at a time: two 10 GB test forks exceed the 16 GB cgroup, and the OOM killer ends one.
+- A fresh worktree compiles Mage.Sets inside the gate's Maven JVM, which stays resident during the test, so
+  precompile it (`mvn -o test-compile -pl Mage.Tests -am`) and run with `MAVEN_OPTS=-Xmx1500m`.
+
+### Finding (pre-existing): Crew replays that always fail (Standard16-RB)
+
+In RB games, the playable calc offers Crew 3 while a land's "{4}: becomes a 3/3 creature" ability is on the stack.
+Every scripted replay of that Crew activation fails (`INVALID SCRIPT AT: Crew 3`). The failed simulations add no
+visits, so the search retries until the 300 s cap, and some games run past the 60-minute game timeout. A
+timed-out game is cancelled but still counted as played, so the case passes with 15 decided games.
+
+| build | INVALID SCRIPT (Crew) | searches at the 300 s cap | game timeouts | win rate |
+|---|---|---|---|---|
+| `cfbfb733` | 3703 (3276) | 9 | 1 | 5/15 |
+| `e5f4a874` | 4125 (3657) | 7 | 0 | 3/16 |
+| `3037a87d` (HEAD) | 3157 (2765) | 6 | 1 | 4/15 |
+
+Present at `cfbfb733`, so not caused by this branch. Not fixed: the fix belongs in the playable check or the
+search's handling of always-failing actions, which is a design decision.
