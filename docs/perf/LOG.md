@@ -810,3 +810,36 @@ Neither `getValue` nor `getValueHash` covers the command zone, so commander posi
 
 The same crash types appear at `cfbfb733`, so this is not caused by this branch. Fixing it (command zone in the state
 value, or checking the chosen action against the real game) is a design decision.
+
+### Fixes for the Crew and commander findings (`d7dd1ded`, `c4ab1f5d`, `4c3fa373`)
+
+Debug logging on the RB case (`crewdbg`, `crewdbg2`, temporary) showed two causes for the failed Crew replays:
+1. **Stop Choosing as the first choice.** For Crew's "any number of creatures" target, the minimum (0) is met before
+   any choice, so the tree offers Stop Choosing. Both MCTS players then returned
+   `isChosen && !targets.isEmpty()`, false with no targets, so the payment failed. Stop Choosing was also never
+   written to the player history, so a node's prefix script lacked it and replays reached the same choice again
+   with an empty script. The Commander crash `failed to activate chosen ability: Cast Kamahl's Will` is the same
+   bug in the real game: "any number of target lands", Stop Choosing first.
+2. **Crew offered with nothing to crew with.** `CrewCost.canPay` matched creatures without the source, so
+   `AnotherPredicate` was skipped and a Vehicle that is a creature counted itself. `SaddleCost.canPay` had the same
+   bug. Upstream XMage bug.
+
+Fixes:
+- `d7dd1ded`: Crew and Saddle `canPay` match with the source, like their payment. Rules tests: Crew-related 25 pass,
+  Saddle and Crew 18 pass.
+- `c4ab1f5d`: Stop Choosing returns `isChosen` and is recorded in the history, in `MCTSPlayer` and
+  `ComputerPlayerMCTS`.
+- `4c3fa373`: `getValue(game, playerId)` and `getValueHash` add the command zone's objects and each commander's
+  cast count and commander damage (`getCommandValue`).
+
+| case (autotap, HEAD) | before the fixes | with the fixes |
+|---|---|---|
+| RB: INVALID SCRIPT (Crew) | 3157 (2765) | 987 (584) |
+| RB: searches at the 300 s cap / game timeouts | 6 / 1 | 0 / 0 |
+| RB: "gameplay loop found" warnings | 3516 | 332 |
+| RB: games decided, win rate | 15, 4/15 | 16, 4/16 |
+| Commander: games lost to crashes | 3 and 0 (two runs) | 0 (one run, 7/16) |
+
+The remaining Crew failures are, on my reading, the search trying creature subsets with too little power, each
+pruned as illegal; not checked in the logs. The full gate's HEAD stages are rerun with these fixes (`fix-auto-*`,
+`full-man-*`).
