@@ -205,13 +205,16 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         if (!actionScript.targetSequence.isEmpty()) {
             UUID choice = actionScript.targetSequence.pollFirst();
-            if(!choice.equals(STOP_CHOOSING)) {
-                target.addTarget(choice, source, game);
-                if(target.contains(choice)) {
-                    //choose another?
-                    getPlayerHistory().targetSequence.add(choice);
-                    makeChoice(outcome, target, source, game, fromCards);
-                }
+            if(choice.equals(STOP_CHOOSING)) {
+                //stop is a decision too: keep it in the history so replays of later nodes stop here as well
+                getPlayerHistory().targetSequence.add(choice);
+                return target.isChosen(game); //no more targets: fine once the minimum is met (also with none)
+            }
+            target.addTarget(choice, source, game);
+            if(target.contains(choice)) {
+                //choose another?
+                getPlayerHistory().targetSequence.add(choice);
+                makeChoice(outcome, target, source, game, fromCards);
             }
             return target.isChosen(game) && !target.getTargets().isEmpty();
         }

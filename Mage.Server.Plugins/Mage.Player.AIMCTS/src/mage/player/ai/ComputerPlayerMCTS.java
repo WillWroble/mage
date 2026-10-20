@@ -255,12 +255,15 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         }
         logger.info(String.format("Targeting %s", game.getEntityName(targetId)));
 
-        if(!targetId.equals(STOP_CHOOSING)) {
-            target.addTarget(targetId, source, game);
-            if(target.contains(targetId)) {
-                getPlayerHistory().targetSequence.add(targetId);
-                makeChoice(outcome, target, source, game, fromCards);
-            }
+        if(targetId.equals(STOP_CHOOSING)) {
+            //stop is a decision too: keep it in the history so the next search's prefix stops here as well
+            getPlayerHistory().targetSequence.add(targetId);
+            return target.isChosen(game); //no more targets: fine once the minimum is met (also with none)
+        }
+        target.addTarget(targetId, source, game);
+        if(target.contains(targetId)) {
+            getPlayerHistory().targetSequence.add(targetId);
+            makeChoice(outcome, target, source, game, fromCards);
         }
 
         return target.isChosen(game) && !target.getTargets().isEmpty();
