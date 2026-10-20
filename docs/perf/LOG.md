@@ -792,3 +792,21 @@ timed-out game is cancelled but still counted as played, so the case passes with
 
 Present at `cfbfb733`, so not caused by this branch. Not fixed: the fix belongs in the playable check or the
 search's handling of always-failing actions, which is a design decision.
+
+### Finding (pre-existing): Commander games crash on a tree action that doesn't fit the real game
+
+In the real game (not a simulation), `ComputerPlayerMCTS` acts on the matched tree node. Three crash types appear,
+all meaning the chosen node doesn't fit the real state:
+- `failed to activate chosen ability`;
+- `ability` null in `priority`;
+- `useAction` null in `chooseUse` (the node is not a use decision).
+
+Neither `getValue` nor `getValueHash` covers the command zone, so commander positions can match falsely in both.
+
+| build | runs | games lost to crashes |
+|---|---|---|
+| HEAD | `full-auto-Commander-MonoG`, `full-auto2-…` | 3 + 0 (the rerun also had 1 game timeout) |
+| `cfbfb733` | `base-auto-Commander-MonoG`, `base-auto2-…` | 1 + at least 2 (the second run was cut short by the task time limit) |
+
+The same crash types appear at `cfbfb733`, so this is not caused by this branch. Fixing it (command zone in the state
+value, or checking the chosen action against the real game) is a design decision.
