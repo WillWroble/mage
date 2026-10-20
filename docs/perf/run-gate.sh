@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fast gate: MCTSDeckValidationTest#fastGate in one tapping mode. Log (and optional JFR) go to OUT_DIR.
 #   docs/perf/run-gate.sh autotap|manual <run name> [jfr]
-# GATE_DECKS=UB (comma-separated) runs only those cases; default all four
+# GATE_TEST='fullGate*' runs the full gate instead (DECK_POOL and the commander case)
+# GATE_DECKS=UB (comma-separated) runs only those cases; default all
 # GATE_GC replaces the GC flags (default ZGC); GATE_JVM_EXTRA / GATE_MVN_EXTRA add test-JVM flags / Maven arguments (e.g. a profiler on the test classpath)
 set -euo pipefail
 MODE=$1 RUN=$2 JFR=${3:-}
@@ -26,5 +27,5 @@ fi
 
 # Mage.MageZero skips install, so Mage.Tests runs inside the reactor
 cd "$ROOT"
-mvn -B test -pl Mage.Tests -am -Dtest='MCTSDeckValidationTest#fastGate' -Dsurefire.failIfNoSpecifiedTests=false \
+mvn -B test -pl Mage.Tests -am -Dtest="MCTSDeckValidationTest#${GATE_TEST:-fastGate}" -Dsurefire.failIfNoSpecifiedTests=false \
   ${GATE_MVN_EXTRA:-} -DargLine="$JVM" 2>&1 | tee "$OUT_DIR/$RUN.mvn.log"

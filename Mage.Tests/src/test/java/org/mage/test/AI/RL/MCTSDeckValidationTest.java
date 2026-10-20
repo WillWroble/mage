@@ -79,9 +79,18 @@ public class MCTSDeckValidationTest {
             "decks/Standard16-GW.dck"
     };
     static Stream<String> fastGateDeckPool() {
+        return gateDecks(FAST_GATE_DECK_POOL);
+    }
+    static Stream<String> fullGateDeckPool() {
+        return gateDecks(DECK_POOL);
+    }
+    static Stream<String> fullGateCommanderDeckPool() {
+        return gateDecks(COMMANDER_DECK_POOL);
+    }
+    private static Stream<String> gateDecks(String[] pool) {
         // -Dgate.decks=UB,GW runs only those cases (matched against the deck name), default all
         String only = System.getProperty("gate.decks", "");
-        return Arrays.stream(FAST_GATE_DECK_POOL)
+        return Arrays.stream(pool)
                 .filter(deck -> only.isEmpty() || Arrays.stream(only.split(",")).anyMatch(deck::contains));
     }
     static Stream<String> deckPool() {
@@ -132,6 +141,16 @@ public class MCTSDeckValidationTest {
     @MethodSource("fastGateDeckPool")
     public void fastGate(String testDeck) {
         testDeckAgainstMCTS(testDeck);
+    }
+    @ParameterizedTest
+    @MethodSource("fullGateDeckPool")
+    public void fullGate(String testDeck) {
+        testDeckAgainstMCTS(testDeck);
+    }
+    @ParameterizedTest
+    @MethodSource("fullGateCommanderDeckPool")
+    public void fullGateCommander(String testDeck) {
+        testCommanderDeckAgainstMCTS(testDeck);
     }
     @ParameterizedTest
     @MethodSource("commanderDeckPool")
