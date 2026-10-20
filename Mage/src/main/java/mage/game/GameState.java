@@ -7,6 +7,7 @@ import mage.abilities.effects.ContinuousEffect;
 import mage.abilities.effects.ContinuousEffects;
 import mage.abilities.effects.Effect;
 import mage.cards.*;
+import mage.constants.CommanderCardType;
 import mage.constants.PhaseStep;
 import mage.constants.TurnPhase;
 import mage.constants.Zone;
@@ -40,6 +41,8 @@ import mage.util.RandomUtil;
 import mage.util.ThreadLocalStringBuilder;
 import mage.util.ValueHash;
 import mage.watchers.Watcher;
+import mage.watchers.common.CommanderInfoWatcher;
+import mage.watchers.common.CommanderPlaysCountWatcher;
 import mage.watchers.Watchers;
 import org.apache.log4j.Logger;
 
@@ -699,6 +702,32 @@ public class GameState implements Serializable, Copyable<GameState> {
             sb.append(group.getDefenderId()).append(group.getAttackers()).append(group.getBlockers());
         }
 
+        sb.append(getCommandValue(game));
+        return sb.toString();
+    }
+
+    /**
+     * Command zone part of getValue(game, playerId): the command zone's objects, and each commander's cast count
+     * (tax) and damage dealt to each player. Empty in games without command zone objects or commanders.
+     */
+    private String getCommandValue(Game game) {
+        StringBuilder sb = new StringBuilder();
+        for (CommandObject commandObject : command()) {
+            sb.append("command").append(commandObject.getId()).append(commandObject.getName()).append(commandObject.getControllerId());
+        }
+        CommanderPlaysCountWatcher playsWatcher = getWatcher(CommanderPlaysCountWatcher.class);
+        for (Player player : players().values()) {
+            for (UUID commanderId : new TreeSet<>(game.getCommandersIds(player, CommanderCardType.COMMANDER_OR_OATHBREAKER, false))) {
+                sb.append("commander").append(commanderId);
+                if (playsWatcher != null) {
+                    sb.append(playsWatcher.getPlaysCount(commanderId));
+                }
+                CommanderInfoWatcher damageWatcher = getWatcher(CommanderInfoWatcher.class, commanderId);
+                if (damageWatcher != null) {
+                    sb.append(new TreeMap<>(damageWatcher.getDamageToPlayer()));
+                }
+            }
+        }
         return sb.toString();
     }
 
@@ -757,6 +786,7 @@ public class GameState implements Serializable, Copyable<GameState> {
         for (CombatGroup group : combat().getGroups()) {
             h.add(group.getDefenderId()).add(group.getAttackers()).add(group.getBlockers());
         }
+        h.add(getCommandValue(game));
         return h.get();
     }
 
