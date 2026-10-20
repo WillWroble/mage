@@ -843,3 +843,52 @@ Fixes:
 The remaining Crew failures are, on my reading, the search trying creature subsets with too little power, each
 pruned as illegal; not checked in the logs. The full gate's HEAD stages are rerun with these fixes (`fix-auto-*`,
 `full-man-*`).
+
+### Full gate, autotap: HEAD with the fixes (`4c3fa373`, `fix-auto-*`) vs `cfbfb733` (`base-auto-*`)
+
+`docs/perf/compare-full-gate.py docs/perf/runs/fix-auto /home/user/mage-base/docs/perf/runs/base-auto`; ParallelGC, `MAVEN_OPTS=-Xmx1500m`, 4 game threads.
+
+| case | HEAD wins | base wins | HEAD crashes/timeouts | base crashes/timeouts |
+|---|---|---|---|---|
+| Standard16-UB | 6/16 | 3/16 | 0/0 | 0/0 |
+| Standard-MonoB | 11/16 | 10/16 | 0/0 | 0/0 |
+| Standard-MonoG | 9/16 | 9/16 | 0/0 | 0/0 |
+| Standard-MonoR | 9/16 | 11/16 | 0/0 | 0/0 |
+| Standard-MonoU | 3/16 | 1/16 | 0/0 | 0/0 |
+| Standard-MonoW | 7/16 | 8/16 | 0/0 | 0/0 |
+| Standard16-5C | 3/16 | 5/16 | 0/0 | 0/0 |
+| Standard16-BW | 7/16 | 5/16 | 0/0 | 0/0 |
+| Standard16-GB | 7/16 | 6/16 | 0/0 | 0/0 |
+| Standard16-GW | 9/16 | 2/16 | 0/0 | 0/0 |
+| Standard16-RB | 5/16 | 5/15 | 0/0 | 0/1 |
+| Standard16-RG | 6/16 | 9/16 | 0/0 | 0/0 |
+| Standard16-RW | 7/16 | 4/16 | 0/0 | 0/0 |
+| Standard16-UG | 2/16 | 5/16 | 0/0 | 0/0 |
+| Standard16-UR | 6/16 | 9/16 | 0/0 | 0/0 |
+| Standard16-UW | 4/16 | 3/16 | 0/0 | 0/0 |
+| Commander-MonoG | 9/16 | 6/15 | 0/0 | 1/0 |
+| all | 110/272 | 101/270 | | |
+
+| ERROR/FATAL kind | HEAD | base |
+|---|---|---|
+| StackObject: <id> sourceId <id> name stack ability (Prowess <i>(Whenever you cast a noncreature spell, this cr | 0 | 17 |
+| The provided sourceId is not connected to an object in the game id: <id> | 0 | 17 |
+| SourceId NOT found in LKI | 0 | 17 |
+| target id is null | 1 | 4 |
+| StackObject: <id> sourceId <id> name Burst Lightning | 0 | 5 |
+| missing parent reference for | 4 | 1 |
+| Game error: <id> - !!!NOT GAME THREAD!!! Commander Two Player Duel; TN.MN; active: PlayerA; stack: N | 0 | 1 |
+| Game timed out after N minutes, cancelling. | 0 | 1 |
+| Game end on critical error: mage.MageException: Error in unit tests | 0 | 1 |
+| Caught an internal AI/Game exception in a worker thread. Ignoring this game. Cause: Error in unit tests | 0 | 1 |
+| A game simulation failed and its result will be ignored. Cause: java.util.concurrent.ExecutionException: Worke | 0 | 1 |
+
+- HEAD passes 17/17 cases with 16 decided games each. The baseline fails Commander-MonoG (one crash, 15/16), and
+  RB passes with 15 decided games (one game timeout).
+- HEAD has no crash, timeout or `MageObjectReference` kind. The baseline shows that kind (17 per message, one
+  position) on its own, so it was pre-existing. `missing parent reference` (HEAD 4, base 1) is the known baseline
+  kind; `target id is null` dropped from 4 to 1.
+- Win rate overall: 110/272 vs 101/270, within noise.
+- GW is the outlier: 9/16 at HEAD vs 2/16 at the baseline, and earlier HEAD runs before the fixes had 1–4/16.
+  It comes from the fixes, most plausibly the Stop Choosing fix (the deck has "any number"/"up to" target cards).
+  That is an AI behaviour change from a requested bug fix, not a rules change. Not verified card by card.
