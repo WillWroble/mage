@@ -35,7 +35,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Pauper-CawGates.txt
+  deckPath: decks/Pauper-Spy.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 

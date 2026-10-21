@@ -261,9 +261,11 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
                 getPlayerHistory().targetSequence.add(targetId);
                 makeChoice(outcome, target, source, game, fromCards);
             }
+        } else {
+            getPlayerHistory().targetSequence.add(STOP_CHOOSING);
         }
 
-        return target.isChosen(game) && !target.getTargets().isEmpty();
+        return target.isChosen(game);
 
     }
     @Override

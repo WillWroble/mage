@@ -494,3 +494,16 @@ WR with Pauper-Faeries vs Pauper-Wildfire: 0.6881720430107527 in 93 games
 WR with Pauper-Faeries vs Pauper-Affinity: 0.48 in 100 games
 WR with Pauper-Faeries vs Pauper-Affinity: 0.55 in 100 games
 WR with Pauper-Faeries vs Pauper-Burn: 0.24489795918367346 in 98 games
+WR with Pauper-Faeries vs Pauper-CawGates: 0.6836734693877551 in 98 games
+WR with Pauper-Faeries vs Pauper-Elves: 0.8641975308641975 in 81 games
+WR with Pauper-Faeries vs Pauper-Faeries: 0.63 in 100 games
+WR with Pauper-Faeries vs Pauper-Rally: 0.22916666666666666 in 96 games
+WR with Pauper-Faeries vs Pauper-Spy: 0.6185567010309279 in 97 games
+WR with Pauper-Faeries vs Pauper-Wildfire: 0.4897959183673469 in 98 games
+WR with Pauper-Faeries vs Pauper-Affinity: 0.57 in 100 games
+WR with Pauper-Faeries vs Pauper-Burn: 0.2553191489361702 in 94 games
+WR with Pauper-Faeries vs Pauper-CawGates: 0.711340206185567 in 97 games
+WR with Pauper-Faeries vs Pauper-Elves: 0.7816091954022989 in 87 games
+WR with Pauper-Faeries vs Pauper-Faeries: 0.6666666666666666 in 96 games
+WR with Pauper-Faeries vs Pauper-Rally: 0.2727272727272727 in 99 games
+WR with Pauper-Faeries vs Pauper-Spy: 0.5979381443298969 in 97 games

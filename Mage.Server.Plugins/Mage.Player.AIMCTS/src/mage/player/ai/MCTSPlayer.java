@@ -205,8 +205,10 @@ public class MCTSPlayer extends ComputerPlayer {
                     getPlayerHistory().targetSequence.add(choice);
                     makeChoice(outcome, target, source, game, fromCards);
                 }
+            } else {
+                getPlayerHistory().targetSequence.add(STOP_CHOOSING);
             }
-            return target.isChosen(game) && !target.getTargets().isEmpty();
+            return target.isChosen(game);
         }
         if(possible.size()==1) {
             //if only one possible just choose it and leave
