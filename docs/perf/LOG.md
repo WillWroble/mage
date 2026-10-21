@@ -892,3 +892,43 @@ pruned as illegal; not checked in the logs. The full gate's HEAD stages are reru
 - GW is the outlier: 9/16 at HEAD vs 2/16 at the baseline, and earlier HEAD runs before the fixes had 1–4/16.
   It comes from the fixes, most plausibly the Stop Choosing fix (the deck has "any number"/"up to" target cards).
   That is an AI behaviour change from a requested bug fix, not a rules change. Not verified card by card.
+
+### Full gate, manual tap: HEAD (`4c3fa373`, `full-man-*`) vs `cfbfb733` (`base-man-*`, 7 of 17 cases)
+
+`docs/perf/compare-full-gate.py docs/perf/runs/full-man /home/user/mage-base/docs/perf/runs/base-man`
+
+| case | HEAD wins | base wins | HEAD crashes/timeouts | base crashes/timeouts |
+|---|---|---|---|---|
+| Standard16-UB | 7/16 | 3/16 | 0/0 | 0/0 |
+| Standard-MonoB | 11/16 | 7/16 | 0/0 | 0/0 |
+| Standard-MonoG | 11/16 | 8/16 | 0/0 | 0/0 |
+| Standard-MonoR | 7/16 | 13/16 | 0/0 | 0/0 |
+| Standard-MonoU | 3/16 | 6/16 | 0/0 | 0/0 |
+| Standard-MonoW | 8/16 | 3/15 | 0/0 | 0/1 |
+| Standard16-5C | 2/16 | 2/14 | 0/0 | 0/2 |
+| Standard16-BW | 11/16 | n/a | 0/0 | n/a |
+| Standard16-GB | 5/16 | n/a | 0/0 | n/a |
+| Standard16-GW | 5/16 | n/a | 0/0 | n/a |
+| Standard16-RB | 1/16 | n/a | 0/0 | n/a |
+| Standard16-RG | 8/16 | n/a | 0/0 | n/a |
+| Standard16-RW | 12/16 | n/a | 0/0 | n/a |
+| Standard16-UG | 1/16 | n/a | 0/0 | n/a |
+| Standard16-UR | 3/16 | n/a | 0/0 | n/a |
+| Standard16-UW | 0/16 | n/a | 0/0 | n/a |
+| Commander-MonoG | 9/16 | n/a | 0/0 | n/a |
+| all | 104/272 | 42/109 | | |
+
+| ERROR/FATAL kind | HEAD | base |
+|---|---|---|
+| Game timed out after N minutes, cancelling. | 0 | 3 |
+| Caught an internal AI/Game exception in a worker thread. Ignoring this game. Cause: Cannot invoke "mage.player | 0 | 1 |
+| missing parent reference for | 1 | 0 |
+
+- HEAD passes 17/17 manual-tap cases with 16 decided games each, no crash or game timeout, one baseline-kind
+  `missing parent reference` line.
+- The baseline finished 7 cases. They have 3 game timeouts (MonoW 1, 5C 2) and one game lost to an exception in a
+  worker thread (`Caught an internal AI/Game exception ... Cannot invoke "mage.player...`).
+- Win rate on the 7 cases both finished: HEAD 49/112, baseline 42/109, within noise.
+- **Not done:** the baseline's other 10 manual cases. Baseline manual cases take 1–2+ hours each, and the
+  container restarted repeatedly while the session was idle (6 restarts on 2026-10-21), each one killing the running
+  case. BW was lost three times, once on its last game. Running the rest needs a machine without these restarts.
