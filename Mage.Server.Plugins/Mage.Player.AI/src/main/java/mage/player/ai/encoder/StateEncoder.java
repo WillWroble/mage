@@ -298,7 +298,7 @@ public class StateEncoder {
             processAbility(sa, game, sa.getId());
         }
         //activated abilities
-        for(ActivatedAbility aa : allAbilities.getActivatedAbilities(z)) {
+        for(ActivatedAbility aa : allAbilities.getPlayableAbilities(z)) {
             addNode(FeatureGraph.Node.Type.ABILITY, cleanString(aa.toString()), aa.getId(), parentId);
             processActivatedAbility(aa, game, aa.getId());
         }
@@ -510,7 +510,7 @@ public class StateEncoder {
         int i = 0;
         //current targets selected for when it's in the middle selecting multiple targets
         for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
-            processTarget(targetID, game, playerId, parentId, "TARGET@"+i);
+            processTarget(targetID, game, playerId, parentId, "TARGET");
             i++;
         }
         //current choices selected for when it's in the middle selecting multiple choices
