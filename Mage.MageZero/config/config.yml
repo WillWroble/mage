@@ -23,7 +23,7 @@ player_a:
     search_budget: 300
     timeout_ms: 60000
     td_discount: 0.92
-    offline_mode: false
+    offline_mode: true
     prune_duplicate_states: true
 
   gameplay:
@@ -35,7 +35,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Pauper-Spy.txt
+  deckPath: decks/Pauper-Wildfire.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -68,7 +68,7 @@ player_b:
 
 training:
   games: 100
-  threads: 8
+  threads: 4
   max_turns: 50 #does nothing
   max_minutes: 60
 

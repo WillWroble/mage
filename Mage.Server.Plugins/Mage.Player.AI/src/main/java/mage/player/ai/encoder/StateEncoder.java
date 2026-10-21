@@ -348,7 +348,7 @@ public class StateEncoder {
             addNode(FeatureGraph.Node.Type.STACK_OBJECT, cleanString(game.getStack().getStackObject(target).toString()), target, parentId, edge);
         } else if (game.getCard(target) != null) {
             addNode(FeatureGraph.Node.Type.CARD, game.getEntityName(target), target, parentId, edge);
-        } else {
+        } else if (!target.equals(STOP_CHOOSING)) {
             logger.warn("unknown target type");
         }
     }
