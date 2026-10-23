@@ -61,6 +61,8 @@ public class MCTSNode {
     protected final List<MCTSNode> children = new ArrayList<>();
     protected int initialChildren;
     protected MCTSNode parent = null;
+    private int size = 1; //nodes in this subtree
+    private int maxDepth = 1; //levels in this subtree
 
     //validation (these fields are populated in validateState)
     protected UUID playerId;
@@ -496,7 +498,9 @@ public class MCTSNode {
             logger.fatal("next action is null");
         }
         ActionEncoder.ActionType actionType = player.getNextAction();
-        children.addAll(createChildren(actionType, player, rootGame));
+        List<MCTSNode> newChildren = createChildren(actionType, player, rootGame);
+        children.addAll(newChildren);
+        updateSubtree(newChildren.size());
         logger.debug(children.size() + " children expanded");
         for (MCTSNode node : children) {
             node.depth = depth + 1;
@@ -673,6 +677,7 @@ public class MCTSNode {
     public void emancipate() {
         if (parent != null) {
             this.parent.children.remove(this);
+            this.parent.updateSubtree(-size);
             this.parent = null;
         }
     }
@@ -683,6 +688,7 @@ public class MCTSNode {
         }
         children.remove(node);
         node.parent = null;
+        updateSubtree(-node.size);
 
         if (!children.isEmpty() || parent == null) {
             //correct MCTS stats
@@ -753,22 +759,30 @@ public class MCTSNode {
     }
 
     public int size() {
-        int num = 1;
-        for (MCTSNode child : children) {
-            num += child.size();
-        }
-        return num;
+        return size;
     }
     public int maxDepth() {
-        int max = 0;
-        for (MCTSNode child : children) {
-            max = Math.max(max, child.maxDepth());
+        return maxDepth;
+    }
+    /**
+     * updates size and maxDepth of this node and its ancestors after its children changed
+     * @param sizeDelta nodes added (or removed if negative)
+     */
+    private void updateSubtree(int sizeDelta) {
+        for (MCTSNode node = this; node != null; node = node.parent) {
+            node.size += sizeDelta;
+            int max = 0;
+            for (MCTSNode child : node.children) {
+                max = Math.max(max, child.maxDepth);
+            }
+            node.maxDepth = max+1;
         }
-        return max+1;
     }
 
     public void reset() {
+        int removed = size - 1;
         children.clear();
+        updateSubtree(-removed);
         score = 0;
         visits = 0;
         depth = 1;
