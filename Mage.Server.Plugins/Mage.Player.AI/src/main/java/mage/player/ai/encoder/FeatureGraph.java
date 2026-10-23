@@ -83,6 +83,7 @@ public class FeatureGraph {
         state.clear();
         state.put(GAME_ROOT_ID, new Node("root", 0, 0));
         stateHash = -1;
+        strictHash = -1;
         graphArrays = null;
     }
     public void mixHash() {

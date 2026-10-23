@@ -15,6 +15,7 @@ import mage.player.ai.score.GameStateEvaluator2;
 import mage.players.Player;
 import mage.players.PlayerScript;
 import mage.util.RandomUtil;
+import mage.util.RateLimitedLogger;
 import org.apache.log4j.Logger;
 
 import java.util.*;
@@ -185,9 +186,8 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 }
             } else {
                 if (System.nanoTime() > endTime) {
-                    logger.info("timed out, looking for any legal line");
+                    RateLimitedLogger.warn("timed out, looking for any legal line");
                     c_perspective = -1;
-                    break;
                 }
             }
 

@@ -126,7 +126,7 @@ public class Config {
             this.c_puct = ((Number) raw.getOrDefault("c_puct", 1.0)).doubleValue();
             this.offlineMode = (boolean) raw.getOrDefault("offline_mode", false);
             this.pruneDuplicateStates = (boolean) raw.getOrDefault("prune_duplicate_states", false);
-            this.pruneDuplicateStates = (boolean) raw.getOrDefault("pimc", false);
+            this.pimc = (boolean) raw.getOrDefault("pimc", false);
         }
     }
 
