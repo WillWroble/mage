@@ -507,3 +507,6 @@ WR with Pauper-Faeries vs Pauper-Elves: 0.7816091954022989 in 87 games
 WR with Pauper-Faeries vs Pauper-Faeries: 0.6666666666666666 in 96 games
 WR with Pauper-Faeries vs Pauper-Rally: 0.2727272727272727 in 99 games
 WR with Pauper-Faeries vs Pauper-Spy: 0.5979381443298969 in 97 games
+WR with Pauper-Faeries vs Pauper-Affinity: 0.4 in 100 games
+WR with Pauper-Faeries vs Pauper-Burn: 0.56 in 100 games
+WR with Pauper-Faeries vs Pauper-CawGates: 0.6175 in 400 games

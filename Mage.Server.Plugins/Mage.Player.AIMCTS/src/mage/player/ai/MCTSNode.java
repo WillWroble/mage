@@ -122,16 +122,15 @@ public class MCTSNode {
     /**
      *
      * @param state
-     * @param stateString null for soft match string for exact match
      * @return
      */
-    public MCTSNode getMatchingState(FeatureGraph state, String stateString) {
+    public MCTSNode getMatchingState(FeatureGraph state) {
         ArrayDeque<MCTSNode> queue = new ArrayDeque<>();
         queue.add(this);
         while (!queue.isEmpty()) {
             MCTSNode current = queue.remove();
             if(current.children.isEmpty()) continue; //tree can have unfinalized nodes
-            if(current.featureGraph.getStateHash() == state.getStateHash() && stateString.equals(current.stateString)) {
+            if(current.featureGraph.getStrictHash() == state.getStrictHash()) {
                 return current;
             }
             queue.addAll(current.children);
@@ -423,7 +422,7 @@ public class MCTSNode {
                     ? (child.getMeanScore())
                     : 0.0;
             // exploration term
-            double u = ComputerPlayerMCTS.C_PUCT * (child.prior) * (sqrtN / (1 + child.getVisits()));
+            double u = basePlayer.c_perspective * basePlayer.c_puct * (child.prior) * (sqrtN / (1 + child.getVisits()));
 
             // combined PUCT
             double val = sign * q + u;

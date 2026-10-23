@@ -37,7 +37,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
     public AtomicInteger pendingNodes =  new AtomicInteger(0);
 
     /** How many concurrent network eval calls are allowed per tree. keep small to keep MCTS expansion deterministic */
-    public static int MAX_PENDING = 4;
+    public int maxPending = 4;
     /** 0 means use random seed*/
     public static long DEFAULT_SEED = 2612645407030963366L;
     public static boolean SHOW_THREAD_INFO = true;
@@ -158,6 +158,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int illegalPurged = 0;
         int validDuplicatesPurged = 0;
         int invalidDuplicatesPurged = 0;
+        c_perspective = 1;
 
 
         while (true) {
@@ -180,6 +181,12 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 }
                 if (root.getVisits() >= searchBudget) {
                     logger.info("required visits reached, ending search");
+                    break;
+                }
+            } else {
+                if (System.nanoTime() > endTime) {
+                    logger.info("timed out, looking for any legal line");
+                    c_perspective = -1;
                     break;
                 }
             }
@@ -309,7 +316,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             logger.info("opponent prefix at root: " + opponentPrefixScript);
         }
         if (root != null) {
-            root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph, newRoot.stateString);
+            root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph);
         }
         if (root == null) {
             root = newRoot;

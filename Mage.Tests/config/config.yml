@@ -75,7 +75,7 @@ player_b:
     see_opponent_hand: true
 
 training:
-  games: 200
+  games: 100
   threads: 4
   max_turns: 50
   max_minutes: 60

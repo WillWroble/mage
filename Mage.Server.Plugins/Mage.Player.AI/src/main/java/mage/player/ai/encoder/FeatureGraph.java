@@ -42,10 +42,23 @@ public class FeatureGraph {
             hash = oldHash;
             children = new HashMap<>();
         }
+        @Override
+        public int hashCode() {
+            return id + value + children.hashCode();
+        }
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof Node) {
+                Node n = (Node)o;
+                return n.id == id && n.value == value && children.equals(n.children);
+            }
+            return false;
+        }
     }
     private final HashMap<UUID, Node> state;
     private GraphArrays graphArrays = null;
     private long stateHash = -1;
+    private long strictHash = -1;
 
     public FeatureGraph() {
         state = new HashMap<UUID, Node>();
@@ -84,6 +97,10 @@ public class FeatureGraph {
             state.get(nodeId).oldHash = state.get(nodeId).hash;
         }
     }
+
+    /**
+     * @return UUID invariant hash
+     */
     public long getStateHash() {
         if (stateHash == -1) {
             for (int i = 0; i < 16; i++) {
@@ -96,6 +113,16 @@ public class FeatureGraph {
             stateHash = StateEncoder.mix64(stateHash);
         }
         return stateHash;
+    }
+
+    /**
+     * @return UUID sensitive hash
+     */
+    public long getStrictHash() {
+        if(strictHash == -1) {
+            strictHash = state.hashCode();
+        }
+        return strictHash;
     }
     /**
      * Array view of the graph for serialization (training data and inference requests).

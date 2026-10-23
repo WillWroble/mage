@@ -11,8 +11,10 @@ public class MCTSDefaults {
     public double priorBonus = 0.1;
 
     public boolean noNoise = true;
+    public boolean pimc = false;
     public double dirichletNoiseEps = 0;
     public double selectionTemperature = 0;
+    public double c_puct = 1;
 
     public boolean noPolicyPriority = true;
     public boolean noPolicyTarget = true;

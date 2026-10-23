@@ -108,18 +108,25 @@ public class Config {
     public static class MctsConfig {
         public final int searchBudget;
         public final int timeoutMs;
+        public final int maxPending;
         public final double tdDiscount;
         public final double backpropDiscount;
+        public final double c_puct;
         public boolean offlineMode;
         public boolean pruneDuplicateStates;
+        public boolean pimc;
+
 
         public MctsConfig(Map<String, Object> raw) {
             this.searchBudget = ((Number) raw.getOrDefault("search_budget", 300)).intValue();
             this.timeoutMs = ((Number) raw.getOrDefault("timeout_ms", 4000)).intValue();
+            this.maxPending = ((Number) raw.getOrDefault("max_pending", 4)).intValue();
             this.tdDiscount = ((Number) raw.getOrDefault("td_discount", 0.95)).doubleValue();
             this.backpropDiscount = ((Number) raw.getOrDefault("backprop_discount", 0.99)).doubleValue();
+            this.c_puct = ((Number) raw.getOrDefault("c_puct", 1.0)).doubleValue();
             this.offlineMode = (boolean) raw.getOrDefault("offline_mode", false);
             this.pruneDuplicateStates = (boolean) raw.getOrDefault("prune_duplicate_states", false);
+            this.pruneDuplicateStates = (boolean) raw.getOrDefault("pimc", false);
         }
     }
 

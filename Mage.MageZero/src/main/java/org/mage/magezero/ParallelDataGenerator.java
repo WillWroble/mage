@@ -397,6 +397,9 @@ public class ParallelDataGenerator {
                 mcts2.priorBonus = Config.INSTANCE.playerA.priors.priorBonus;
                 mcts2.allowDuplicates = !Config.INSTANCE.playerA.mcts.pruneDuplicateStates;
                 mcts2.backpropDiscount = Config.INSTANCE.playerA.mcts.backpropDiscount;
+                mcts2.maxPending = Config.INSTANCE.playerA.mcts.maxPending;
+                mcts2.pimc = Config.INSTANCE.playerA.mcts.pimc;
+                mcts2.c_puct = Config.INSTANCE.playerA.mcts.c_puct;
                 if(remoteModelEvaluatorA == null || Config.INSTANCE.playerA.mcts.offlineMode) mcts2.offlineMode = true;
             } else {
                 mcts2.nn = remoteModelEvaluatorB;
@@ -415,6 +418,9 @@ public class ParallelDataGenerator {
                 mcts2.priorBonus = Config.INSTANCE.playerB.priors.priorBonus;
                 mcts2.allowDuplicates = !Config.INSTANCE.playerB.mcts.pruneDuplicateStates;
                 mcts2.backpropDiscount = Config.INSTANCE.playerB.mcts.backpropDiscount;
+                mcts2.maxPending = Config.INSTANCE.playerB.mcts.maxPending;
+                mcts2.pimc = Config.INSTANCE.playerB.mcts.pimc;
+                mcts2.c_puct = Config.INSTANCE.playerB.mcts.c_puct;
                 if(remoteModelEvaluatorB == null || Config.INSTANCE.playerB.mcts.offlineMode) mcts2.offlineMode = true;
             }
         } else if (player.getRealPlayer() instanceof ComputerPlayer8) {

@@ -46,7 +46,7 @@ public class MCTSNode2 extends MCTSNode {
             ((ComputerPlayerMCTS2)basePlayer).pendingNodes.decrementAndGet();
             return;
         }
-        while (((ComputerPlayerMCTS2)basePlayer).pendingNodes.get() > ComputerPlayerMCTS2.MAX_PENDING) {
+        while (((ComputerPlayerMCTS2)basePlayer).pendingNodes.get() > ((ComputerPlayerMCTS2)basePlayer).maxPending) {
             Thread.yield();
         }
         ((ComputerPlayerMCTS2) basePlayer).nn.inferAsync(featureGraph)

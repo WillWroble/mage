@@ -23,8 +23,11 @@ player_a:
     search_budget: 300
     timeout_ms: 60000
     td_discount: 0.92
-    offline_mode: true
+    offline_mode: false
     prune_duplicate_states: true
+    max_pending: 4
+    c_puct: 1.0
+    pimc: false
 
   gameplay:
     mulligans_enabled: false
@@ -35,7 +38,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Pauper-Wildfire.txt
+  deckPath: decks/Pauper-Elves.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -55,8 +58,11 @@ player_b:
     search_budget: 300
     timeout_ms: 60000
     td_discount: 0.92
-    offline_mode: false
+    offline_mode: true
     prune_duplicate_states: true
+    max_pending: 4
+    c_puct: 1.0
+    pimc: false
 
   gameplay:
     mulligans_enabled: false
@@ -67,8 +73,8 @@ player_b:
     see_opponent_hand: true
 
 training:
-  games: 100
-  threads: 4
+  games: 400
+  threads: 16
   max_turns: 50 #does nothing
   max_minutes: 60
 

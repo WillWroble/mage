@@ -9,8 +9,6 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.*;
 import mage.game.Game;
-import mage.game.GameImpl;
-import mage.game.GameState;
 import mage.player.ai.config.MCTSDefaults;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.StateEncoder;
@@ -54,10 +52,12 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public double priorBonus = MCTSDefaults.CURRENT.priorBonus; //minimum exploration budget (Higher = more stable)
     //how much to discount the Q scores backpropagation through MCTS; lower means less confident in simulated outcomes
     public double backpropDiscount = MCTSDefaults.CURRENT.backpropDiscount;
+    public boolean pimc = MCTSDefaults.CURRENT.pimc;
     //exploration constant
-    public static double C_PUCT = 1;
+    public double c_puct = MCTSDefaults.CURRENT.c_puct;
+    public double c_perspective = 1;
     //adjust based on available RAM and threads running
-    public static int MAX_TREE_NODES = 100000;
+    public static int MAX_TREE_NODES = 10000;
     public static int MAX_TREE_DEPTH = 1000;
 
     public transient MCTSNode root;
@@ -368,15 +368,16 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId(), stateEncoder);
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
-            //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
+        }
+        if(pimc) {
+            shuffleUnknowns(mcts, getId());
         }
         mcts.setLastPriority(game.getLastPriorityPlayerId());
         mcts.pause();
         mcts.setMCTSSimulation(true);
         return mcts;
     }
-    //TODO: make true stochastic MCTS (hidden feature set + MCTS discount works for now)
     public static void shuffleUnknowns(Game mcts, UUID playerId) {
         for (Player newPlayer : mcts.getState().getPlayers().values()) {
             if (!newPlayer.getId().equals(playerId)) {

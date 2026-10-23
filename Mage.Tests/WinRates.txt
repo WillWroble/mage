@@ -1485,3 +1485,12 @@ WR with Standard16-RW vs Standard-MonoB: 0.5 in 16 games
 WR with Standard16-UG vs Standard-MonoB: 0.3125 in 16 games
 WR with Standard16-UR vs Standard-MonoB: 0.375 in 16 games
 WR with Standard16-UW vs Standard-MonoB: 0.125 in 16 games
+WR with Standard16-UB vs Standard-MonoB: 0.4375 in 16 games
+WR with Standard-MonoB vs Standard-MonoB: 0.8125 in 16 games
+WR with Standard-MonoG vs Standard-MonoB: 0.75 in 16 games
+WR with Standard-MonoR vs Standard-MonoB: 0.625 in 16 games
+WR with Standard-MonoU vs Standard-MonoB: 0.125 in 16 games
+WR with Standard16-UB vs Standard-MonoB: 0.5625 in 16 games
+WR with Standard-MonoB vs Standard-MonoB: 0.625 in 16 games
+WR with Standard-MonoG vs Standard-MonoB: 0.5625 in 16 games
+WR with Standard-MonoR vs Standard-MonoB: 0.25 in 16 games

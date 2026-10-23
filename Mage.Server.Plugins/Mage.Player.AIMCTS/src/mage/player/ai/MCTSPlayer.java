@@ -365,16 +365,5 @@ public class MCTSPlayer extends ComputerPlayer {
         lastToAct = true;
         game.pause();
     }
-//    @Override
-//    public void declareBlocker(UUID defenderId, UUID blockerId, UUID attackerId, Game game, boolean allowUndo) {
-//        Permanent blocker = game.getPermanent(blockerId);
-//        CombatGroup group = game.getCombat().findGroup(attackerId);
-//        if (blocker != null && group != null && group.canBlock(blocker, game)) {
-//            group.addBlocker(blockerId, playerId, game);
-//            game.getCombat().addBlockingGroup(blockerId, attackerId, playerId, game);
-//        } else if (blocker != null && group != null) {
-//            illegalGameState(game);
-//        }
-//    }
 }
 
