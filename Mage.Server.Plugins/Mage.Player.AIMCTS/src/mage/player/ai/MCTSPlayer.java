@@ -20,6 +20,7 @@ import org.apache.log4j.Logger;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static mage.player.ai.ComputerPlayerMCTS.shuffleUnknowns;
 import static mage.target.TargetImpl.STOP_CHOOSING;
 
 /**
@@ -43,6 +44,7 @@ public class MCTSPlayer extends ComputerPlayer {
     //additional text for state encoder that describes the decision the player is currently making
     private String decisionText;
     private UUID targetPlayer;
+    private ComputerPlayerMCTS basePlayer = null;
     private FeatureGraph featureGraph;
     private StateEncoder encoder;
 
@@ -95,6 +97,7 @@ public class MCTSPlayer extends ComputerPlayer {
     public void restore(Player player) {
         // simulated player can be created from any player type
         super.restore(player.getRealPlayer());
+        basePlayer = (ComputerPlayerMCTS) player;
     }
     @Override
     public int drawCards(int num, Ability source, Game game) {
@@ -123,6 +126,9 @@ public class MCTSPlayer extends ComputerPlayer {
             }
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
+        }
+        if(basePlayer.pimc) {
+            shuffleUnknowns(game, targetPlayer);
         }
         game.setLastPriority(playerId);
         playables = getPlayableAbilities(game);

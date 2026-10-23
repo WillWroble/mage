@@ -370,9 +370,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
         }
-        if(pimc) {
-            shuffleUnknowns(mcts, getId());
-        }
         mcts.setLastPriority(game.getLastPriorityPlayerId());
         mcts.pause();
         mcts.setMCTSSimulation(true);
