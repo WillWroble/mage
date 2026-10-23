@@ -1203,12 +1203,12 @@ public class HumanPlayer extends PlayerImpl {
         UserData controllingUserData = this.getControllingPlayersUserData(game);
 
         //for MCTS opponent
+        game.setLastPriority(playerId);
         List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
-        if(playableAbilities.isEmpty() && !game.isCheckPoint(playerId)) {//just pass when only option
-            pass(game);
+        if(playableAbilities.isEmpty()) {//just pass when only option
+            quietPass(game);
             return false;
         }
-        game.setLastPriority(playerId);
 
 
         if (canRespond()) {
