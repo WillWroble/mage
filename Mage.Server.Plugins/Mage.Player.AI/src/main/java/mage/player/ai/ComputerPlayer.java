@@ -20,6 +20,7 @@ import mage.constants.*;
 import mage.filter.common.FilterLandCard;
 import mage.game.ExileZone;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.command.CommandObject;
 import mage.game.draft.Draft;
 import mage.game.events.GameEvent;
@@ -1581,6 +1582,7 @@ public class ComputerPlayer extends PlayerImpl {
         this.human = false;
     }
     protected List<ActivatedAbility> getPlayableAbilities(Game originalGame) {
+        boolean originalCheckPlayableState = originalGame.inCheckPlayableState();
         // Build only from floating mana + conditional mana in pool
         Game game = originalGame.createSimulationForPlayableCalc();
 
@@ -1731,6 +1733,7 @@ public class ComputerPlayer extends PlayerImpl {
 
         // Return copies to avoid sim coupling
         playable.sort(Comparator.comparing(ActivatedAbility::getId));
+        ((GameImpl) originalGame).setCheckPlayableState(originalCheckPlayableState);
         return playable.stream().map(ActivatedAbility::copy).collect(Collectors.toList());
     }
     //TODO: make this more efficient
