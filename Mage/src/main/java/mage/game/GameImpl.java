@@ -89,7 +89,7 @@ import java.util.stream.Collectors;
  */
 public abstract class GameImpl implements Game {
     //the state of the game at the last priority window where there was a decision. last priority + playerHistories should always equal the current game.
-    private Game lastPriority = this;
+    private GameState lastPriority = this.state;
     private UUID lastPriorityPlayerId;
     public Set<StackObject> decisionStackObjects;
 
@@ -185,6 +185,7 @@ public abstract class GameImpl implements Game {
         this.mulligan = mulligan;
         this.attackOption = attackOption;
         this.state = new GameState();
+        this.lastPriority = this.state;
         this.startingLife = startingLife;
         this.startingHandSize = startingHandSize;
         this.executingRollback = false;
@@ -294,7 +295,7 @@ public abstract class GameImpl implements Game {
      * @return the game object from right before the last priority
      */
     @Override
-    public Game getLastPriority() {
+    public GameState getLastPriority() {
         return lastPriority;
     }
 
@@ -313,9 +314,8 @@ public abstract class GameImpl implements Game {
     public void setLastPriority(UUID id) {
         clearHistory();
         lastPriorityPlayerId  = id;
-        if(!isSimulation()) {
-            lastPriority = this.copy();
-        }
+        lastPriority = this.state.copy();
+
     }
 
     /**
@@ -350,6 +350,23 @@ public abstract class GameImpl implements Game {
                 || !getOpponent(playerId).getPlayerHistory().numSequence.isEmpty();
         return  isStarting || isPreAttack ||  isPreBlock || isPostBlock;// || isMicroDialogue || isMicroDialogueOpponent;
     }
+    /**
+     * resets root game to the given state
+     * @param state state to reset to
+     */
+    @Override
+    public void restoreGame(GameState state) {
+
+        setState(state);
+        getPlayerList().setCurrent(state.getPlayerByOrderId());
+        // clear ephemeral caches / rebuild effects
+        resetLKI();
+        resetShortLivingLKI();
+        applyEffects(); // rebuild layers/CEs
+        getState().setEffectsAppliedForResume(); // so the resumed priority loop doesn't apply them again
+        resetCheckPlayableState();
+        lastPriority = state;
+    }
     @Override
     public boolean isSimulation() {
         return simulation;
@@ -373,7 +390,7 @@ public abstract class GameImpl implements Game {
     @Override
     public Game createSimulationForPlayableCalc() {
         Game res;
-        if(false && simulation) {//TODO: figure out how to optimize this
+        if(isMCTSSimulation()) {
             res = this;
         } else {
             copyingForPlayableCalc.set(true);
@@ -386,6 +403,9 @@ public abstract class GameImpl implements Game {
         ((GameImpl) res).simulation = true;
         ((GameImpl) res).checkPlayableState = true;
         return res;
+    }
+    public void resetCheckPlayableState() {
+        checkPlayableState = false;
     }
 
     @Override
@@ -1743,6 +1763,10 @@ public abstract class GameImpl implements Game {
     @Override
     public void pause() {
         state.pause();
+    }
+    @Override
+    public void unPause() {
+        state.unPause();
     }
 
     @Override

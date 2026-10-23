@@ -294,7 +294,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
             }
         }
 
-        Game sim = createMCTSGame(game.getLastPriority());
+        Game sim = createMCTSGame(game);
         PlayerScript prefixScript = new PlayerScript(getPlayerHistory());
         PlayerScript opponentPrefixScript = new PlayerScript(game.getOpponent(playerId).getPlayerHistory());
         MCTSNode2 newRoot = new MCTSNode2(this, sim, actionType, prefixScript, opponentPrefixScript);

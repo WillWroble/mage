@@ -348,7 +348,7 @@ public class StateEncoder {
             addNode(FeatureGraph.Node.Type.STACK_OBJECT, cleanString(game.getStack().getStackObject(target).toString()), target, parentId, edge);
         } else if (game.getCard(target) != null) {
             addNode(FeatureGraph.Node.Type.CARD, game.getEntityName(target), target, parentId, edge);
-        } else if (!target.equals(STOP_CHOOSING)) {
+        } else if (target == null || !target.equals(STOP_CHOOSING)) {
             logger.warn("unknown target type");
         }
     }
@@ -509,8 +509,10 @@ public class StateEncoder {
         Player myPlayer = game.getPlayer(playerId);
         int i = 0;
         //current targets selected for when it's in the middle selecting multiple targets
+        Map<UUID, Integer> targetCount = new HashMap<>();
         for(UUID targetID : myPlayer.getPlayerHistory().targetSequence) {
-            processTarget(targetID, game, playerId, parentId, "TARGET");
+            targetCount.put(targetID, targetCount.getOrDefault(targetID, 0) + 1);
+            processTarget(targetID, game, playerId, parentId, "TARGET@"+targetCount.get(targetID));
             i++;
         }
         //current choices selected for when it's in the middle selecting multiple choices

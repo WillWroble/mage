@@ -8,6 +8,10 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
+import mage.game.GameImpl;
+import mage.game.GameState;
+import mage.game.combat.CombatGroup;
+import mage.game.permanent.Permanent;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.FeatureGraph;
 import mage.player.ai.encoder.StateEncoder;
@@ -112,6 +116,7 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public boolean priority(Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
+        game.setLastPriority(playerId);
         if(!actionScript.prioritySequence.isEmpty()) {
             game.getState().setPriorityPlayerId(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
@@ -125,11 +130,11 @@ public class MCTSPlayer extends ComputerPlayer {
             //priority history is handled in base player activateAbility()
         }
         playables = getPlayableAbilities(game);
-        if(playables.size() == 1 && !game.isCheckPoint(playerId)) {
-            pass(game);
+        ((GameImpl) game).resetCheckPlayableState();
+        if(playables.size() == 1) {
+            quietPass(game);
             return false;
         }
-        game.setLastPriority(playerId);
         decisionText = "priority";
         actionType = ActionEncoder.ActionType.PRIORITY;
         freezeState(game);
@@ -364,5 +369,16 @@ public class MCTSPlayer extends ComputerPlayer {
         lastToAct = true;
         game.pause();
     }
+//    @Override
+//    public void declareBlocker(UUID defenderId, UUID blockerId, UUID attackerId, Game game, boolean allowUndo) {
+//        Permanent blocker = game.getPermanent(blockerId);
+//        CombatGroup group = game.getCombat().findGroup(attackerId);
+//        if (blocker != null && group != null && group.canBlock(blocker, game)) {
+//            group.addBlocker(blockerId, playerId, game);
+//            game.getCombat().addBlockingGroup(blockerId, attackerId, playerId, game);
+//        } else if (blocker != null && group != null) {
+//            illegalGameState(game);
+//        }
+//    }
 }
 

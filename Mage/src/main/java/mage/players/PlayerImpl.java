@@ -2644,6 +2644,11 @@ public abstract class PlayerImpl implements Player, Serializable {
         this.passed = true;
         resetStoredBookmark(game);
     }
+    @Override
+    public void quietPass(Game game) {
+        this.passed = true;
+        resetStoredBookmark(game);
+    }
 
 
     @Override

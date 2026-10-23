@@ -293,6 +293,8 @@ public interface Player extends MageItem, Copyable<Player> {
     // TODO: research usage of !hasLeft() && !hasLost() replace it by isInGame() if possible
     boolean hasLeft();
 
+    void quietPass(Game game);
+
     void resetMicroActions();
 
     /**

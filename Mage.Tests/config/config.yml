@@ -24,15 +24,15 @@ player_a:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
-    timeout_ms: 4000
+    search_budget: 300
+    timeout_ms: 400000
     td_discount: 0.95
     backprop_discount: 0.99
     offline_mode: true
     prune_duplicate_states: true
 
   gameplay:
-    mulligans_enabled: true
+    mulligans_enabled: false
     manual_tapping: false
 
 
@@ -59,15 +59,15 @@ player_b:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
-    timeout_ms: 4000
+    search_budget: 300
+    timeout_ms: 400000
     td_discount: 0.95
     backprop_discount: 0.99
     offline_mode: true
     prune_duplicate_states: true
 
   gameplay:
-    mulligans_enabled: true
+    mulligans_enabled: false
     manual_tapping: false
 
 

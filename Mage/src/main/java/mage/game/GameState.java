@@ -2020,4 +2020,8 @@ public class GameState implements Serializable, Copyable<GameState> {
     public boolean getReverseTurnOrder() {
         return this.reverseTurnOrder;
     }
+
+    public void unPause() {
+        paused = false;
+    }
 }

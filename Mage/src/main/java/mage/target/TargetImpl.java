@@ -452,6 +452,9 @@ public abstract class TargetImpl implements Target {
             }
 
             // can select next target
+            if(game.isMCTSSimulation()) {
+                break;
+            }
         } while (true);
 
         chosen = isChosen(game);

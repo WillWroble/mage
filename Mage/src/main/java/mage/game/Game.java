@@ -51,7 +51,7 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     boolean isCheckPoint(UUID playerId);
     Random getLocalRandom();
     void setLocalRandom(Random random);
-    Game getLastPriority();
+    GameState getLastPriority();
     UUID getLastPriorityPlayerId();
     Player getOpponent(UUID playerId);
 
@@ -300,6 +300,8 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
 
     void loadGameStates(GameStates states);
 
+    void restoreGame(GameState state);
+
     boolean isSimulation();
     boolean isMCTSSimulation();
     void setMCTSSimulation(boolean b);
@@ -442,6 +444,8 @@ public interface Game extends MageItem, Serializable, Copyable<Game> {
     void resume();
 
     void pause();
+
+    void unPause();
 
     boolean isPaused();
 

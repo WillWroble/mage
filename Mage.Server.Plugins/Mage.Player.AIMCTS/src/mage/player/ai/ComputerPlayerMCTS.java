@@ -9,6 +9,8 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.*;
 import mage.game.Game;
+import mage.game.GameImpl;
+import mage.game.GameState;
 import mage.player.ai.config.MCTSDefaults;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.StateEncoder;
@@ -103,6 +105,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
+        game.setLastPriority(playerId);
         if (game.getTurnStepType() == PhaseStep.UPKEEP) {
             if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
                 logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList<>(hand.getCards(game)));
@@ -112,22 +115,20 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
         List<ActivatedAbility> playableAbilities = getPlayableAbilities(game);
-        if(playableAbilities.size() < 2 && !game.isCheckPoint(playerId)) {
+        if(playableAbilities.size() < 2) {
             logger.info("auto pass");
-            pass(game);
+            quietPass(game);
             return false;
         }
         allMana = true;
         for(ActivatedAbility ability : playableAbilities) {
             allMana &= (ability.isManaActivatedAbility() || ability instanceof PassAbility);
         }
-        game.setLastPriority(playerId);
         Ability ability = null;
         MCTSNode best = getNextAction(game, ActionEncoder.ActionType.PRIORITY);
         boolean success = false;
         if(best != null && best.getPriorityAction() != null) {
             ability = best.getPriorityAction().copy();
-            //ability = findMatchingAbility(ability, playableAbilities, game);
             success = activateAbility((ActivatedAbility) ability, game);
             root = best;
         }
@@ -150,24 +151,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             logger.info("pool=" + getManaPool());
         }
         return true;
-    }
-    private Ability findMatchingAbility(Ability ability, List<ActivatedAbility> playableAbilities, Game game) {
-        for(ActivatedAbility playable : playableAbilities) {
-            if(playable.isSameInstance(ability)) {
-                if(ability.getSourceId() != null) {
-                    if(playable.getSourceId() != null) {
-                        if(game.getEntityValue(playable.getSourceId(), playerId).equals(game.getEntityValue(ability.getSourceId(), playerId))) {
-                            return playable;
-                        }
-                        logger.info(game.getEntityValue(playable.getSourceId(), playerId) + " DOESNT EQUAL " + game.getEntityValue(ability.getSourceId(), playerId));
-                        continue;
-                    }
-                }
-                return playable;
-            }
-        }
-        logger.error("ability not found: " + ability.toString() + ability.getRule(true) + ability.getClass().getSimpleName());
-        return null;
     }
     protected MCTSNode calculateActions(Game game, ActionEncoder.ActionType action) {
         applyMCTS(game, action);
@@ -365,6 +348,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         //TODO: implement. right now only RL version supported
 
     }
+
     /**
      * Copies game and replaces all players in copy with mcts players
      * Shuffles each players library so that there is no knowledge of its order
@@ -378,8 +362,9 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
 
     protected Game createMCTSGame(Game game) {
         Game mcts = game.createSimulationForAI();
+        mcts.restoreGame(game.getLastPriority().copy());
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
-            Player origPlayer = game.getState().getPlayers().get(copyPlayer.getId());
+            Player origPlayer = mcts.getState().getPlayers().get(copyPlayer.getId());
             MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId(), stateEncoder);
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());

@@ -3561,6 +3561,11 @@ public class TestPlayer implements Player {
     }
 
     @Override
+    public void quietPass(Game game) {
+        computerPlayer.quietPass(game);
+    }
+
+    @Override
     public void lost(Game game) {
         computerPlayer.lost(game);
     }

@@ -7,6 +7,7 @@ import mage.constants.Zone;
 import mage.abilities.Ability;
 import mage.cards.Card;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.GameState;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.FeatureGraph;
@@ -83,7 +84,7 @@ public class MCTSNode {
      */
     public MCTSNode(ComputerPlayerMCTS targetPlayer, Game game, ActionEncoder.ActionType actionType, PlayerScript prefixA, PlayerScript prefixB) {
         this.rootGame = game;
-        this.state = game.getState().copy();
+        this.state = game.getLastPriority().copy();
         this.basePlayer = targetPlayer;
         this.targetPlayer = targetPlayer.getId();
         this.terminal = game.checkIfGameIsOver();
@@ -251,14 +252,13 @@ public class MCTSNode {
         PlayerScript myScript = new PlayerScript();
         PlayerScript opponentScript = new PlayerScript();
         populateActionScripts(myScript, opponentScript);
-        // node states are never changed after they are stored, so the restore copy can share them until first access
         GameState baseState;
         if(parent == null) {
             baseState = state.lazyCopy();
         } else {
             baseState = parent.state.lazyCopy();
         }
-        resetRootGame(baseState);
+        rootGame.restoreGame(baseState);
         MCTSPlayer playerA = (MCTSPlayer) rootGame.getPlayer(targetPlayer);
         MCTSPlayer playerB =  (MCTSPlayer) rootGame.getOpponent(targetPlayer);
         playerA.actionScript = myScript; //set base player actions
@@ -286,14 +286,9 @@ public class MCTSNode {
 
         actionType = actingPlayer.getNextAction();
         featureGraph = actingPlayer.getFeatureGraph();
-        stateString = rootGame.getState().getValue(rootGame, targetPlayer);
+        stateString = rootGame.getLastPriority().getValue(rootGame, targetPlayer);
         if(parent != null) {
-            if (actingPlayer.getNextAction() == ActionEncoder.ActionType.PRIORITY) {//priority point, use current state value
-                this.state = rootGame.getState();
-            } else {//micro point, use previous state value
-                this.state = parent.state;
-                //this.state.gameLocalRandom = RandomUtil.deepCopy(rootGame.getLocalRandom());
-            }
+            this.state = rootGame.getLastPriority();
         }
     }
     private void setPlayer(Game game) {
@@ -330,6 +325,7 @@ public class MCTSNode {
         rootGame.resetShortLivingLKI();
         rootGame.applyEffects(); // rebuild layers/CEs
         rootGame.getState().setEffectsAppliedForResume(); // so the resumed priority loop doesn't apply them again
+        ((GameImpl) rootGame).resetCheckPlayableState();
         //for sanity
         for (Player p : rootGame.getPlayers().values()) {
             MCTSPlayer mp = (MCTSPlayer) p;
