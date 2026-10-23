@@ -52,17 +52,17 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         if(actionEncoder == null) {
             actionsInit(game);
         }
+        game.setLastPriority(playerId);
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
 
         List<ActivatedAbility> playableAbilities = getPlayable(game, true);
         playableAbilities = playableAbilities.stream().filter(a -> !a.isManaAbility()).collect(Collectors.toList());
 
-        if(playableAbilities.isEmpty() && !game.isCheckPoint(playerId)) {//just pass when only option
-            pass(game);
+        if(playableAbilities.isEmpty()) {//just pass when only option
+            quietPass(game);
             return false;
         }
-        game.setLastPriority(playerId);
 
         switch (game.getTurnStepType()) {
             case UPKEEP:
