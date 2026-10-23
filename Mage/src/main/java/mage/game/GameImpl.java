@@ -353,11 +353,11 @@ public abstract class GameImpl implements Game {
     /**
      * resets root game to the given state
      * @param state state to reset to
+     * @apiNote never mutates given state
      */
     @Override
     public void restoreGame(GameState state) {
-
-        setState(state);
+        setState(state.lazyCopy());
         getPlayerList().setCurrent(state.getPlayerByOrderId());
         // clear ephemeral caches / rebuild effects
         resetLKI();

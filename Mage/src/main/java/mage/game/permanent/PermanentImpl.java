@@ -95,6 +95,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
     protected boolean faceDown;
     protected boolean attacking;
     protected int blocking;
+    protected boolean passedInCombat = false;
     // number of creatures the permanent can block
     protected int maxBlocks = 1;
     // minimal number of creatures the creature can be blocked by
@@ -160,6 +161,7 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
         this.faceDown = permanent.faceDown;
         this.attacking = permanent.attacking;
         this.blocking = permanent.blocking;
+        this.passedInCombat = permanent.passedInCombat;
         this.maxBlocks = permanent.maxBlocks;
         this.deathtouched = permanent.deathtouched;
         this.solved = permanent.solved;
@@ -1916,6 +1918,14 @@ public abstract class PermanentImpl extends CardImpl implements Permanent {
             // remove existing soulbond info text
             this.addInfo("soulbond", null, null);
         }
+    }
+    @Override
+    public void setPassedInCombat(boolean b) {
+        passedInCombat = b;
+    }
+    @Override
+    public boolean isPassedInCombat() {
+        return passedInCombat;
     }
 
     @Override

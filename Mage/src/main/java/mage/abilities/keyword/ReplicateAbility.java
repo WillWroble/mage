@@ -11,6 +11,7 @@ import mage.cards.Card;
 import mage.constants.Outcome;
 import mage.constants.Zone;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.events.GameEvent;
 import mage.game.stack.Spell;
 import mage.game.stack.StackObject;
@@ -91,6 +92,7 @@ public class ReplicateAbility extends StaticAbility implements OptionalAdditiona
         this.resetReplicate();
         boolean again = true;
         ManaOptions manaOptions = player.getManaAvailable(game);
+        ((GameImpl) game).resetCheckPlayableState();
         Mana base = ability.getManaCostsToPay().getMana().copy();
         while (player.canRespond() && again) {
             String times = "";

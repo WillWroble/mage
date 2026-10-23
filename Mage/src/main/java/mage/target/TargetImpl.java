@@ -451,10 +451,13 @@ public abstract class TargetImpl implements Target {
                 break;
             }
 
-            // can select next target
-            if(game.isMCTSSimulation()) {
+            //stop by being computer player
+            if(game.getPlayer(playerId).isComputer()) {
                 break;
             }
+
+            // can select next target
+
         } while (true);
 
         chosen = isChosen(game);
@@ -531,6 +534,11 @@ public abstract class TargetImpl implements Target {
 
             // stop by nothing to choose (actual for human and done button?)
             if (prevTargetsCount == this.getTargets().size()) {
+                break;
+            }
+
+            //stop by being computer player
+            if(game.getPlayer(playerId).isComputer()) {
                 break;
             }
 

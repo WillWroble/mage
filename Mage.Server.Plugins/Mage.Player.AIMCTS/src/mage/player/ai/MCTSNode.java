@@ -254,9 +254,9 @@ public class MCTSNode {
         populateActionScripts(myScript, opponentScript);
         GameState baseState;
         if(parent == null) {
-            baseState = state.lazyCopy();
+            baseState = state;
         } else {
-            baseState = parent.state.lazyCopy();
+            baseState = parent.state;
         }
         rootGame.restoreGame(baseState);
         MCTSPlayer playerA = (MCTSPlayer) rootGame.getPlayer(targetPlayer);

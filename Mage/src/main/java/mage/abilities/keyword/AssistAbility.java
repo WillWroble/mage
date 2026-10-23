@@ -15,6 +15,7 @@ import mage.abilities.mana.ManaOptions;
 import mage.constants.*;
 import mage.filter.FilterPlayer;
 import mage.game.Game;
+import mage.game.GameImpl;
 import mage.game.stack.Spell;
 import mage.players.ManaPool;
 import mage.players.Player;
@@ -108,6 +109,7 @@ public class AssistAbility extends SimpleStaticAbility implements AlternateManaP
             if (opponent != null) {
                 // basic and pool, but no coditional mana
                 ManaOptions availableMana = opponent.getManaAvailable(game);
+                ((GameImpl) game).resetCheckPlayableState();
 //                availableMana.addMana(opponent.getManaPool().getMana());
                 for (Mana mana : availableMana) {
                     if (mana.count() > 0) {

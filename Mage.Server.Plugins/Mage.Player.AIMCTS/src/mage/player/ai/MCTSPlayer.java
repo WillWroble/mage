@@ -116,7 +116,6 @@ public class MCTSPlayer extends ComputerPlayer {
     @Override
     public boolean priority(Game game) {
         if(game.isPaused() || game.checkIfGameIsOver()) return false;
-        game.setLastPriority(playerId);
         if(!actionScript.prioritySequence.isEmpty()) {
             game.getState().setPriorityPlayerId(playerId);
             ActivatedAbility ability = (ActivatedAbility) actionScript.prioritySequence.pollFirst().copy();
@@ -129,6 +128,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
         }
+        game.setLastPriority(playerId);
         playables = getPlayableAbilities(game);
         ((GameImpl) game).resetCheckPlayableState();
         if(playables.size() == 1) {
@@ -353,14 +353,15 @@ public class MCTSPlayer extends ComputerPlayer {
     }
     @Override
     protected List<ActivatedAbility> getPlayableAbilities(Game originalGame) {
+        List<ActivatedAbility> out;
         if(autoTap) {
-            List<ActivatedAbility> out = getPlayable(originalGame, true);
+            out = getPlayable(originalGame, true);
             out = out.stream().filter(a -> !a.isManaAbility()).collect(Collectors.toList());
             out.add(new PassAbility());
-            return out;
         } else {
-            return super.getPlayableAbilities(originalGame);
+            out = super.getPlayableAbilities(originalGame);
         }
+        return out;
     }
     @Override
     public void illegalGameState(Game game) {

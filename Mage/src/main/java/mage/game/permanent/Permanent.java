@@ -427,6 +427,10 @@ public interface Permanent extends Card, Controllable {
      */
     void setPairedCard(MageObjectReference pairedCard);
 
+    void setPassedInCombat(boolean b);
+
+    boolean isPassedInCombat();
+
     /**
      * Gets paired card. Can return null.
      *

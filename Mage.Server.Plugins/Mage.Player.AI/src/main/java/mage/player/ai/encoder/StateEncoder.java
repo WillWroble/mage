@@ -261,9 +261,9 @@ public class StateEncoder {
 
         if(p.isCreature(game)) {
             if(p.hasSummoningSickness()) addFeature("SummoningSick", parentId);
-            if(p.canAttack(game.getOpponent(playerId).getId(), game)) addFeature("CanAttack", parentId); //use p.canAttack()
+            if(p.canAttack(game.getOpponent(playerId).getId(), game)) addFeature("CanAttack", parentId);
             if(p.canBlockAny(game)) addFeature("CanBlock", parentId);
-            //if(p.hasSummoningSickness()) addFeature("SummoningSickness");
+            if(p.isPassedInCombat()) addFeature("PassedInCombat", parentId);
             if(p.isAttacking()) {
                 addFeature("Attacking", parentId);
                 UUID defender = game.getCombat().getDefenderId(p.getId());

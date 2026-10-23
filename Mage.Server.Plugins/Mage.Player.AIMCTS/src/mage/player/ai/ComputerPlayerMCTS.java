@@ -371,6 +371,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             //dont shuffle here
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);
         }
+        mcts.setLastPriority(game.getLastPriorityPlayerId());
         mcts.pause();
         mcts.setMCTSSimulation(true);
         return mcts;

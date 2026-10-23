@@ -1057,8 +1057,12 @@ public class ComputerPlayer extends PlayerImpl {
                 if (choice != null) {
                     this.declareAttacker(attacker.getId(), choice, game, false);
                 }
+                attacker.setPassedInCombat(true);
             }
             game.getPlayers().resetPassed();
+            for(Permanent attacker : availableAttackers) {
+                attacker.setPassedInCombat(false);
+            }
         }
     }
 
@@ -1084,8 +1088,12 @@ public class ComputerPlayer extends PlayerImpl {
                 makeChoice(Outcome.Neutral, attackerTarget, new ChooseCreatureToBlockAbility("choose which creature to block for {this}", blocker.getId()), game, null);
                 UUID attackerId = attackerTarget.getFirstTarget();
                 declareBlocker(defendingPlayerId, blocker.getId(), attackerId, game);
+                blocker.setPassedInCombat(true);
             }
             game.getPlayers().resetPassed();
+            for(Permanent attacker : blockers) {
+                attacker.setPassedInCombat(false);
+            }
         }
     }
 

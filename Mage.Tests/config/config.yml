@@ -32,7 +32,7 @@ player_a:
     prune_duplicate_states: true
 
   gameplay:
-    mulligans_enabled: false
+    mulligans_enabled: true
     manual_tapping: false
 
 
@@ -67,7 +67,7 @@ player_b:
     prune_duplicate_states: true
 
   gameplay:
-    mulligans_enabled: false
+    mulligans_enabled: true
     manual_tapping: false
 
 
