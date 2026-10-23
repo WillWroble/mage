@@ -38,7 +38,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Pauper-Elves.txt
+  deckPath: decks/Pauper-Faeries.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 

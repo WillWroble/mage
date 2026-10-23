@@ -54,9 +54,10 @@ public class MCTSPlayer extends ComputerPlayer {
     public MCTSPlayer(UUID id) {
         super(id);
     }
-    public MCTSPlayer(UUID id, UUID target, StateEncoder encoder) {
+    public MCTSPlayer(UUID id, ComputerPlayerMCTS basePlayer, StateEncoder encoder) {
         super(id);
-        this.targetPlayer = target;
+        this.targetPlayer = basePlayer.getId();
+        this.basePlayer = basePlayer;
         this.encoder = encoder;
     }
 
@@ -66,6 +67,7 @@ public class MCTSPlayer extends ComputerPlayer {
         this.actionType = player.actionType;
         this.targetPlayer = player.targetPlayer;
         this.encoder = player.encoder;
+        this.basePlayer = player.basePlayer;
     }
     public void clearFields() {
         lastToAct = false;
@@ -97,7 +99,6 @@ public class MCTSPlayer extends ComputerPlayer {
     public void restore(Player player) {
         // simulated player can be created from any player type
         super.restore(player.getRealPlayer());
-        basePlayer = (ComputerPlayerMCTS) player;
     }
     @Override
     public int drawCards(int num, Ability source, Game game) {
