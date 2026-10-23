@@ -3571,6 +3571,7 @@ public abstract class PlayerImpl implements Player, Serializable {
      */
     @Override
     public ManaOptions getManaAvailable(Game originalGame) {
+        boolean originalCheckState = originalGame.inCheckPlayableState();
         // workaround to fix a triggers list modification bug (game must be immutable on playable calculations)
         Game game = originalGame.createSimulationForPlayableCalc();
 
@@ -3668,6 +3669,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         availableMana.removeFullyIncludedVariations();
         availableMana.remove(new Mana()); // Remove any empty mana that was left over from the way the code is written
 
+        ((GameImpl) originalGame).setCheckPlayableState(originalCheckState);
         // make sure it independent of sim game
         return availableMana.copy();
     }
@@ -4302,7 +4304,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         if (shouldSkipGettingPlayable(originalGame)) {
             return playable;
         }
-
+        boolean originalCheckPlayableState = originalGame.inCheckPlayableState();
         Game game = originalGame.createSimulationForPlayableCalc();
         ManaOptions availableMana = getManaAvailable(game); // get available mana options (mana pool and conditional mana added (but conditional still lose condition))
         boolean fromAll = fromZone.equals(Zone.ALL);
@@ -4471,7 +4473,7 @@ public abstract class PlayerImpl implements Player, Serializable {
         } else {
             playable.addAll(activatedAll);
         }
-
+        ((GameImpl) originalGame).setCheckPlayableState(originalCheckPlayableState);
         // make sure it independent of sim game
         return playable.stream()
                 .map(ActivatedAbility::copy)

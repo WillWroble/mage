@@ -3,15 +3,11 @@ package mage.player.ai;
 import mage.abilities.*;
 import mage.abilities.common.PassAbility;
 import mage.abilities.costs.mana.ManaCost;
-import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.game.Game;
 import mage.game.GameImpl;
-import mage.game.GameState;
-import mage.game.combat.CombatGroup;
-import mage.game.permanent.Permanent;
 import mage.player.ai.encoder.ActionEncoder;
 import mage.player.ai.encoder.FeatureGraph;
 import mage.player.ai.encoder.StateEncoder;
@@ -130,7 +126,6 @@ public class MCTSPlayer extends ComputerPlayer {
         }
         game.setLastPriority(playerId);
         playables = getPlayableAbilities(game);
-        ((GameImpl) game).resetCheckPlayableState();
         if(playables.size() == 1) {
             quietPass(game);
             return false;

@@ -364,7 +364,7 @@ public abstract class GameImpl implements Game {
         resetShortLivingLKI();
         applyEffects(); // rebuild layers/CEs
         getState().setEffectsAppliedForResume(); // so the resumed priority loop doesn't apply them again
-        resetCheckPlayableState();
+        setCheckPlayableState();
         lastPriority = state;
     }
     @Override
@@ -404,8 +404,8 @@ public abstract class GameImpl implements Game {
         ((GameImpl) res).checkPlayableState = true;
         return res;
     }
-    public void resetCheckPlayableState() {
-        checkPlayableState = false;
+    public void setCheckPlayableState(boolean b) {
+        checkPlayableState = b;
     }
 
     @Override

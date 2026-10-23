@@ -92,7 +92,6 @@ public class ReplicateAbility extends StaticAbility implements OptionalAdditiona
         this.resetReplicate();
         boolean again = true;
         ManaOptions manaOptions = player.getManaAvailable(game);
-        ((GameImpl) game).resetCheckPlayableState();
         Mana base = ability.getManaCostsToPay().getMana().copy();
         while (player.canRespond() && again) {
             String times = "";
