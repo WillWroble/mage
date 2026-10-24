@@ -60,7 +60,7 @@ public class ComputerPlayer8 extends ComputerPlayer7{
         playableAbilities = playableAbilities.stream().filter(a -> !a.isManaAbility()).collect(Collectors.toList());
 
         if(playableAbilities.isEmpty()) {//just pass when only option
-            quietPass(game);
+            pass(game);
             return false;
         }
 

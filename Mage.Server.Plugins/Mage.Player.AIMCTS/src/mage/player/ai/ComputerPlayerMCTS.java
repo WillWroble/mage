@@ -117,7 +117,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         List<ActivatedAbility> playableAbilities = getPlayableAbilities(game);
         if(playableAbilities.size() < 2) {
             logger.info("auto pass");
-            quietPass(game);
+            pass(game);
             return false;
         }
         allMana = true;

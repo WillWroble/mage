@@ -134,9 +134,10 @@ public class MCTSPlayer extends ComputerPlayer {
         game.setLastPriority(playerId);
         playables = getPlayableAbilities(game);
         if(playables.size() == 1) {
-            quietPass(game);
+            pass(game);
             return false;
         }
+
         decisionText = "priority";
         actionType = ActionEncoder.ActionType.PRIORITY;
         freezeState(game);

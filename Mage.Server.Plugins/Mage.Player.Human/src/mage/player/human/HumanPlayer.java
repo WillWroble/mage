@@ -1206,7 +1206,7 @@ public class HumanPlayer extends PlayerImpl {
         game.setLastPriority(playerId);
         List<ActivatedAbility> playableAbilities = getPlayable(game, true).stream().filter(a -> !(a instanceof ManaAbility)).collect(Collectors.toList());
         if(playableAbilities.isEmpty()) {//just pass when only option
-            quietPass(game);
+            pass(game);
             return false;
         }
 
