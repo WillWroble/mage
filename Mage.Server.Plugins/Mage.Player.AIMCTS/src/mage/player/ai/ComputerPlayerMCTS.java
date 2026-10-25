@@ -132,6 +132,10 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             success = activateAbility((ActivatedAbility) ability, game);
             root = best;
         }
+        if(ability == null) {
+            pass(game);
+            return false;
+        }
         if(!success) {
             logger.error("failed to activate chosen ability: " + ability.toString());
             throw new IllegalStateException("failed to activate chosen ability - game failure");

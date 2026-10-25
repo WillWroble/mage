@@ -33,12 +33,12 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /** How many concurrent HTTP calls are allowed. Keep small when batching is enabled. */
-    public static int MAX_CONCURRENT_CALLS = 16;
+    public static int MAX_CONCURRENT_CALLS = 8;
 
 
     // ---------- batching controls ----------
-    public static final int batchInterval = 2500;//micro seconds
-    public static final int maxBatchSize = 4;
+    public static final int batchInterval = 32000;//micro seconds
+    public static final int maxBatchSize = 32;
 
     private final OkHttpClient http;
     private final HttpUrl evalUrl;

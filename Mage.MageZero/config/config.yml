@@ -38,7 +38,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Pauper-Rally.txt
+  deckPath: decks/Standard-MonoB.dck
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -73,8 +73,8 @@ player_b:
     see_opponent_hand: true
 
 training:
-  games: 400
-  threads: 16
+  games: 200
+  threads: 64
   max_turns: 50 #does nothing
   max_minutes: 60
 

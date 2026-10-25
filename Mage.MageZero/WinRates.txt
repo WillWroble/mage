@@ -513,3 +513,13 @@ WR with Pauper-Faeries vs Pauper-CawGates: 0.6175 in 400 games
 WR with Pauper-Faeries vs Pauper-Elves: 0.3549222797927461 in 386 games
 WR with Pauper-Faeries vs Pauper-Faeries: 0.5087719298245614 in 399 games
 WR with Pauper-Faeries vs Pauper-Rally: 0.1525 in 400 games
+WR with Pauper-Faeries vs Pauper-Spy: 0.467005076142132 in 394 games
+WR with Pauper-Faeries vs Pauper-Wildfire: 0.5768261964735516 in 397 games
+WR with Pauper-Faeries vs Pauper-Faeries: 0.44 in 400 games
+WR with Pauper-Faeries vs Pauper-Elves: 0.3569620253164557 in 395 games
+WR with Pauper-Faeries vs Standard-MonoB: 0.074 in 2000 games
+WR with Pauper-Faeries vs Standard-MonoG: 0.0750375187593797 in 1999 games
+WR with Pauper-Faeries vs Standard-MonoR: 0.102 in 2000 games
+WR with Pauper-Faeries vs Standard-MonoU: 0.535767883941971 in 1999 games
+WR with Pauper-Faeries vs Standard-MonoW: 0.21121121121121122 in 1998 games
+WR with Pauper-Faeries vs Standard-MonoB: 0.3675675675675676 in 185 games

@@ -3,6 +3,7 @@ package mage.player.ai;
 
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
+import mage.abilities.common.PassAbility;
 import mage.cards.Card;
 import mage.cards.decks.Deck;
 import mage.constants.PhaseStep;
@@ -318,12 +319,11 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if (root != null) {
             root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph);
         }
-        if (root == null) {
+        if (root == null || c_perspective==-1) {
             root = newRoot;
         }
         root.emancipate();
         MCTSNode2 out = (MCTSNode2) calculateActions(game, actionType);
-        //first try regenerating tree (allowing duplicates)
         if(out == null) {
             logger.warn("invalid tree - regenerating from scratch");
             //allowDuplicates = true;
