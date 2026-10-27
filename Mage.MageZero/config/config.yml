@@ -34,11 +34,11 @@ player_a:
     manual_tapping: false
 
 
-  hidden_info:
+  hiddenInfo:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoB.dck
+  deckPath: decks/Pauper-CawGates.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -69,14 +69,14 @@ player_b:
     manual_tapping: false
 
 
-  hidden_info:
+  hiddenInfo:
     see_opponent_hand: true
 
 training:
   games: 200
   threads: 64
   max_turns: 50 #does nothing
-  max_minutes: 60
+  max_minutes: 120
 
 server:
   host: localhost
