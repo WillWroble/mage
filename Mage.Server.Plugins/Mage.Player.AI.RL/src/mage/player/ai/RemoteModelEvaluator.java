@@ -7,6 +7,8 @@ import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -166,16 +168,18 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /**
-     * Request (msgpack map), same concatenated CSR form as the HDF5 files:
+     * Request (msgpack map), same concatenated CSR form as the HDF5 files, each array as raw little-endian int32
+     * bytes (msgpack bin):
      *   indices, values           : per node, all states concatenated
      *   offsets                   : per state, start of its nodes (length B)
      *   edge_child, edge_parent,
      *   edge_label                : per edge, all states concatenated; child/parent are LOCAL to their state
      *   edge_offsets              : per state, start of its edges (length B)
-     * Response: array of B maps, each with
-     *   policy_priority, policy_target : one float per node of that state, in the order sent
-     *   policy_binary                  : [false, true]
-     *   value                          : float
+     *   binary                    : true (the server then replies with raw float32 arrays)
+     * Response: msgpack map of raw little-endian float32 arrays (msgpack bin):
+     *   priority, target          : one float per node, all states concatenated in the order sent
+     *   use                       : [false, true] per state
+     *   value                     : one float per state
      */
     private void runBatchedHttpCall(List<PendingReq> batch) throws Exception {
         // 1) Build concatenated arrays & per-state start offsets
@@ -188,11 +192,11 @@ public class RemoteModelEvaluator implements AutoCloseable {
         }
         int[] ids = new int[totalNodes];
         int[] values = new int[totalNodes];
-        long[] offsets = new long[B];
+        int[] offsets = new int[B];
         int[] edgeChild = new int[totalEdges];
         int[] edgeParent = new int[totalEdges];
         int[] edgeLabel = new int[totalEdges];
-        long[] edgeOffsets = new long[B];
+        int[] edgeOffsets = new int[B];
 
         int nodePos = 0;
         int edgePos = 0;
@@ -213,14 +217,16 @@ public class RemoteModelEvaluator implements AutoCloseable {
 
         // 2) Encode request
         MessageBufferPacker pk = MessagePack.newDefaultBufferPacker();
-        pk.packMapHeader(7);
-        packIntArray(pk, "indices", ids);
-        packIntArray(pk, "values", values);
-        packLongArray(pk, "offsets", offsets);
-        packIntArray(pk, "edge_child", edgeChild);
-        packIntArray(pk, "edge_parent", edgeParent);
-        packIntArray(pk, "edge_label", edgeLabel);
-        packLongArray(pk, "edge_offsets", edgeOffsets);
+        pk.packMapHeader(8);
+        packInts(pk, "indices", ids);
+        packInts(pk, "values", values);
+        packInts(pk, "offsets", offsets);
+        packInts(pk, "edge_child", edgeChild);
+        packInts(pk, "edge_parent", edgeParent);
+        packInts(pk, "edge_label", edgeLabel);
+        packInts(pk, "edge_offsets", edgeOffsets);
+        pk.packString("binary");
+        pk.packBoolean(true);
         pk.close();
 
         RequestBody body = RequestBody.create(pk.toByteArray(), MediaType.parse("application/x-msgpack"));
@@ -229,87 +235,64 @@ public class RemoteModelEvaluator implements AutoCloseable {
         // 3) Execute & parse
         try (Response resp = http.newCall(req).execute()) {
             if (!resp.isSuccessful()) throw new RuntimeException("HTTP " + resp.code() + " from model server");
-            byte[] bytes = resp.body().bytes();
-            MessageUnpacker up = MessagePack.newDefaultUnpacker(bytes);
+            MessageUnpacker up = MessagePack.newDefaultUnpacker(resp.body().bytes());
 
-            int n = up.unpackArrayHeader();
-            if (n != B) throw new RuntimeException("Batch size mismatch: sent " + B + " got " + n);
-            InferenceResult[] results = new InferenceResult[n];
-            for (int i = 0; i < n; i++) {
-                results[i] = unpackOneResultMap(up, batch.get(i).graph.order);
+            float[] priority = null, target = null, use = null, value = null;
+            int keys = up.unpackMapHeader();
+            for (int k = 0; k < keys; k++) {
+                String key = up.unpackString();
+                switch (key) {
+                    case "priority": priority = unpackFloats(up); break;
+                    case "target": target = unpackFloats(up); break;
+                    case "use": use = unpackFloats(up); break;
+                    case "value": value = unpackFloats(up); break;
+                    default: up.skipValue();
+                }
+            }
+            if (priority == null || target == null || use == null || value == null) {
+                throw new RuntimeException("Model server response is missing arrays (is the server up to date?)");
+            }
+            if (priority.length != totalNodes || target.length != totalNodes || use.length != 2 * B || value.length != B) {
+                throw new RuntimeException("Size mismatch: sent " + B + " states / " + totalNodes + " nodes, got "
+                        + value.length + " states / " + priority.length + " nodes");
             }
 
             // 4) Fulfill promises in order
+            int nodeStart = 0;
             for (int i = 0; i < B; i++) {
-                batch.get(i).promise.complete(results[i]);
+                List<UUID> order = batch.get(i).graph.order;
+                Map<UUID, Float> policyUse = new HashMap<>();
+                policyUse.put(FeatureGraph.USE_FALSE_ID, use[2 * i]);
+                policyUse.put(FeatureGraph.USE_TRUE_ID, use[2 * i + 1]);
+                batch.get(i).promise.complete(new InferenceResult(toNodeMap(priority, nodeStart, order),
+                        toNodeMap(target, nodeStart, order), policyUse, value[i]));
+                nodeStart += order.size();
             }
         }
     }
 
-    private static void packIntArray(MessageBufferPacker pk, String key, int[] arr) throws IOException {
+    private static void packInts(MessageBufferPacker pk, String key, int[] arr) throws IOException {
+        ByteBuffer bytes = ByteBuffer.allocate(4 * arr.length).order(ByteOrder.LITTLE_ENDIAN);
+        bytes.asIntBuffer().put(arr);
         pk.packString(key);
-        pk.packArrayHeader(arr.length);
-        for (int v : arr) pk.packInt(v);
+        pk.packBinaryHeader(bytes.capacity());
+        pk.writePayload(bytes.array());
     }
 
-    private static void packLongArray(MessageBufferPacker pk, String key, long[] arr) throws IOException {
-        pk.packString(key);
-        pk.packArrayHeader(arr.length);
-        for (long v : arr) pk.packLong(v);
-    }
-
-    private static float[] unpackFloatArray(MessageUnpacker up) throws Exception {
-        int n = up.unpackArrayHeader();
-        float[] arr = new float[n];
-        for (int j = 0; j < n; j++) {
-            arr[j] = (float) up.unpackDouble();
-        }
+    private static float[] unpackFloats(MessageUnpacker up) throws IOException {
+        byte[] bytes = up.readPayload(up.unpackBinaryHeader());
+        float[] arr = new float[bytes.length / 4];
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(arr);
         return arr;
     }
 
-    /** Per-node scores -> map keyed by node UUID, using the order the state was sent in. */
-    private static Map<UUID, Float> toNodeMap(float[] scores, List<UUID> order) {
-        if (scores.length != order.size()) {
-            throw new RuntimeException("Node count mismatch: sent " + order.size() + " got " + scores.length);
-        }
+    /** One state's per-node scores (starting at `start`) -> map keyed by node UUID, in the order the state was sent. */
+    private static Map<UUID, Float> toNodeMap(float[] scores, int start, List<UUID> order) {
         Map<UUID, Float> out = new HashMap<>();
-        for (int i = 0; i < scores.length; i++) {
-            out.put(order.get(i), scores[i]);
+        for (int i = 0; i < order.size(); i++) {
+            out.put(order.get(i), scores[start + i]);
         }
         return out;
-    }
-
-    private static InferenceResult unpackOneResultMap(MessageUnpacker up, List<UUID> order) throws Exception {
-        int mapSz = up.unpackMapHeader();
-        Map<UUID, Float> policyPriority = null;
-        Map<UUID, Float> policyTarget = null;
-        Map<UUID, Float> policyUse = null;
-        float value = 0f;
-
-        for (int i = 0; i < mapSz; i++) {
-            String key = up.unpackString();
-            switch (key) {
-                case "policy_priority":
-                    policyPriority = toNodeMap(unpackFloatArray(up), order);
-                    break;
-                case "policy_target":
-                    policyTarget = toNodeMap(unpackFloatArray(up), order);
-                    break;
-                case "policy_binary": {
-                    float[] b = unpackFloatArray(up);
-                    policyUse = new HashMap<>();
-                    policyUse.put(FeatureGraph.USE_FALSE_ID, b[0]);
-                    policyUse.put(FeatureGraph.USE_TRUE_ID, b[1]);
-                    break;
-                }
-                case "value":
-                    value = (float) up.unpackDouble();
-                    break;
-                default:
-                    up.skipValue();
-            }
-        }
-        return new InferenceResult(policyPriority, policyTarget, policyUse, value);
     }
 
     private int pendingSizeApprox() {
