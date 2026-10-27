@@ -27,7 +27,7 @@ player_a:
     prune_duplicate_states: true
     max_pending: 4
     c_puct: 1.0
-    pimc: false
+    pimc: true
 
   gameplay:
     mulligans_enabled: false
@@ -35,10 +35,10 @@ player_a:
 
 
   hiddenInfo:
-    see_opponent_hand: true
+    see_opponent_hand: false
 
 player_b:
-  deckPath: decks/Pauper-CawGates.txt
+  deckPath: decks/Standard-MonoB.dck
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 

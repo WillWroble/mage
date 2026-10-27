@@ -369,7 +369,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
         mcts.restoreGame(game.getLastPriority().copy());
         for (Player copyPlayer : mcts.getState().getPlayers().values()) {
             Player origPlayer = mcts.getState().getPlayers().get(copyPlayer.getId());
-            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), this, stateEncoder);
+            MCTSPlayer newPlayer = new MCTSPlayer(copyPlayer.getId(), getId(), stateEncoder);
             newPlayer.restore(origPlayer);
             newPlayer.setMatchPlayer(origPlayer.getMatchPlayer());
             mcts.getState().getPlayers().put(copyPlayer.getId(), newPlayer);

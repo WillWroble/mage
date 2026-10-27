@@ -262,6 +262,8 @@ public class MCTSNode {
         MCTSPlayer playerB =  (MCTSPlayer) rootGame.getOpponent(targetPlayer);
         playerA.actionScript = myScript; //set base player actions
         playerB.actionScript = opponentScript; //set opponent actions
+        playerA.shuffleUnknowns = basePlayer.pimc;
+        playerB.shuffleUnknowns = basePlayer.pimc;
         //will run until next decision (see MCTSPlayer)
         if(rootGame.getPhase() == null) {
             rootGame.getOptions().skipInitShuffling = true;

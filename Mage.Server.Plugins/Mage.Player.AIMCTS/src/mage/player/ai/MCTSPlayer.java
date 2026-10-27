@@ -33,6 +33,7 @@ public class MCTSPlayer extends ComputerPlayer {
 
     //the script of actions this dummy player is supposed to follow to catch up to the latest decision
     public PlayerScript actionScript = new PlayerScript();
+    public boolean shuffleUnknowns = false;
     public boolean scriptFailed = false;
     private boolean lastToAct = false;
     private boolean isRandomTransition;
@@ -44,7 +45,6 @@ public class MCTSPlayer extends ComputerPlayer {
     //additional text for state encoder that describes the decision the player is currently making
     private String decisionText;
     private UUID targetPlayer;
-    private ComputerPlayerMCTS basePlayer = null;
     private FeatureGraph featureGraph;
     private StateEncoder encoder;
 
@@ -54,10 +54,9 @@ public class MCTSPlayer extends ComputerPlayer {
     public MCTSPlayer(UUID id) {
         super(id);
     }
-    public MCTSPlayer(UUID id, ComputerPlayerMCTS basePlayer, StateEncoder encoder) {
+    public MCTSPlayer(UUID id, UUID targetPlayer, StateEncoder encoder) {
         super(id);
-        this.targetPlayer = basePlayer.getId();
-        this.basePlayer = basePlayer;
+        this.targetPlayer = targetPlayer;
         this.encoder = encoder;
     }
 
@@ -67,7 +66,6 @@ public class MCTSPlayer extends ComputerPlayer {
         this.actionType = player.actionType;
         this.targetPlayer = player.targetPlayer;
         this.encoder = player.encoder;
-        this.basePlayer = player.basePlayer;
     }
     public void clearFields() {
         lastToAct = false;
@@ -128,7 +126,7 @@ public class MCTSPlayer extends ComputerPlayer {
             return !(ability instanceof PassAbility);
             //priority history is handled in base player activateAbility()
         }
-        if(basePlayer.pimc) {
+        if(shuffleUnknowns) {
             shuffleUnknowns(game, targetPlayer);
         }
         game.setLastPriority(playerId);
