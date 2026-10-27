@@ -55,9 +55,11 @@ public class RemoteModelEvaluator implements AutoCloseable {
 
     private static final class PendingReq {
         final FeatureGraph.GraphArrays graph; // also holds the UUID order for mapping results back
+        final long[] hashes;                  // per node in graph.order: its subtree hash (the server's cache key)
         final CompletableFuture<InferenceResult> promise;
-        PendingReq(FeatureGraph.GraphArrays graph) {
+        PendingReq(FeatureGraph.GraphArrays graph, long[] hashes) {
             this.graph = graph;
+            this.hashes = hashes;
             this.promise = new CompletableFuture<>();
         }
     }
@@ -117,7 +119,13 @@ public class RemoteModelEvaluator implements AutoCloseable {
      */
     public CompletableFuture<InferenceResult> inferAsync(FeatureGraph state) {
 
-        PendingReq pr = new PendingReq(state.getGraphArrays());
+        state.getStateHash(); // mixes every node's subtree hash, if the search hasn't already
+        FeatureGraph.GraphArrays graph = state.getGraphArrays();
+        long[] hashes = new long[graph.order.size()];
+        for (int i = 0; i < hashes.length; i++) {
+            hashes[i] = state.get(graph.order.get(i)).hash;
+        }
+        PendingReq pr = new PendingReq(graph, hashes);
         pending.add(pr);
 
         // If we just hit the max batch size, try to flush immediately (best-effort).
@@ -175,6 +183,8 @@ public class RemoteModelEvaluator implements AutoCloseable {
      *   edge_child, edge_parent,
      *   edge_label                : per edge, all states concatenated; child/parent are LOCAL to their state
      *   edge_offsets              : per state, start of its edges (length B)
+     *   node_hash                 : per node, its subtree hash as raw little-endian int64; the server caches
+     *                               local-layer outputs under it
      *   binary                    : true (the server then replies with raw float32 arrays)
      * Response: msgpack map of raw little-endian float32 arrays (msgpack bin):
      *   priority, target          : one float per node, all states concatenated in the order sent
@@ -197,6 +207,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
         int[] edgeParent = new int[totalEdges];
         int[] edgeLabel = new int[totalEdges];
         int[] edgeOffsets = new int[B];
+        long[] hashes = new long[totalNodes];
 
         int nodePos = 0;
         int edgePos = 0;
@@ -208,6 +219,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
             int m = g.edgeChild.length;
             System.arraycopy(g.ids, 0, ids, nodePos, n);
             System.arraycopy(g.values, 0, values, nodePos, n);
+            System.arraycopy(batch.get(i).hashes, 0, hashes, nodePos, n);
             System.arraycopy(g.edgeChild, 0, edgeChild, edgePos, m);
             System.arraycopy(g.edgeParent, 0, edgeParent, edgePos, m);
             System.arraycopy(g.edgeLabel, 0, edgeLabel, edgePos, m);
@@ -217,7 +229,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
 
         // 2) Encode request
         MessageBufferPacker pk = MessagePack.newDefaultBufferPacker();
-        pk.packMapHeader(8);
+        pk.packMapHeader(9);
         packInts(pk, "indices", ids);
         packInts(pk, "values", values);
         packInts(pk, "offsets", offsets);
@@ -225,6 +237,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
         packInts(pk, "edge_parent", edgeParent);
         packInts(pk, "edge_label", edgeLabel);
         packInts(pk, "edge_offsets", edgeOffsets);
+        packLongs(pk, "node_hash", hashes);
         pk.packString("binary");
         pk.packBoolean(true);
         pk.close();
@@ -274,6 +287,14 @@ public class RemoteModelEvaluator implements AutoCloseable {
     private static void packInts(MessageBufferPacker pk, String key, int[] arr) throws IOException {
         ByteBuffer bytes = ByteBuffer.allocate(4 * arr.length).order(ByteOrder.LITTLE_ENDIAN);
         bytes.asIntBuffer().put(arr);
+        pk.packString(key);
+        pk.packBinaryHeader(bytes.capacity());
+        pk.writePayload(bytes.array());
+    }
+
+    private static void packLongs(MessageBufferPacker pk, String key, long[] arr) throws IOException {
+        ByteBuffer bytes = ByteBuffer.allocate(8 * arr.length).order(ByteOrder.LITTLE_ENDIAN);
+        bytes.asLongBuffer().put(arr);
         pk.packString(key);
         pk.packBinaryHeader(bytes.capacity());
         pk.writePayload(bytes.array());
