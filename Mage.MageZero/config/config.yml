@@ -27,7 +27,7 @@ player_a:
     prune_duplicate_states: true
     max_pending: 4
     c_puct: 1.0
-    pimc: true
+    pimc: false
 
   gameplay:
     mulligans_enabled: false
@@ -35,10 +35,10 @@ player_a:
 
 
   hiddenInfo:
-    see_opponent_hand: false
+    see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoB.dck
+  deckPath: decks/Standard-MonoU.dck
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -58,7 +58,7 @@ player_b:
     search_budget: 300
     timeout_ms: 60000
     td_discount: 0.92
-    offline_mode: true
+    offline_mode: false
     prune_duplicate_states: true
     max_pending: 4
     c_puct: 1.0
@@ -81,7 +81,7 @@ training:
 server:
   host: localhost
   port: 50052 #50052
-  opponent_port: 50053 #50053
+  opponent_port: 50052 #50053
 
 logging:
   sparse: false #does nothing

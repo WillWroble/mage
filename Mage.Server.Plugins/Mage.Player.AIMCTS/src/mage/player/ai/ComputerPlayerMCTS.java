@@ -133,6 +133,7 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
             root = best;
         }
         if(ability == null) {
+            logger.error("couldn't choose ability - passing instead");
             pass(game);
             return false;
         }

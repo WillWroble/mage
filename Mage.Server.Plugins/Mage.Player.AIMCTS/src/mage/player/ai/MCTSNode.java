@@ -585,11 +585,11 @@ public class MCTSNode {
             }
         }
         //mask illegal moves
-        for(MCTSNode node : children) {
-            if(!(node.isLegalState() || node.containsLegalNode())) {
-                node.reset();
-            }
-        }
+//        for(MCTSNode node : children) {
+//            if(!(node.isLegalState() || node.containsLegalNode())) {
+//                node.reset();
+//            }
+//        }
         StringBuilder sb = new StringBuilder();
         if(baseGame.getTurnStepType() == null) {
             sb.append("pre-game");
