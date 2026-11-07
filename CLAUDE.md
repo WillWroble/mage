@@ -80,6 +80,38 @@ value search, and XMage's MAD bot is ≈10 points weaker than that offline MCTS.
   `RemoteModelEvaluator` (MageZero's players; a protocol-driven player can follow how they hook decisions).
 - `Mage.MageZero/` — `ParallelDataGenerator`, `Config`, decks (`decks/Pauper-*.txt`), `config/`.
 
+## Running games on RunPod
+
+Paid GPU work goes through RunPod with the tooling in `WillWroble/MageZero` (`runpod/`, branch
+`graph-encoder-test`); use it rather than writing new launchers, so results stay comparable. `RUNPOD_API_KEY` is in
+the session environment. Will pays for every pod: run only what was asked, state the expected cost before launching,
+and report the actual cost afterwards.
+
+- **Tooling.** `runpod/launch.py` creates a pod that clones MageZero at the pushed commit (push first) and runs a
+  script: `--script runpod/generate.sh --env MAGE_COMMIT=<sha> MODEL=<dir> CONFIG="<yml> <yml> ..."` plays each
+  config in turn (a model server on port 50052, optional `OPP_MODEL` on 50053). `runpod/build-xmage.sh` builds this
+  repo at `MAGE_COMMIT` into `/workspace/xmage/<sha>` once per commit (≈15 min the first time, then cached).
+  `launch.py --list`, `--reap` (deletes pods that wrote `DONE`), `runpod/watchdog.py` (checks every 10 min).
+- **Volume.** Network volume `0ksqf5sep2` in EU-RO-1 (300 GB), mounted at `/workspace` in every pod. Pods must be
+  in EU-RO-1. A files pod (`mz-files`, CPU, $0.06/h) serves `/workspace/runs` over HTTP on port 8000 for reading logs
+  (`https://<files pod id>-8000.proxy.runpod.net/<run>/`). If it stops answering, recreate it with
+  `launch.py --files`; running pods are unaffected. The volume froze once when it filled up: check free space before
+  big runs and clean up old checkpoints and duplicate shards.
+- **Which pod.** Games per $ on ver13 vs offline MonoB (`MageZero/results/runpod-pods.md`): RTX 4090 ($0.89/h)
+  is cheapest, 178 games/$, with `THREADS=16 HEAP=32g TIMEOUT_MS=120000`; RTX PRO 6000 ($2.49/h) is fastest, 64
+  threads, and is used for training. Pass the settings that match the pod: a PRO 6000 launched with 4090 settings
+  wastes most of its cores. 4090s are sometimes unavailable; retry rather than silently switching type.
+- **Comparability.** Every MageZero result so far uses XMage `f2ce8eca`, value-only search, 300 sims, `c_puct` 1.0,
+  `max_pending` 4, the opponent's hand visible. Record the XMage commit, GPU type and `max_pending` next to every win
+  rate. `max_pending` (evaluations in flight per tree) changes play when inference is slow: on Will's RTX 4070,
+  ver15 vs offline MonoB went from ≈33% at 4 to ≈36% at 2; on the pods' GPUs the cap rarely binds (five pod types
+  agreed within noise). 200 games give about ±3.5 points; use the same deck files, seats and budgets when comparing.
+- **Practicalities that bit before.** XMage builds its card database on startup: give each pod its own local copy,
+  never a shared or copied `db/` (decks load with cards missing). Write shards to the container disk and copy them to
+  the volume when a run ends (`generate.sh` does this), so a stalled volume can't leave a half-written shard. Load
+  models from the volume, not through Git LFS: LFS bandwidth is billed and was once blocked by its budget. Sessions
+  stop background watchers after two hours; restart the watchdog when told it stopped.
+
 ## Environment
 
 - JDK 21, Maven. XMage needs a large heap; ZGC is preferred.
