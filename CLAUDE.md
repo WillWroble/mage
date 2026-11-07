@@ -119,12 +119,9 @@ RunPod), then self-play on all 36 matchups. So expect multi-deck models; don't a
      any differences rather than editing either list).
 2. **Baselines in our engine.** Run Spellbench's reference bots (`examples/minimal_bot.py`, random, first) through
    the XMage engine, and XMage-side bots (offline MCTS, MAD) wrapped as agents, so the scale can be anchored.
-3. **MageZero as an agent.** Not to be started without Will. Open questions to bring to him, with options:
-   - The agent only gets the neutral board view, but MageZero's search copies an XMage game and its encoder reads
-     XMage state. Rebuild a game from the observation and decklists (determinized, PIMC-style), or rate it only
-     on the XMage engine through an extension (which rated runs restrict, §14)?
-   - MageZero's models are deck-specific (Faeries only today) and were trained with the opponent's hand visible;
-     Spellbench hides it. The PIMC games so far played much worse than perfect-information ones.
+3. **MageZero as an agent.** Decided (see "How to work with Will"): engine-neutral, greedy policy only, opponent's
+   hand hidden. The agent gets only the v2 board view, so it rebuilds the encoder's input from it. Search (which
+   copies an XMage game) comes later and needs its own plan. ver15 pilots Faeries well; gen5 will cover all 8 decks.
 
 ## Rules
 
