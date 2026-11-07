@@ -491,7 +491,9 @@ public class MCTSNode {
         return children;
     }
     public void expand() {
-
+        if(isTerminal()) {
+            return;
+        }
         MCTSPlayer player = (MCTSPlayer) rootGame.getPlayer(playerId);
         if (player.getNextAction() == null) {
             logger.fatal("next action is null");

@@ -51,6 +51,9 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
 
 
     public UUID bestAction(MCTSNode2 node, Game game) {
+        if(node.isTerminal()) {
+            return null;
+        }
         Map<UUID, Float> policy = new HashMap<>();
         for(MCTSNode child : node.children) {
             UUID id = child.getActionId(game);

@@ -27,6 +27,9 @@ public class MCTSNode2 extends MCTSNode {
      * async call. wait for network result than finalize the node.
      */
     public void evaluate() {
+        if(isTerminal()) {
+            return;
+        }
         evaluationPending = true;
         ((ComputerPlayerMCTS2)basePlayer).pendingNodes.incrementAndGet();
         Game game = getGame();

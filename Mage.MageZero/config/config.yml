@@ -4,14 +4,14 @@ goes_first: random  # player_a, player_b, random
 
 player_a:
   deckPath: decks/Pauper-Faeries.txt
-  type: mcts
+  type: on_policy
   #output_file: data/playerA/AvsB.hdf5
 
   priors:
-    priority: false
-    target: false
-    binary: false
-    opponent: false
+    priority: true
+    target: true
+    binary: true
+    opponent: true
     prior_temperature: 1.5
 
   noise:
@@ -20,7 +20,7 @@ player_a:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 1000
+    search_budget: 300
     timeout_ms: 60000
     td_discount: 0.92
     offline_mode: false
