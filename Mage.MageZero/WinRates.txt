@@ -600,3 +600,8 @@ WR with Pauper-Faeries vs Standard-MonoB: 0.3015075376884422 in 199 games
 WR with Pauper-Faeries vs Standard-MonoB: 0.325 in 200 games
 WR with Pauper-Faeries vs Standard-MonoB: 0.365 in 200 games
 WR with Pauper-Faeries vs Standard-MonoB: 0.4797979797979798 in 198 games
+WR with Pauper-Faeries vs Standard-MonoB: 0.15 in 200 games
+WR with Pauper-Faeries vs Standard-MonoW: 0.25252525252525254 in 198 games
+WR with Pauper-Faeries vs Standard-MonoR: 0.08125 in 160 games
+WR with Pauper-Faeries vs Standard-MonoR: 0.085 in 200 games
+WR with Pauper-Faeries vs Standard-MonoG: 0.115 in 200 games

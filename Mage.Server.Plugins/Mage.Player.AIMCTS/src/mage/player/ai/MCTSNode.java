@@ -497,6 +497,7 @@ public class MCTSNode {
         MCTSPlayer player = (MCTSPlayer) rootGame.getPlayer(playerId);
         if (player.getNextAction() == null) {
             logger.fatal("next action is null");
+            return;
         }
         ActionEncoder.ActionType actionType = player.getNextAction();
         children.addAll(createChildren(actionType, player, rootGame));

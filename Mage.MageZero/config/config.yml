@@ -11,7 +11,7 @@ player_a:
     priority: true
     target: true
     binary: true
-    opponent: true
+    opponent: false
     prior_temperature: 1.5
 
   noise:
@@ -38,7 +38,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoB.dck
+  deckPath: decks/Standard-MonoU.dck
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 

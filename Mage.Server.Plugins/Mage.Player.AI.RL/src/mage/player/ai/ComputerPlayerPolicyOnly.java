@@ -51,7 +51,7 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
 
 
     public UUID bestAction(MCTSNode2 node, Game game) {
-        if(node.isTerminal()) {
+        if(node.isTerminal() || node.policy == null) {
             return null;
         }
         Map<UUID, Float> policy = new HashMap<>();
@@ -178,6 +178,9 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
         while (pendingNodes.get() > 0) {
             Thread.yield();
         }
+        Map<UUID, Integer> actionMap = getActionMap(newRoot, game);
+
+        if(actionMap != null && newRoot.featureGraph != null) stateEncoder.addLabeledState(newRoot.featureGraph, actionMap, newRoot.getMeanScore(), actionType, true, game, playerId);
 
         return newRoot;
     }
