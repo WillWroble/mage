@@ -547,7 +547,7 @@ public class ParallelDataGenerator {
                 ComputerPlayerMCTS2 mcts2 = new ComputerPlayerMCTS2(name, RangeOfInfluence.ONE, 6);
                 return mcts2;
             }
-            if(Config.INSTANCE.playerA.type.equals("on_policy")) {
+            if(Config.INSTANCE.playerB.type.equals("on_policy")) {
                 ComputerPlayerPolicyOnly po = new ComputerPlayerPolicyOnly(name, RangeOfInfluence.ONE, 6);
                 return po;
             }

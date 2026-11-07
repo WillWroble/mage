@@ -50,7 +50,12 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
     }
 
 
-    public UUID bestAction(Map<UUID, Float> policy) {
+    public UUID bestAction(MCTSNode2 node, Game game) {
+        Map<UUID, Float> policy = new HashMap<>();
+        for(MCTSNode child : node.children) {
+            UUID id = child.getActionId(game);
+            policy.put(id, node.policy.get(id));
+        }
         double priorTemperature = priorTemp; // This controls 'spikiness' of prior distribution; higher means less spiky
 
         //find max logit for numeric stability
@@ -117,7 +122,7 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
             allMana &= (ability.isManaActivatedAbility() || ability instanceof PassAbility);
         }
 
-        UUID bestAction = bestAction(newRoot.policy);
+        UUID bestAction = bestAction(newRoot, game);
         ActivatedAbility ability = null;
         for(ActivatedAbility aa : playableAbilities) {
             if(aa.getId().equals(bestAction)) {
@@ -167,6 +172,9 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
         newRoot.validateState();
         newRoot.expand();
         newRoot.evaluate();
+        while (pendingNodes.get() > 0) {
+            Thread.yield();
+        }
 
         return newRoot;
     }
@@ -227,7 +235,7 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
         if(newRoot == null) {
             return super.makeChoice( outcome,  target,  source,  game,  fromCards);
         }
-        UUID targetId = bestAction(newRoot.policy);
+        UUID targetId = bestAction(newRoot, game);
         if(targetId == null) {
             logger.error("target id is null");
             return false;
@@ -273,7 +281,7 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
             getPlayerHistory().useSequence.add(false);
             return false;
         }
-        UUID chosenId = bestAction(newRoot.policy);
+        UUID chosenId = bestAction(newRoot, game);
         boolean chosen = false;
         if(chosenId != null) {
             if(chosenId.equals(FeatureGraph.USE_TRUE_ID)) {
