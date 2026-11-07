@@ -15,6 +15,71 @@ MageZero has never been compared with any of them: there is no common engine. Fo
 ver15 Faeries model wins ≈49% against XMage's offline heuristic MCTS (300 sims) with its policy alone and ≈67% with
 value search, and XMage's MAD bot is ≈10 points weaker than that offline MCTS.
 
+## How to work with Will
+
+- Read the code, configs and the MageZero repo before asking. If the answer is in `config.yml`, an encoder class or a
+  results file, find it yourself. Only ask about decisions the code can't settle, all at once, in plain text (not
+  question widgets), short and numbered, with your recommendation. Then act on the answer.
+- Never write messages or posts on Will's behalf (to Jack, Discord, GitHub). If something needs saying to someone,
+  tell Will what needs saying and why.
+- Settled decisions for this branch (don't re-ask):
+  1. The MageZero bot must be **engine-neutral**: a Spellbench agent that rebuilds its input from the v2 board view,
+     so it can play on `pauper-kernel` against Archon, not only inside XMage.
+  2. First bot: **policy only, greedy** (`ComputerPlayerPolicyOnly` with `noise.enabled: false`, top-scored legal
+     move, no search). Break ties deterministically (candidate order), never by `HashMap` order.
+  3. Spellbench hides the opponent's hand: run with `hiddenInfo.see_opponent_hand: false` (the encoder then encodes
+     only the hand size, `StateEncoder.perfectInfo`). The models were trained with it visible; report the loss.
+  4. Serve the model from the MageZero repo, branch `graph-encoder-test`:
+     `python src/magezero/server.py --model experiment_models/Pauper-Faeries/ver15 --port 50052`.
+
+## MageZero: what exists (from `WillWroble/MageZero`, `results/`)
+
+**Pipeline.** XMage (this fork) plays games with `ComputerPlayerMCTS2` (async MCTS, virtual loss, `max_pending`
+evaluations in flight per tree). Each state is encoded by `StateEncoder` into a graph (typed internal nodes: ROOT,
+PLAYER, ZONE, STACK_OBJECT, PERMANENT, CARD, ABILITY; hashed leaf features; labelled child→parent edges) and sent
+by `RemoteModelEvaluator` (msgpack, raw int32 arrays plus per-node subtree hashes) to the Python server, which
+batches requests and caches local-layer outputs by subtree hash. Games are written to h5 shards
+(`data/{deck}/ver{N}/...`, one file per seat and matchup) with per-state MCTS visit counts (priority, target,
+choose-use) and value labels (TD-blended, discount 0.92, toward ±1 at the end). Python trains on them.
+
+**Network.** `NetGraph` (9.1M params): d256, 4 heads, FF 512, 2 bottom-up local passes (one attention layer per node
+type, ABILITY → … → ROOT), then a 2-layer global transformer over [CLS, internal nodes]. Heads: per-node priority and
+target logits, CLS choose-use and value (tanh, MSE). Policy loss is over the **legal candidates only**. A GNN beats
+an MLP of equal size and the MLP in play at every generation (`results/gnn-vs-mlp-summary.md`).
+
+**Search settings behind every result.** Value-only MCTS (priors off), 300 simulations, `c_puct` 1.0,
+`max_pending` 4, the opponent's hand visible, XMage `f2ce8eca`. Opponent = XMage's offline heuristic MCTS
+(`offline_mode: true`, `GameStateEvaluator3`), also 300 sims. 200 games per matchup (±3.5 points).
+
+**Data versions (Pauper-Faeries).** `ver4` is the current data line (v0.3 encoder: passed-combat flags, only playable
+activated abilities). Generations: gen0 = heuristic search vs heuristic; gen1 = games of model v4; gen2 = ver7/ver10;
+gen3 = ver13; each generation plays the offline search, the earlier models and itself (self-play). Decks: Faeries is
+always the model's deck; opponents are the 8 Pauper decks (`decks/Pauper-*.txt`: Affinity, Burn, CawGates, Elves,
+Faeries, Rally, Spy, Wildfire) and 5 Standard mono decks. `ver1`–`ver3`, `ver5` and UWTempo `ver30/31` are older.
+
+**Models** (`experiment_models/Pauper-Faeries/verN/model.pt.gz`):
+- v4 (`ver4`): gen1 model, trained on gen0.
+- ver7: gen2, gen0 + gen1. ver10: gen2 without gen0 (weaker).
+- ver13: gen3, warm start from v4, gen0–gen2, lr 3e-5, 3 epochs. First model to beat v4.
+- ver14: gen4 candidate, warm start from ver13, gen0–gen3 (4.37M states), lr 3e-5, 3 epochs. Overfit by data order.
+- **ver15: current best.** Same recipe as ver14 (seed 0, player names kept, legal-only loss, TD 0.92), different data
+  order. Will expects to replace it.
+
+**ver15's strength (Faeries vs the offline search, 200 games):** with search: mirror 72.0%, Burn 68.5%, MonoB 36.0%,
+MonoW 53.5%, Rally 31.0%, MonoG 32.0% (48.8% mean, +2.3 over ver13). Policy only, greedy: Pauper pool mean 48.8%
+(Affinity 66.5, Burn 45.5, CawGates 67.0, Elves 55.3, mirror 39.0, Rally 13.5, Spy 55.0), about level with the
+heuristic search and ≈19 points below search; Mono decks mean ≈24% (`results/onpolicy.md`). 1000 sims instead of
+300: MonoB 44.6%. Priority priors don't help yet.
+
+**Training regime and lessons.** Warm start from the previous model at lr 3e-5, legal-only policy loss, MSE value,
+all generations in the buffer (dropping old generations hurt play), every 5th game held out per block, validation
+on every block every 10K steps (`train.py --val-every`). Small held-out value-loss differences (≈.004) moved win
+rate by ≈6 points. Training value and policy jointly beats either alone.
+
+**In progress (Will's direction).** Gen5: one model for the whole Pauper format, starting from ver15's weights. Its
+first data: ver15 piloting each of the 8 Pauper decks against the offline search of each (8×8×200 games, running on
+RunPod), then self-play on all 36 matchups. So expect multi-deck models; don't assume Faeries-only.
+
 ## The spec (read first)
 
 - `spec/SPELLBENCH_PROTOCOL_V2.md` in the Spellbench repo: stdio NDJSON, one decision at a time, the engine poses
