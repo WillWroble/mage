@@ -176,21 +176,15 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                 logger.info("tree is too deep, ending search");
                 break;
             }
-            if(root.containsLegalNode() || true) { //can only normal exit search if the tree contains a priority node (meaning a future legal state)
-                if (System.nanoTime() > endTime) {
-                    logger.info("timed out, ending search");
-                    break;
-                }
-                if (root.getVisits() >= searchBudget) {
-                    logger.info("required visits reached, ending search");
-                    break;
-                }
-            } else {
-                if (System.nanoTime() > endTime) {
-                    RateLimitedLogger.warn("timed out, looking for any legal line");
-                    c_perspective = -1;
-                }
+            if (System.nanoTime() > endTime) {
+                logger.info("timed out, ending search");
+                break;
             }
+            if (root.getVisits() >= searchBudget) {
+                logger.info("required visits reached, ending search");
+                break;
+            }
+
 
             MCTSNode2 current = root;
 
