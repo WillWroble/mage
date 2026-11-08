@@ -243,6 +243,7 @@
         <module>Mage.Verify</module>
         <module>Mage.Reports</module>
         <module>Mage.MageZero</module>
+        <module>Mage.Spellbench</module>
     </modules>
 
     <repositories>
