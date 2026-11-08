@@ -2,6 +2,7 @@ package spellbench.kit.xmage;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -46,6 +47,9 @@ public final class KitContext {
      */
     public static java.util.function.BiPredicate<mage.abilities.Ability, mage.game.Game> rootFilter;
 
+    /** The decision's candidates, in the engine's order: a deterministic order for a decider's ties. */
+    public static List<Object> candidates;
+
     /** UUIDs of stack objects the rebuild flagged approximate: no simulated game may resolve them. */
     public static final Set<UUID> horizon = new HashSet<>();
 
@@ -68,6 +72,7 @@ public final class KitContext {
 
     public static synchronized void reset() {
         rootFilter = null;
+        candidates = null;
         horizon.clear();
         counters.clear();
         ops = 0;

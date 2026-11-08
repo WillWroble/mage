@@ -22,12 +22,15 @@ import mage.target.TargetAmount;
 import mage.target.TargetCard;
 import spellbench.kit.core.Json;
 import spellbench.kit.core.ObsIndex;
+import spellbench.kit.core.Offers;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -170,6 +173,8 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
                 offered.add(a);
             }
         }
+        // ties go to the earlier candidate (settled: candidate order, never hash order)
+        offered.sort(Comparator.comparingInt(a -> candidateIndex(w, game, a, obs)));
         RemoteModelEvaluator.InferenceResult scores = infer(game, ActionType.PRIORITY, "priority", null, null);
         UUID bestId = argmax(offered.stream().map(Ability::getId).collect(Collectors.toList()), scores.policyPriority);
         Ability best = offered.stream().filter(a -> a.getId().equals(bestId)).findFirst().get();
@@ -184,6 +189,26 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
         out.optionPayload = Mapping.payload(w, best, game);
         if (act) {
             execute(w, best, out);
+        }
+        return out;
+    }
+
+    private static int candidateIndex(World w, Game game, Ability a, ObsIndex obs) {
+        if (a instanceof PassAbility) {
+            return -1;
+        }
+        int c = KitContext.candidates == null ? -1 : Offers.candidateFor(KitContext.candidates, Mapping.prioritySemantic(w, game, a, obs));
+        return c < 0 ? Integer.MAX_VALUE : c;
+    }
+
+    /**
+     * A target dialog's options in a deterministic order: a synthesized dialog's (a {@link KitTarget}) keeps the
+     * decision's candidate order; a dialog the world asks while an action executes is ordered by v2 reference.
+     */
+    private List<UUID> ordered(Target target, Set<UUID> possible) {
+        List<UUID> out = new ArrayList<>(possible);
+        if (!(target instanceof KitTarget)) {
+            out.sort(Comparator.comparing(id -> world == null ? id.toString() : String.valueOf(Mapping.targetRef(world, id))));
         }
         return out;
     }
@@ -233,7 +258,7 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
             return false;
         }
         Set<UUID> possible = target.possibleTargets(controller, source, game, fromCards).stream()
-                .filter(id -> !target.contains(id)).collect(Collectors.toSet());
+                .filter(id -> !target.contains(id)).collect(Collectors.toCollection(LinkedHashSet::new));
         if (possible.isEmpty()) {
             return false;
         }
@@ -241,7 +266,7 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
         if (possible.size() + (target.isChosen(game) ? 1 : 0) == 1) {
             choice = possible.iterator().next();
         } else {
-            List<UUID> options = new ArrayList<>(possible);
+            List<UUID> options = ordered(target, possible);
             if (target.isChosen(game)) {
                 options.add(STOP_CHOOSING);
             }

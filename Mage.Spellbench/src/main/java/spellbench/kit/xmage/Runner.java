@@ -313,6 +313,7 @@ public final class Runner {
         res.put("flags", new ArrayList<Object>(w.flags));
         res.put("sample", w.sample);
         ObsIndex index = new ObsIndex(obs);
+        KitContext.candidates = Json.arr(decision, "candidates");
         Game game = w.game;
         KitPolicy bot0 = decider[0];
         String skip = forcing || Json.bool(req, "search_flagged") ? null : skipReason(w, path);
