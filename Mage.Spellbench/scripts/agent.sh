@@ -25,6 +25,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$DB" ] || { echo "need --db" >&2; exit 2; }
+# fail closed: without the model every decision would fall back to the kit's declining answer
+curl -sf -m 10 "$MODEL_URL/healthz" >/dev/null || { echo "model server not answering at $MODEL_URL" >&2; exit 1; }
 if [ -n "${KIT_LOG_DIR:-}" ]; then FRONT+=(--log-dir "$KIT_LOG_DIR"); fi
 
 JAR="$HERE/target/mage-spellbench.jar"
