@@ -6,9 +6,11 @@ import mage.abilities.Mode;
 import mage.abilities.Modes;
 import mage.abilities.common.PassAbility;
 import mage.cards.Cards;
+import mage.cards.CardsImpl;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
+import mage.constants.Zone;
 import mage.game.Game;
 import mage.game.events.GameEvent;
 import mage.game.stack.StackObject;
@@ -46,7 +48,8 @@ import static mage.target.TargetImpl.STOP_CHOOSING;
  * answered with the highest-scoring legal choice. The opponent's hand is never encoded ({@code perfectInfo} false):
  * the world's opponent hand is a sample, and only its size is public.
  * <p>
- * Make-choice and number dialogs have no policy head and use the {@code ComputerPlayer} heuristics. Replaces the kit's MAD decider ({@code KitMad}); its recording of live dialog
+ * Make-choice, mode and number dialogs have no policy head and use the {@code ComputerPlayer} heuristics, as
+ * {@link ComputerPlayerPolicyOnly} does; the number's random pick comes from the kit's seeded stream. Replaces the kit's MAD decider ({@code KitMad}); its recording of live dialog
  * answers and its priority outcome are kept unchanged.
  */
 public class KitPolicy extends ComputerPlayerPolicyOnly {
@@ -274,7 +277,7 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
                 options.add(STOP_CHOOSING);
             }
             String text = (source == null ? "null" : source.getRule()) + ":Choose a target:" + target.getTargetName();
-            choice = argmax(options, infer(game, ActionType.CHOOSE_TARGET, text, fromCards,
+            choice = argmax(options, infer(game, ActionType.CHOOSE_TARGET, text, optionPile(game, possible, fromCards),
                     source == null ? null : source.getSourceId()).policyTarget);
         }
         if (choice.equals(STOP_CHOOSING)) {
@@ -285,6 +288,24 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
             makeChoice(outcome, target, source, game, fromCards);
         }
         return target.isChosen(game);
+    }
+
+    /**
+     * The cards the encoder shows as the option pile. Training encodes the cards XMage passes with the dialog (a library
+     * search, for example); a dialog the kit synthesizes passes none, so its library cards, which no zone encodes, are
+     * passed here instead.
+     */
+    private static Cards optionPile(Game game, Set<UUID> possible, Cards fromCards) {
+        if (fromCards != null) {
+            return fromCards;
+        }
+        Cards pile = new CardsImpl();
+        for (UUID id : possible) {
+            if (game.getState().getZone(id) == Zone.LIBRARY) {
+                pile.add(id);
+            }
+        }
+        return pile.isEmpty() ? null : pile;
     }
 
     private boolean policyUse(String message, Ability source, Game game) {
@@ -419,12 +440,9 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
         return x;
     }
 
-    /** No policy head: {@code ComputerPlayer.choose}'s heuristic (the MCTS players would search here). */
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        String m = choice.getMessage();
-        boolean r = m != null && (m.equalsIgnoreCase("Choose creature type") || m.equalsIgnoreCase("Choose a creature type"))
-                ? chooseCreatureType(outcome, choice, game) : chooseHelper(outcome, choice, game);
+        boolean r = super.choose(outcome, choice, game);
         record(game, "choice", choice.isKeyChoice() ? choice.getChoiceKey() : choice.getChoice());
         return r;
     }
