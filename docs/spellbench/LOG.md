@@ -47,3 +47,35 @@ python tests/play.py --games 2 --format standard-2022-25-bo1 --dck Pauper-Faerie
 0 violations, 0 forfeits, 0 host halts. The agent's 451 answered decisions were all tagged `bot` (no kit fallback):
 297 single-candidate, 72 priority, 47 combat, 18 dialogs, the rest pregame and continuations. The model server
 answered every policy query.
+
+## 2026-11-08 — Anchors: ver15 vs Spellbench's builtins, 8 Pauper decks
+
+Same setup as the smoke test (Spellbench `27c9009` XMage engine and live validator, Pauper decks inline under the
+`standard-2022-25-bo1` label, ver15 on CPU), agent at `cbfae60f`. 32 games per opponent: each deck 2 seat-swapped
+pairs, both bots piloting the same deck (`play.py` schedule), 2 shards.
+
+```bash
+python tests/play.py --games 32 --shards 2 --format standard-2022-25-bo1 --dck Pauper-<deck>.txt ... (8 decks) \
+  --kit-name magezero-policy --kit-version 0.3.0+1f9e47ebcd47 --kit-cmd '[... agent.sh ...]' --opponent <bot> -- <engine>
+```
+
+| Deck | vs heuristic | vs uniform | vs first |
+|---|---:|---:|---:|
+| Affinity | 4/4 | 4/4 | 4/4 |
+| Burn | 4/4 | 4/4 | 4/4 |
+| CawGates | 3/4 | 2/4 | 4/4 |
+| Elves | 4/4 | 3/4 | 4/4 |
+| Faeries | 4/4 | 4/4 | 4/4 |
+| Rally | 3/4 | 4/4 | 4/4 |
+| Spy | 3/4 | 3/4 | 4/4 |
+| Wildfire | 1/4 | 3/4 | 4/4 |
+| **Total** | **26/32 (81%)** | **27/32 (84%)** | **32/32 (100%)** |
+
+All 96 games natural, 0 violations, 0 forfeits, 0 host halts. Kit fallbacks (`wrapper`): 85 of 7,862 answered
+decisions vs heuristic, 90 of 10,876 vs uniform, 39 of 6,565 vs first, all in dialog kinds the kit does not
+synthesize yet (`choose_cost_target` plan values, `choose_replacement`, `order_pick`, `distribute`,
+`optional_cost`, `choose_cast_method`); none in priority. These samples are small (±15 points at 32 games) and
+this is XMage's engine, not mtg-kernel's.
+
+An earlier heuristic batch at `e219f496` (23/32) is discarded: 119 priority decisions failed because `choose(Choice)`
+and `makeChoiceAmount` went through MageZero's search root, which a kit world doesn't set up (fixed in `cbfae60f`).
