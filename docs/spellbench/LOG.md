@@ -99,3 +99,51 @@ java -jar lib/mage-magezero-1.4.58.jar hidden-<deck>.yml
 
 At 200 games (±3.5 points) hiding the hand costs nothing measurable: Burn is above both visible runs, the mirror
 between them. The visible runs themselves differ by 5–6 points.
+
+## 2026-11-08 — ver15 vs the Archon panel on mtg-kernel (pauper-kernel-v2 setup, unrated)
+
+ver15 as our agent (greedy policy only, opponent's hand hidden) against Jack's Archon 1–3 (`a48`, `c12`, `g115`,
+MIT, huggingface.co/mtg-kernel, loaded with their rated model states), on mtg-kernel `92ec2393` (the Archons' rated
+commit; built here with 16 codegen units, catalog `af8e1b91…` as the model card) through Spellbench `27c9009`'s host
+and live validator, with `pauper-kernel-v2`'s deck pool, extensions, native-id audit and time control. Every game is
+a mirror (both seats one deck), seat-swapped pairs over the 8 decks, as on the board. Played with
+`Mage.Spellbench/bench/drive.py` (not `spellbench run`, whose rated-run isolation gate refuses unsandboxed bots).
+
+- Local: 16 pairs per Archon (96 games, 2 shards), agent at `ecc9e428`.
+- RunPod: `bench/launch.py --name sb-archon --cpu 32 --env PAIRS=32 SHARDS=8` at `6febcdb6`, CPU pod, $1.12/h,
+  1 h 10 min, about $1.31. 168 of 192 games: one of the 8 shards never reported (its 24 games are ver15 in the second
+  seat of Elves and Faeries pairs) and `multiprocessing.Pool` waited on it, so the pod was deleted by hand; the
+  driver now uses `ProcessPoolExecutor`, which fails instead (`a57afc25`+).
+- ver15 from huggingface.co/inkling616/MZ-Pauper-Faeries-v15 on the pod: the same 215 weight tensors and vocabularies
+  as `experiment_models/Pauper-Faeries/ver15` (the file only lacks the optimizer state).
+
+| Archon (board Elo, 2026-10-28) | ver15 wins | Win rate (95%) |
+|---|---:|---:|
+| a48 (1179) | 51/88 | 58% ±10 |
+| c12 (1211) | 50/88 | 57% ±10 |
+| g115 (1381) | 34/88 | 39% ±10 |
+
+By the deck both seats pilot:
+
+| Deck | a48 | c12 | g115 |
+|---|---:|---:|---:|
+| Affinity | 12/12 | 9/12 | 4/12 |
+| Burn | 8/12 | 10/12 | 8/12 |
+| CawGates | 6/12 | 7/12 | 7/12 |
+| Elves | 3/8 | 5/8 | 3/8 |
+| Faeries | 5/8 | 6/8 | 3/8 |
+| Rally | 6/12 | 7/12 | 7/12 |
+| Spy | 10/12 | 2/12 | 2/12 |
+| Wildfire | 1/12 | 4/12 | 0/12 |
+
+264 games, all natural, 0 violations, 0 forfeits, 0 halts (the Archons' bot fails closed, so none of its decisions
+was dropped). ver15's side, local logs (14,091 decisions): the model answered every priority (6,131), combat
+(2,741) and dialog decision the kit supports; 3,667 were the kit's mana-only passes and 32 single candidates; 438
+(3.1%) fell back to the kit's lowest or declining candidate: 5 where the model scored no option (library cards
+missing from the encoding, fixed in `a57afc25`: 45/45 such answers by the model in 8 Elves and Spy games) and the
+rest in dialog kinds the kit does not synthesize yet (`order_pick`, `choose_cost_target`, `choose_option`,
+`arrange_card`, optional costs). No ver15 decision used more than half its clock.
+
+Reading: about level with or above Archons 1 and 2 and below Archon 3. ver15 pilots Faeries in training only;
+Wildfire and Spy (vs c12 and g115) are its weakest decks. Four games against a48 were discarded before this run:
+the model server had died, so every decision fell back (`agent.sh` now refuses to start without it, `ecca3004`).

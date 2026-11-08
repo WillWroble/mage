@@ -4,11 +4,11 @@
     SPELLBENCH=<spellbench checkout> python drive.py CONFIG.json OUT.jsonl [--shards N]
 """
 import json
-import multiprocessing
 import os
 import secrets
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 
 sys.path.insert(0, os.path.join(os.environ.get("SPELLBENCH", "../spellbench"), "engines/xmage/kit/tests"))
 from play import _row  # noqa: E402
@@ -58,10 +58,12 @@ def main():
     shards = int(sys.argv[sys.argv.index("--shards") + 1]) if "--shards" in sys.argv else 1
     config = TournamentConfig.from_json(json.load(open(config_path)))
     secret_hex = secrets.token_hex(32)
+    print(json.dumps({"run_secret": secret_hex}), file=sys.stderr, flush=True)  # to replay any game of the run
     indexes = [c.game_index for c in schedule(config, RunSecret.from_hex(secret_hex))]
     chunks = [indexes[i::shards] for i in range(shards)]
-    with multiprocessing.Pool(shards) as pool:
-        results = pool.map(worker, [(config_path, secret_hex, chunk) for chunk in chunks])
+    # unlike multiprocessing.Pool, the executor fails (BrokenProcessPool) instead of waiting forever when a shard dies
+    with ProcessPoolExecutor(shards) as pool:
+        results = list(pool.map(worker, [(config_path, secret_hex, chunk) for chunk in chunks]))
     rows = sorted((r for rs in results for r in rs), key=lambda r: r["game_index"])
     with open(out, "w") as f:
         for r in rows:
