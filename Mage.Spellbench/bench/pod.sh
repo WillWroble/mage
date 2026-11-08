@@ -4,7 +4,7 @@
 # the agent's decision logs (logs.tar.gz) and the model server's log.
 #
 # Env: MAGE_COMMIT, OUT (launch.py), PAIRS (seat-swapped pairs per Archon, default 32), SHARDS (games at once,
-# default vCPUs / 4), SPELLBENCH_COMMIT (default 27c9009), MODEL_REPO (Hugging Face, default ver15).
+# default vCPUs / 4), DECKS (space-separated pool decks, default all eight), SPELLBENCH_COMMIT (default 27c9009), MODEL_REPO (Hugging Face, default ver15).
 set -ex
 M=/tmp/mage
 C=/workspace/spellbench
@@ -69,7 +69,7 @@ until curl -sf localhost:50052/healthz; do sleep 2; done
 # the games, written on the container disk and copied to the volume at the end
 R=/tmp/run && mkdir -p $R/work
 python $M/Mage.Spellbench/bench/archon.py --spellbench $SB --kernel $K --archons $A --db /tmp/cards/db --work $R/work \
-  --out $R --pairs $PAIRS > $R/config.json
+  --out $R --pairs $PAIRS ${DECKS:+--decks $DECKS} > $R/config.json
 cp $R/config.json $OUT/
 (while sleep 60; do grep -h '^{"bot_p0"' $R/run.log > $OUT/games-so-far.jsonl 2>/dev/null || true; done) &
 SPELLBENCH=$SB python $M/Mage.Spellbench/bench/drive.py $R/config.json $R/games.jsonl --shards $SHARDS > $R/run.log 2>&1

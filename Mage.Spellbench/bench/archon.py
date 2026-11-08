@@ -2,7 +2,7 @@
 Spellbench's pauper-kernel-v2 board (engine, extensions, time control), local and unrated. Also writes each Archon's
 local scorer config (the model card's step 2: its path files point at this machine).
 
-    python archon.py --spellbench DIR --kernel DIR --archons DIR --db DIR --work DIR --out DIR [--pairs N] > config.json
+    python archon.py --spellbench DIR --kernel DIR --archons DIR --db DIR --work DIR --out DIR [--pairs N] [--decks D ...] > config.json
 
 --archons holds archon-1-pauper, archon-2-pauper and archon-3-pauper from huggingface.co/mtg-kernel.
 """
@@ -40,6 +40,7 @@ def main():
     for a in ["spellbench", "kernel", "archons", "db", "work", "out"]:
         p.add_argument(f"--{a}", required=True, type=lambda s: pathlib.Path(s).resolve())
     p.add_argument("--pairs", type=int, default=16, help="seat-swapped pairs per Archon (8 per rotation of the decks)")
+    p.add_argument("--decks", nargs="*", help="only these pool decks (default: the board's eight)")
     p.add_argument("--agent", default=str(pathlib.Path(__file__).resolve().parent.parent / "scripts/agent.sh"))
     a = p.parse_args()
     py, sb, k = sys.executable, a.spellbench, a.kernel
@@ -54,7 +55,7 @@ def main():
                                  "--version", "pauper-v2.0.0", "--expect-model-state", state]})
     bench = json.loads((sb / "benchmarks/pauper-kernel-v2/benchmark.json").read_text())
     config = {"schema": "spellbench-tournament-config/v2", "tournament_dir": str(a.out / "t"), "format": bench["format"],
-              "deck_pool": [{"catalog_id": d} for d in bench["deck_pool"]],
+              "deck_pool": [{"catalog_id": d} for d in (a.decks or bench["deck_pool"])],
               "engine": {"command": [py, f"{sb}/integrations/mtg_kernel/kernel_engine_v2.py",
                                      "--bridge", f"{k}/target/release/agent_bridge_v1",
                                      "--catalog", f"{k}/pauper-v2-catalog.json",
