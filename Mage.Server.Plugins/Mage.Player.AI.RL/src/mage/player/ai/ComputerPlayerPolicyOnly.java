@@ -9,6 +9,7 @@ import mage.abilities.costs.mana.ManaCost;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
+import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.player.ai.encoder.ActionEncoder;
@@ -117,13 +118,28 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
     @Override
     public boolean priority(Game game) {
 
-        MCTSNode2 newRoot = getNextAction(game, ActionEncoder.ActionType.PRIORITY);
 
         List<ActivatedAbility> playableAbilities = getPlayableAbilities(game);
+
+        game.setLastPriority(playerId);
+        if (game.getTurnStepType() == PhaseStep.UPKEEP) {
+            if (!lastPhase.equals(game.getTurn().getValue(game.getTurnNum()))) {
+                logList(game.getTurn().getValue(game.getTurnNum()) + name + " hand: ", new ArrayList<>(hand.getCards(game)));
+                lastPhase = game.getTurn().getValue(game.getTurnNum());
+            }
+        }
+        game.getState().setPriorityPlayerId(playerId);
+        game.firePriorityEvent(playerId);
+        if(playableAbilities.size() < 2) {
+            logger.info("auto pass");
+            pass(game);
+            return false;
+        }
         allMana = true;
         for(ActivatedAbility ability : playableAbilities) {
             allMana &= (ability.isManaActivatedAbility() || ability instanceof PassAbility);
         }
+        MCTSNode2 newRoot = getNextAction(game, ActionEncoder.ActionType.PRIORITY);
 
         UUID bestAction = bestAction(newRoot, game);
         ActivatedAbility ability = null;

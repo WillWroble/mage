@@ -35,10 +35,10 @@ player_a:
 
 
   hiddenInfo:
-    see_opponent_hand: true
+    see_opponent_hand: false
 
 player_b:
-  deckPath: decks/Standard-MonoU.dck
+  deckPath: decks/Standard-MonoB.dck
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
