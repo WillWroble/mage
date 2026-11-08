@@ -280,16 +280,47 @@ public class ComputerPlayerPolicyOnly extends ComputerPlayerMCTS2 {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        return super.choose(outcome, choice, game);
+        if (choice.getMessage() != null && (choice.getMessage().equalsIgnoreCase("Choose creature type") || choice.getMessage().equalsIgnoreCase("Choose a creature type"))) {
+            return  chooseCreatureType(outcome, choice, game);
+        }
+        if(outcome.equals(Outcome.PutManaInPool) || choice.getChoices().size() == 1) {
+            //return chooseHelper(outcome, choice, game);
+        }
+        boolean out = chooseHelper(outcome, choice, game);
+
+        String k = choice.getChoiceKey();
+        if (k != null) {
+            getPlayerHistory().choiceSequence.add(k);
+        } else if (choice.getChoice() != null) {
+            getPlayerHistory().choiceSequence.add(choice.getChoice());
+        }
+
+        return out;
     }
 
     @Override
     protected int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
-        return super.makeChoiceAmount(min, max, game, source, isManaPay);
+        if(min >= max) {
+            return min;
+        }
+        int out = makeChoiceAmountHelper(min, max, game, source, isManaPay);
+        getPlayerHistory().numSequence.add(out-min);
+        return out;
     }
 
     public Mode chooseMode(Modes modes, Ability source, Game game) {
-        return super.chooseMode(modes, source, game);
+        logger.warn("chooseMode");
+        List<Mode> options = modes.getAvailableModes(source, game).stream()
+                .filter(mode -> !modes.getSelectedModes().contains(mode.getId()))
+                .filter(mode -> mode.getTargets().canChoose(source.getControllerId(), source, game)).collect(Collectors.toList());
+        if(modes.getMinModes() == 0) options.add(null);
+        if(options.size() == 1) {
+            return options.iterator().next();
+        }
+        Mode out = chooseModeHelper(modes, source, game);
+        int outIdx = options.indexOf(out);
+        getPlayerHistory().numSequence.add(outIdx);
+        return out;
     }
 
     @Override

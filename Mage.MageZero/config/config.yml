@@ -38,7 +38,7 @@ player_a:
     see_opponent_hand: false
 
 player_b:
-  deckPath: decks/Standard-MonoB.dck
+  deckPath: decks/Standard-MonoW.dck
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 

@@ -250,7 +250,7 @@ public class ComputerPlayer extends PlayerImpl {
         getPlayerHistory().numSequence.add(out-min);
         return out;
     }
-    private int makeChoiceAmountHelper(int min, int max, Game game, Ability source, boolean isManaPay) {
+    protected int makeChoiceAmountHelper(int min, int max, Game game, Ability source, boolean isManaPay) {
         // fast calc on nothing to choose
         if (min >= max) {
             return min;
