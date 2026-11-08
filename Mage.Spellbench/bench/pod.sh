@@ -55,9 +55,9 @@ sha256sum $MODEL/model.pt.gz | tee $OUT/model.sha256
 
 # the agent at $MAGE_COMMIT, once per commit, and this pod's own card database template
 G=$C/agent/$MAGE_COMMIT
-if [ ! -f $G/target/mage-spellbench.jar ]; then
+if [ ! -f $G/target/mage-spellbench.jar ]; then  # the cache is copied whole, then renamed: never half-written
   (cd $M && MAVEN_OPTS=-Xmx16g mvn -B -q -T 1C package -DskipTests -Dmaven.repo.local=/workspace/m2 -pl Mage.Spellbench -am)
-  mkdir -p $G && cp -r $M/Mage.Spellbench/target $G/
+  rm -rf $G.tmp && mkdir -p $G.tmp && cp -r $M/Mage.Spellbench/target $G.tmp/ && rm -rf $G && mv $G.tmp $G
 fi
 rm -rf $M/Mage.Spellbench/target && cp -r $G/target $M/Mage.Spellbench/
 mkdir -p /tmp/cards && (cd /tmp/cards && java -Xmx4g -cp "$M/Mage.Spellbench/target/mage-spellbench.jar:$M/Mage.Spellbench/target/lib/*" \
