@@ -20,6 +20,7 @@ import mage.player.ai.encoder.StateEncoder;
 import mage.target.Target;
 import mage.target.TargetAmount;
 import mage.target.TargetCard;
+import mage.util.RandomUtil;
 import spellbench.kit.core.Json;
 import spellbench.kit.core.ObsIndex;
 import spellbench.kit.core.Offers;
@@ -45,8 +46,7 @@ import static mage.target.TargetImpl.STOP_CHOOSING;
  * answered with the highest-scoring legal choice. The opponent's hand is never encoded ({@code perfectInfo} false):
  * the world's opponent hand is a sample, and only its size is public.
  * <p>
- * Make-choice and number dialogs have no policy head and use the {@code ComputerPlayer} heuristics, as in
- * {@link ComputerPlayerPolicyOnly}. Replaces the kit's MAD decider ({@code KitMad}); its recording of live dialog
+ * Make-choice and number dialogs have no policy head and use the {@code ComputerPlayer} heuristics. Replaces the kit's MAD decider ({@code KitMad}); its recording of live dialog
  * answers and its priority outcome are kept unchanged.
  */
 public class KitPolicy extends ComputerPlayerPolicyOnly {
@@ -386,6 +386,22 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
         return m;
     }
 
+    /**
+     * No policy head: {@code ComputerPlayer}'s amount heuristic (the MCTS players would search here), with its random
+     * pick drawn from the kit's seeded stream instead of the game's local random.
+     */
+    @Override
+    protected int makeChoiceAmount(int min, int max, Game game, Ability source, boolean isManaPay) {
+        if (min >= max) {
+            return min;
+        }
+        int realMax = max == Integer.MAX_VALUE ? Math.max(min, 10) : max;
+        int x = isManaPay
+                ? getAvailableManaProducers(game).size() - source.getManaCostsToPay().getUnpaid().manaValue()
+                : RandomUtil.nextInt(realMax + 1);
+        return Math.max(min, Math.min(realMax, x));
+    }
+
     @Override
     public int announceX(int min, int max, String message, Game game, Ability source, boolean isManaPay) {
         int x = super.announceX(min, max, message, game, source, isManaPay);
@@ -400,9 +416,12 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
         return x;
     }
 
+    /** No policy head: {@code ComputerPlayer.choose}'s heuristic (the MCTS players would search here). */
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        boolean r = super.choose(outcome, choice, game);
+        String m = choice.getMessage();
+        boolean r = m != null && (m.equalsIgnoreCase("Choose creature type") || m.equalsIgnoreCase("Choose a creature type"))
+                ? chooseCreatureType(outcome, choice, game) : chooseHelper(outcome, choice, game);
         record(game, "choice", choice.isKeyChoice() ? choice.getChoiceKey() : choice.getChoice());
         return r;
     }
