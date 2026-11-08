@@ -95,5 +95,7 @@ java -jar lib/mage-magezero-1.4.58.jar hidden-<deck>.yml
 | Opponent | Hand hidden | Hand visible (Kaggle, `results/onpolicy.md`) | Hand visible (Will, Nov 7) |
 |---|---:|---:|---:|
 | Burn | 56.0% (112/200, 0 failed) | 52.0% | 45.5% |
+| mirror | 39.5% (79/200, 0 failed) | 44.0% | 39.0% |
 
-At 200 games (±3.5 points) hiding the hand costs nothing measurable against Burn.
+At 200 games (±3.5 points) hiding the hand costs nothing measurable: Burn is above both visible runs, the mirror
+between them. The visible runs themselves differ by 5–6 points.
