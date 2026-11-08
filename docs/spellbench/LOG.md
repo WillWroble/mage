@@ -79,3 +79,23 @@ this is XMage's engine, not mtg-kernel's.
 
 An earlier heuristic batch at `e219f496` (23/32) is discarded: 119 priority decisions failed because `choose(Choice)`
 and `makeChoiceAmount` went through MageZero's search root, which a kit world doesn't set up (fixed in `cbfae60f`).
+
+## 2026-11-08 — What hiding the opponent's hand costs ver15 (policy only, in XMage)
+
+ver15 policy only (greedy) as Pauper-Faeries vs the offline heuristic search (300 sims), 200 games, with
+`player_a.hiddenInfo.see_opponent_hand: false` (the encoder sees only the opponent's hand size). Configs are
+MageZero's `kaggle/configs/onpolicy-<deck>.yml` with only that flag, the thread count (8) and the shard paths
+changed. XMage built from this branch at `714e4b33` (before 05766b34's auto pass), the same player code as the
+visible-hand baselines; model served on CPU.
+
+```bash
+java -jar lib/mage-magezero-1.4.58.jar hidden-<deck>.yml
+```
+
+| Opponent | Hand hidden | Hand visible (Kaggle, `results/onpolicy.md`) | Hand visible (Will, Nov 7) |
+|---|---:|---:|---:|
+| Burn | 56.0% (112/200, 0 failed) | 52.0% | 45.5% |
+| mirror | 39.5% (79/200, 0 failed) | 44.0% | 39.0% |
+
+At 200 games (±3.5 points) hiding the hand costs nothing measurable: Burn is above both visible runs, the mirror
+between them. The visible runs themselves differ by 5–6 points.

@@ -25,20 +25,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$DB" ] || { echo "need --db" >&2; exit 2; }
+# fail closed: without the model every decision would fall back to the kit's declining answer
+curl -sf -m 10 "$MODEL_URL/healthz" >/dev/null || { echo "model server not answering at $MODEL_URL" >&2; exit 1; }
 if [ -n "${KIT_LOG_DIR:-}" ]; then FRONT+=(--log-dir "$KIT_LOG_DIR"); fi
 
 JAR="$HERE/target/mage-spellbench.jar"
 mkdir -p "$WORK"
 DIR=$(mktemp -d "$WORK/mz-agent-XXXXXX")
-FRONT_LAUNCHED=0
-cleanup() {
-  if [ "$FRONT_LAUNCHED" = 0 ] && [ -d "$DIR" ]; then
-    java -cp "$JAR" spellbench.kit.core.OwnedWork "$DIR" "$WORK"
-  fi
-}
-trap cleanup EXIT
+# the front's own cleanup can leave the directory behind (each holds a 250 MB database copy), so remove it here too
+trap 'rm -rf "$DIR"' EXIT INT TERM
 cp -R "$DB" "$DIR/db"
-FRONT_LAUNCHED=1
 java -Xmx128m -cp "$JAR" spellbench.kit.core.Front \
   --work "$DIR" --work-root "$WORK" --cleanup-work 1 "${FRONT[@]}" \
   -- java -Xmx"$XMX" -XX:+UseSerialGC -Dspellbench.model.url="$MODEL_URL" -cp "$JAR:$HERE/target/lib/*" \

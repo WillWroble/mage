@@ -175,9 +175,12 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
         }
         // ties go to the earlier candidate (settled: candidate order, never hash order)
         offered.sort(Comparator.comparingInt(a -> candidateIndex(w, game, a, obs)));
-        RemoteModelEvaluator.InferenceResult scores = infer(game, ActionType.PRIORITY, "priority", null, null);
-        UUID bestId = argmax(offered.stream().map(Ability::getId).collect(Collectors.toList()), scores.policyPriority);
-        Ability best = offered.stream().filter(a -> a.getId().equals(bestId)).findFirst().get();
+        Ability best = offered.get(0);
+        if (offered.size() > 1) { // with pass alone, pass without the model (as ComputerPlayerPolicyOnly's auto pass)
+            RemoteModelEvaluator.InferenceResult scores = infer(game, ActionType.PRIORITY, "priority", null, null);
+            UUID bestId = argmax(offered.stream().map(Ability::getId).collect(Collectors.toList()), scores.policyPriority);
+            best = offered.stream().filter(a -> a.getId().equals(bestId)).findFirst().get();
+        }
         if (best instanceof PassAbility) {
             out.pass = true;
             out.reason = "pass";
