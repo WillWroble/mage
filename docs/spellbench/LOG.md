@@ -147,3 +147,29 @@ rest in dialog kinds the kit does not synthesize yet (`order_pick`, `choose_cost
 Reading: about level with or above Archons 1 and 2 and below Archon 3. ver15 pilots Faeries in training only;
 Wildfire and Spy (vs c12 and g115) are its weakest decks. Four games against a48 were discarded before this run:
 the model server had died, so every decision fell back (`agent.sh` now refuses to start without it, `ecca3004`).
+
+## 2026-11-08 — Faeries mirrors only: ver15 vs the Archon panel (in-distribution for ver15)
+
+ver15 trained with Faeries on one side of every game, so the Faeries mirror is the one board matchup inside its
+training distribution (Faeries is also among the Archons' seven training decks). Same setup as the panel run above,
+`DECKS=Faeries`, 32 seat-swapped pairs per Archon (192 games), agent at `4e242877` (with `a57afc25`'s library-option
+fix and 530ff1a9's choose fix). RunPod CPU pod `sb-faeries`, 32 vCPU, 8 shards, $0.96/h, 07:14:49–07:25:31 UTC
+(about $0.17; the agent was rebuilt there). An earlier launch at `ac4e3288` played no games: the network volume
+stopped taking writes at 06:38 UTC while it copied its build (Will added 200 GB); deleted after about 45 min, about
+$0.70. `pod.sh` now writes its cache whole and renames it (`4e242877`).
+
+```bash
+python Mage.Spellbench/bench/launch.py --name sb-faeries --cpu 32 --hours 3 --env PAIRS=32 SHARDS=8 DECKS=Faeries
+```
+
+| Archon (board Elo) | ver15 wins | Win rate (95%) | ver15 in seat p0 / p1 | Elo implied by this matchup |
+|---|---:|---:|---:|---:|
+| a48 (1179) | 52/64 | 81% ±10 | 26/32 / 26/32 | ≈1430 |
+| c12 (1211) | 55/64 | 86% ±9 | 27/32 / 28/32 | ≈1525 |
+| g115 (1381) | 41/64 | 64% ±12 | 22/32 / 19/32 | ≈1480 |
+
+192 games, all natural, 0 violations. ver15's 19,254 decisions: 18,581 `bot` (7,022 mana-only passes, 4,997
+priority, 4,618 combat, 1,160 dialogs, the rest plans and singles), 673 kit fallbacks (551 `choose_option` with two
+candidates, which the kit has no dialog for and answers with candidate 0; 86 `order_pick`; 36 `optional_cost`), 0
+runner errors, no decision over half its clock. The implied Elo is one matchup against each opponent's
+all-deck rating, so it is an indication, not a board rating.
