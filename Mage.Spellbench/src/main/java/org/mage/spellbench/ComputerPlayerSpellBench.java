@@ -277,9 +277,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private void arranged(JsonObject decision, JsonObject chosen) {
         String kind = Views.text(chosen, "kind");
         if ("arrange_card".equals(kind)) {
-            if (chosen.get("card_index").getAsInt() == 0) {
+            if (chosen.get("card_index").getAsInt() == 0) { // a new arrangement: one XMage did not ask about is over
                 partition.clear();
                 ordered.clear();
+                arrangement.clear();
             }
             partition.add(new String[]{Views.text(chosen.getAsJsonObject("card"), "card_name"),
                     Views.text(chosen, "destination"), Views.text(chosen, "purpose")});
@@ -370,7 +371,6 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
-        arrangement.clear(); // an arrangement XMage did not ask about is over
         game.setLastPriority(playerId); // as every XMage AI player: MageZero's simulations replay from here
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
