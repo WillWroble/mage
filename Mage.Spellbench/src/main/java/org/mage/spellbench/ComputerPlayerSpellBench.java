@@ -524,6 +524,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             Pick pick = picks.poll();
             if (pick == null) {
                 JsonObject decision = advance(game, TARGETS);
+                if (decision == null && !target.getTargets().isEmpty() && target.isChosen(game)) {
+                    return true; // the kernel ended the selection without asking (nothing more to take)
+                }
                 if (decision == null) {
                     throw new LockstepDivergence("XMage asks the Archon a selection (" + target.getMessage(game) + ", "
                             + target.getClass().getSimpleName() + "); the kernel waits on MageZero");
