@@ -309,6 +309,7 @@ final class Views {
      */
     private static Map<String, List<JsonObject>> zones(JsonObject observation) {
         Map<String, List<JsonObject>> out = new HashMap<>();
+        boolean combat = COMBAT.contains(text(observation, "phase_step")); // the kernel keeps combat flags past combat
         for (JsonElement p : observation.getAsJsonArray("players")) {
             JsonObject player = p.getAsJsonObject();
             for (String zone : new String[]{"hand", "battlefield", "graveyard", "exile"}) {
@@ -317,7 +318,7 @@ final class Views {
                     List<JsonObject> list = new ArrayList<>();
                     objects.getAsJsonArray().forEach(o -> list.add(o.getAsJsonObject()));
                     if (UNORDERED.contains(zone)) {
-                        list.sort((x, y) -> state(x, true).toString().compareTo(state(y, true).toString()));
+                        list.sort((x, y) -> state(x, combat).toString().compareTo(state(y, combat).toString()));
                     }
                     out.put(text(player, "seat") + " " + zone, list);
                 }

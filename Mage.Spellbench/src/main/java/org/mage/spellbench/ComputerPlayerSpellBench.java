@@ -392,7 +392,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     public TriggeredAbility chooseTriggeredAbility(List<TriggeredAbility> abilities, Game game) {
         return guard(game, () -> {
             JsonObject decision = advance(game, Set.of("order_pick"));
-            if (decision == null || !Lockstep.semantic(decision, 0).getAsJsonObject("item").has("trigger")) {
+            while (decision != null && !Lockstep.semantic(decision, 0).getAsJsonObject("item").has("trigger")) {
+                kernel.step(kernel.archonChoice()); // an order of cards before it (a discard's), which XMage makes itself
+                decision = advance(game, Set.of("order_pick"));
+            }
+            if (decision == null) {
                 throw new LockstepDivergence("XMage asks the Archon an order of triggers; the kernel does not");
             }
             Views.View view = views.view(game, SEAT);
