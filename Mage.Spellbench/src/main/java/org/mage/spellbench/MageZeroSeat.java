@@ -133,6 +133,12 @@ final class MageZeroSeat {
 
     private Integer pick(JsonObject decision, Game game) {
         if (Lockstep.selected(decision) == 0 || selection == null) {
+            Move.Kind upcoming = upcoming();
+            if (upcoming != null && upcoming != Move.Kind.TARGETS) {
+                // XMage asked MageZero nothing here (it offers fewer choices, Snap only tapped lands): nothing chosen
+                selection = null;
+                return candidate(decision, c -> Views.text(c, "kind").startsWith("finish_"), "XMage's choice of nothing");
+            }
             selection = next(Move.Kind.TARGETS);
             if (selection == null) {
                 return null;
@@ -283,6 +289,11 @@ final class MageZeroSeat {
             return !other.isJsonNull() && target.equals(attack ? Views.text(other.getAsJsonObject(), "player")
                     : Views.text(other.getAsJsonObject(), "object_id"));
         }, "declaration of " + declaration);
+    }
+
+    /** The kind of MageZero's next move after its passes, or null when it has made none. */
+    private Move.Kind upcoming() {
+        return moves.stream().filter(m -> m.kind != Move.Kind.PASS).findFirst().map(m -> m.kind).orElse(null);
     }
 
     /**

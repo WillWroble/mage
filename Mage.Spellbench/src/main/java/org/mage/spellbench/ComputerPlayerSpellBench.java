@@ -176,7 +176,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             return null; // the kernel is past this priority, at a dialog of the Archon's that XMage asks later
         }
         throw new LockstepDivergence("XMage asks the Archon " + (kinds == null ? "priority" : kinds)
-                + "; the kernel asks it " + Lockstep.firstKind(decision));
+                + "; the kernel asks it " + Lockstep.firstKind(decision)
+                + "; at the Archon's last priority it differed by " + passedAt);
     }
 
     /**
@@ -287,7 +288,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         ActivatedAbility ability = playable(game, view, decision, semantic);
         acting = ability;
         try {
+            debugCosts("before", ability, game);
             if (!activateAbility(ability, game)) {
+                debugCosts("refused", ability, game);
                 throw new LockstepDivergence("XMage refused the Archon's " + semantic);
             }
             if (!picks.isEmpty()) {
@@ -298,6 +301,35 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             picks.clear();
         }
         return true;
+    }
+
+    private void debugCosts(String when, ActivatedAbility ability, Game game) {
+        if (when.equals("before")) {
+            for (String n : new String[]{"mage.abilities", "mage.players", "mage.target", "mage.game.stack"}) {
+                org.apache.log4j.Logger l = org.apache.log4j.Logger.getLogger(n);
+                l.setLevel(org.apache.log4j.Level.DEBUG);
+                if (!l.getAllAppenders().hasMoreElements()) {
+                    l.addAppender(new org.apache.log4j.ConsoleAppender(new org.apache.log4j.PatternLayout("LOG %p %c{1}.%M %m%n"), "System.err"));
+                }
+            }
+        }
+        mage.cards.Card card = game.getCard(ability.getSourceId());
+        if (card == null) return;
+        for (Ability a : card.getAbilities(game)) {
+            if (a instanceof mage.abilities.costs.AlternativeCostSourceAbility) {
+                java.util.List<mage.abilities.costs.Cost> all = new ArrayList<>();
+                try {
+                    java.lang.reflect.Field f = mage.abilities.costs.AlternativeCostSourceAbility.class.getDeclaredField("alternateCosts");
+                    f.setAccessible(true);
+                    for (Object alt : (Iterable<?>) f.get(a)) for (Object c : (Iterable<?>) alt) all.add((mage.abilities.costs.Cost) c);
+                } catch (Exception e) { System.err.println("DEBUG reflect " + e); }
+                for (mage.abilities.costs.Cost c : all) {
+                    for (Target t : c.getTargets()) {
+                        System.err.println("DEBUG " + when + " alt " + a + " cost " + c + " selected=" + t.isChoiceSelected() + " chosen=" + t.isChosen(game) + " targets=" + t.getTargets() + " canChoose=" + t.canChoose(playerId, ability, game) + " canRespond=" + canRespond());
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -408,8 +440,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             boolean attack = source instanceof ChooseToAttackAbility;
             String kind = attack ? "declare_attack" : "declare_block";
             do {
-                JsonObject decision = advance(game, Set.of(kind));
-                if (decision == null) {
+                JsonObject decision = next(game, Set.of(kind));
+                if (decision == null || !wanted(decision, Set.of(kind))) {
                     // the kernel went past this declaration without asking: no creature of the Archon's can attack or
                     // block there, so it declares none (XMage's one-at-a-time loop offers every attacker regardless)
                     JsonObject now = views.view(game, SEAT).json;
