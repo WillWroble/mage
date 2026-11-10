@@ -1039,16 +1039,18 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /** The XMage object for a kernel object reference in {@code decision}, as this seat's view shows it. */
     private UUID xmage(Game game, Views.View view, JsonObject decision, JsonObject reference) {
-        if ("library".equals(Views.text(reference, "zone"))) {
-            // a library card is shown by name only: any card of that name in that library
+        Views.Locator at = Views.locate(Lockstep.observation(decision), Views.text(reference, "object_id"));
+        String zone = Views.text(reference, "zone");
+        if ("library".equals(zone) || at == null && "hand".equals(zone)) {
+            // a card in a library or in a hand the Archon cannot see (revealed to it: Mesmeric Fiend's choice) is
+            // shown by name only: any card of that name there
             Player owner = game.getPlayer(views.player(Views.text(reference, "owner_seat")));
-            for (Card card : owner.getLibrary().getCards(game)) {
+            for (Card card : "library".equals(zone) ? owner.getLibrary().getCards(game) : owner.getHand().getCards(game)) {
                 if (card.getName().equals(Views.text(reference, "card_name"))) {
                     return card.getId();
                 }
             }
         }
-        Views.Locator at = Views.locate(Lockstep.observation(decision), Views.text(reference, "object_id"));
         String id = at == null ? null : Views.find(view.json, at);
         UUID object = id == null ? null : view.objects.get(id);
         if (object == null) {
