@@ -130,32 +130,43 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     @Override
     public boolean chooseTarget(Outcome outcome, Target target, Ability source, Game game) {
-        return dialog(game, Move.Kind.TARGETS, () -> super.chooseTarget(outcome, target, source, game),
-                r -> new ArrayList<>(target.getTargets()));
+        return selection(game, target, source, null, () -> super.chooseTarget(outcome, target, source, game));
     }
 
     @Override
     public boolean chooseTarget(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        return dialog(game, Move.Kind.TARGETS, () -> super.chooseTarget(outcome, cards, target, source, game),
-                r -> new ArrayList<>(target.getTargets()));
+        return selection(game, target, source, cards, () -> super.chooseTarget(outcome, cards, target, source, game));
     }
 
     @Override
     public boolean choose(Outcome outcome, Target target, Ability source, Game game, Map<String, Serializable> options) {
-        return dialog(game, Move.Kind.TARGETS, () -> super.choose(outcome, target, source, game, options),
-                r -> new ArrayList<>(target.getTargets()));
+        return selection(game, target, source, null, () -> super.choose(outcome, target, source, game, options));
     }
 
     @Override
     public boolean choose(Outcome outcome, Cards cards, TargetCard target, Ability source, Game game) {
-        return dialog(game, Move.Kind.TARGETS, () -> super.choose(outcome, cards, target, source, game),
-                r -> new ArrayList<>(target.getTargets()));
+        return selection(game, target, source, cards, () -> super.choose(outcome, cards, target, source, game));
     }
 
     @Override
     public boolean chooseTargetAmount(Outcome outcome, TargetAmount target, Ability source, Game game) {
-        return dialog(game, Move.Kind.TARGETS, () -> super.chooseTargetAmount(outcome, target, source, game),
-                r -> new ArrayList<>(target.getTargets()));
+        return selection(game, target, source, null, () -> super.chooseTargetAmount(outcome, target, source, game));
+    }
+
+    /** A selection; a forced one (a single possible pick and no stopping) is no decision and is not recorded. */
+    private boolean selection(Game game, Target target, Ability source, Cards cards, Decision<Boolean> decision) {
+        UUID controller = target.getAffectedAbilityControllerId(getId());
+        long possible = target.possibleTargets(controller, source, game, cards).stream()
+                .filter(id -> !target.contains(id)).count();
+        if (possible + (target.isChosen(game) ? 1 : 0) <= 1) {
+            dialogDepth++;
+            try {
+                return decision.decide();
+            } finally {
+                dialogDepth--;
+            }
+        }
+        return dialog(game, Move.Kind.TARGETS, decision, r -> new ArrayList<>(target.getTargets()));
     }
 
     @Override

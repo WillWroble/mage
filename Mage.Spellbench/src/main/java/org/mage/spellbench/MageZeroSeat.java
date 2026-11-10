@@ -91,7 +91,7 @@ final class MageZeroSeat {
                         : action(decision, move);
             }
             if (move.kind == Move.Kind.ACTION) {
-                throw new LockstepDivergence("MageZero acted in XMage where the kernel asks nothing: " + diff);
+                throw new LockstepDivergence("MageZero's " + move + " in XMage is where the kernel asks nothing: " + diff);
             }
             moves.poll(); // a pass where the kernel did not ask
             mismatch = diff.toString();
@@ -176,15 +176,11 @@ final class MageZeroSeat {
     }
 
     /**
-     * An order the kernel asks and XMage makes itself. Cards put in a library are hidden there: the kernel's library
-     * takes XMage's order at the next checkpoint, so any order stands in until then.
+     * An order the kernel asks and XMage makes itself. Cards put in a library are hidden there and the kernel's
+     * library takes XMage's order at the next checkpoint; a graveyard's order is not compared (XMage keeps the order
+     * cards arrive in, never asking anyone). So any order stands.
      */
     private int order(JsonObject decision) {
-        JsonObject item = Lockstep.semantic(decision, 0).getAsJsonObject("item");
-        JsonObject object = item == null ? null : item.getAsJsonObject("object");
-        if (object == null || !"library".equals(Views.text(object, "zone"))) {
-            throw new LockstepDivergence("no XMage counterpart for the kernel's order of " + item);
-        }
         return 0;
     }
 

@@ -151,6 +151,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private JsonObject advance(Game game, Set<String> kinds) {
         while (kernel.terminal() == null) {
             JsonObject decision = kernel.decision();
+            boolean wanted = SEAT.equals(kernel.actingSeat()) && (kinds == null ? Lockstep.isPriority(decision)
+                    : kinds.contains(Lockstep.firstKind(decision)));
+            if (decision.getAsJsonArray("candidates").size() == 1 && !wanted) {
+                kernel.step(0); // forced: one candidate, whoever is asked (an engine may make it without asking)
+                continue;
+            }
             if (OTHER.equals(kernel.actingSeat())) {
                 Integer candidate = mageZero.answer(decision, game);
                 if (candidate == null) {
@@ -163,8 +169,6 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 kernel.step(candidate);
                 continue;
             }
-            boolean wanted = kinds == null ? Lockstep.isPriority(decision)
-                    : kinds.contains(Lockstep.firstKind(decision));
             if (wanted) {
                 return decision;
             }
@@ -320,7 +324,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             do {
                 JsonObject decision = advance(game, Set.of(kind));
                 if (decision == null) {
-                    throw new LockstepDivergence("XMage asks the Archon to " + kind + "; the kernel waits on MageZero");
+                    // the kernel went past this declaration without asking: no creature of the Archon's can attack or
+                    // block there, so it declares none (XMage's one-at-a-time loop offers every attacker regardless)
+                    JsonObject now = views.view(game, SEAT).json;
+                    if (kernel.terminal() != null || !views.before(Lockstep.observation(kernel.decision()), now)) {
+                        break;
+                    }
+                    throw new LockstepDivergence("XMage asks the Archon to " + kind + "; the kernel waits on MageZero"
+                            + " at an earlier point");
                 }
                 Views.View view = views.view(game, SEAT);
                 JsonObject semantic = archon();

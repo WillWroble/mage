@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -149,21 +150,29 @@ final class Views {
 
     /**
      * The differences between a kernel observation and an XMage one as game states (the kernel's turn counted as the
-     * game's). Left out: object ids (opaque per engine and
+     * game's). Left out: combat fields outside combat (mtg-kernel keeps them to the end of the turn), object ids (opaque per engine and
      * viewer), {@code known} and {@code passed_seats} (bookkeeping), each engine's rendering of card text
      * ({@code full_name}, {@code characteristics}), a spell's name on the stack (mtg-kernel names the card, XMage the
      * cast face). A non-modal object without X is {@code modes [0]}, {@code x_value 0} on mtg-kernel and null in the
-     * projection. XMage's exile zones have no order, so exile compares by card.
+     * projection. XMage keeps no chosen order in exile or graveyards (its exile zones are hash maps, a graveyard
+     * keeps the order cards arrive in, never asking anyone), so those compare by card.
      */
     List<String> diff(JsonObject kernel, JsonObject xmage) {
         JsonObject game = kernel.deepCopy();
         game.addProperty("turn", gameTurn(kernel));
+        boolean combat = COMBAT.contains(text(xmage, "phase_step"));
         List<String> out = new ArrayList<>();
-        walk("", state(game), state(xmage), out);
+        walk("", state(game, combat), state(xmage, combat), out);
         return out;
     }
 
-    private static JsonElement state(JsonElement e) {
+    /** The steps in which creatures are in combat (CR 506.4: they leave it as the combat phase ends). */
+    private static final Set<String> COMBAT = Set.of("beginning_of_combat", "declare_attackers", "declare_blockers",
+            "combat_damage", "end_of_combat");
+    private static final Set<String> COMBAT_FIELDS = Set.of("attacking", "attack_target", "blocking",
+            "blocked_attackers");
+
+    private static JsonElement state(JsonElement e, boolean combat) {
         if (e.isJsonObject()) {
             JsonObject in = e.getAsJsonObject();
             JsonObject out = new JsonObject();
@@ -171,7 +180,7 @@ final class Views {
                 String k = entry.getKey();
                 JsonElement v = entry.getValue();
                 if (k.equals("object_id") || k.equals("known") || k.equals("passed_seats") || k.equals("full_name")
-                        || k.equals("characteristics")
+                        || k.equals("characteristics") || !combat && COMBAT_FIELDS.contains(k)
                         || k.equals("card_name") && in.has("stack_kind") && "spell".equals(text(in, "stack_kind"))) {
                     continue;
                 }
@@ -182,8 +191,8 @@ final class Views {
                 } else if (k.equals("x_value") && v.isJsonNull()) {
                     v = new JsonPrimitive(0);
                 }
-                v = state(v);
-                if (k.equals("exile")) {
+                v = state(v, combat);
+                if (k.equals("exile") || k.equals("graveyard")) {
                     List<JsonElement> cards = new ArrayList<>();
                     v.getAsJsonArray().forEach(cards::add);
                     cards.sort((x, y) -> x.toString().compareTo(y.toString()));
@@ -197,7 +206,7 @@ final class Views {
         }
         if (e.isJsonArray()) {
             JsonArray out = new JsonArray();
-            e.getAsJsonArray().forEach(x -> out.add(state(x)));
+            e.getAsJsonArray().forEach(x -> out.add(state(x, combat)));
             return out;
         }
         return e;
