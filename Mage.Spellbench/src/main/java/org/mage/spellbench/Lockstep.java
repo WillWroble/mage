@@ -29,8 +29,27 @@ final class Lockstep {
             stack.add(topFirst.get(i));
         }
         copy.add("stack", stack);
+        // an embalmed token is named as its card (CR 702.128a); mtg-kernel names it by its catalog entry
+        JsonArray players = new JsonArray();
+        for (JsonElement p : observation.getAsJsonArray("players")) {
+            JsonObject player = p.getAsJsonObject();
+            JsonArray battlefield = player.getAsJsonArray("battlefield");
+            if (battlefield.toString().contains(EMBALMED)) {
+                player = player.deepCopy();
+                for (JsonElement b : player.getAsJsonArray("battlefield")) {
+                    String name = Views.text(b.getAsJsonObject(), "card_name");
+                    if (name != null && name.endsWith(EMBALMED)) {
+                        b.getAsJsonObject().addProperty("card_name", name.substring(0, name.length() - EMBALMED.length()));
+                    }
+                }
+            }
+            players.add(player);
+        }
+        copy.add("players", players);
         return copy;
     }
+
+    private static final String EMBALMED = " Embalmed Token";
 
     static JsonObject semantic(JsonObject decision, int candidate) {
         return decision.getAsJsonArray("candidates").get(candidate).getAsJsonObject().getAsJsonObject("semantic");
