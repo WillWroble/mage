@@ -187,7 +187,10 @@ final class KernelMatch implements AutoCloseable {
         arrange.addProperty("game_id", gameId);
         arrange.addProperty("seat", seat);
         arrange.add("library", new Gson().toJsonTree(library));
-        expect(engine.request(PROTOCOL, "x_lockstep_arrange_library", arrange), "library_arranged");
+        JsonObject response = engine.request(PROTOCOL, "x_lockstep_arrange_library", arrange);
+        if (!"library_arranged".equals(response.get("response_type").getAsString())) {
+            throw new LockstepDivergence("the kernel's library of " + seat + " is not XMage's: " + response);
+        }
     }
 
     @Override

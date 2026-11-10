@@ -1,6 +1,7 @@
 package org.mage.spellbench;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
@@ -203,7 +204,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             JsonObject decision = kernel.decision();
             boolean wanted = wanted(decision, kinds);
             if (decision.getAsJsonArray("candidates").size() == 1 && !wanted || Lockstep.takesAll(decision)) {
-                kernel.step(0); // forced: one candidate, or all to take, whoever is asked (XMage makes it unasked)
+                step(0); // forced: one candidate, or all to take, whoever is asked (XMage makes it unasked)
                 continue;
             }
             if (other.equals(kernel.actingSeat())) {
@@ -215,13 +216,13 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                     }
                     return null;
                 }
-                kernel.step(candidate);
+                step(candidate);
                 continue;
             }
             if (wanted || !kernelOnly(decision)) {
                 return decision;
             }
-            kernel.step(kernel.archonChoice());
+            step(kernel.archonChoice());
         }
         // a natural end may come before XMage's (the damage of a combat both seats passed through): until XMage gets
         // there the Archon only passes, and the results are compared at XMage's end
@@ -232,6 +233,24 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                     + (kinds == null ? "" : " and asks the Archon " + kinds));
         }
         return null;
+    }
+
+    /**
+     * Steps the kernel; at a priority decision, each of its libraries is first put in XMage's order when it holds as
+     * many cards: XMage owns the randomness (a shuffle is XMage's), and stepping priority may take the kernel to a draw
+     * before this player is asked again. Not inside an effect, which may be bound to cards in a library.
+     */
+    private void step(int candidate) {
+        JsonObject decision = kernel.decision();
+        for (JsonElement p : Lockstep.isPriority(decision) ? Lockstep.observation(decision).getAsJsonArray("players")
+                : new JsonArray()) {
+            String each = Views.text(p.getAsJsonObject(), "seat");
+            List<String> library = library(game, game.getPlayer(views.player(each)));
+            if (p.getAsJsonObject().get("library_count").getAsInt() == library.size()) {
+                kernel.arrangeLibrary(each, library);
+            }
+        }
+        kernel.step(candidate);
     }
 
     /** The Archon's decision of one of {@code kinds} (null: priority). */
@@ -254,7 +273,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private JsonObject archon() {
         JsonObject decision = kernel.decision();
         int candidate = kernel.archonChoice();
-        kernel.step(candidate);
+        step(candidate);
         return Lockstep.semantic(decision, candidate).deepCopy();
     }
 
@@ -288,9 +307,6 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
             passedAt = diff;
             return false; // the kernel asks the Archon at a later point
-        }
-        for (String each : new String[]{other, seat}) {
-            kernel.arrangeLibrary(each, library(game, game.getPlayer(views.player(each))));
         }
         Views.View view = views.view(game, seat);
         JsonObject semantic = archon();
@@ -454,7 +470,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         return guard(game, () -> {
             JsonObject decision = advance(game, Set.of("order_pick"));
             while (decision != null && !Lockstep.semantic(decision, 0).getAsJsonObject("item").has("trigger")) {
-                kernel.step(kernel.archonChoice()); // an order of cards before it (a discard's), which XMage makes itself
+                step(kernel.archonChoice()); // an order of cards before it (a discard's), which XMage makes itself
                 decision = advance(game, Set.of("order_pick"));
             }
             if (decision == null) {
