@@ -246,9 +246,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 continue;
             }
             // a decision XMage makes itself: one it never asks (an order), or a dialog it is already past (a forced
-            // search XMage made without asking); the Archon answers it, and the next comparison checks XMage did the same
+            // search XMage made without asking: it is later, or gives the Archon priority with the dialog's object
+            // resolved); the Archon answers it, and the next comparison checks XMage did the same
+            JsonObject kernelNow = Lockstep.observation(decision);
+            JsonObject now = views.view(game, seat).json;
             boolean past = !Lockstep.isPriority(decision)
-                    && views.before(Lockstep.observation(decision), views.view(game, seat).json);
+                    && (views.before(kernelNow, now) || kinds == null && views.resolved(kernelNow, now));
             if (wanted || !kernelOnly(decision) && !past) {
                 return decision;
             }

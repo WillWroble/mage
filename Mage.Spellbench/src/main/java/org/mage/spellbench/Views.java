@@ -96,10 +96,21 @@ final class Views {
 
     /** The kernel observation's point in the game is earlier than the XMage one's. */
     boolean before(JsonObject kernel, JsonObject xmage) {
-        int turn = gameTurn(kernel);
-        int other = xmage.get("turn").getAsInt();
+        return before(kernel, xmage, false);
+    }
+
+    /** {@code a}'s point is earlier than {@code b}'s; {@code reversed}: {@code a} is XMage's, {@code b} the kernel's. */
+    private boolean before(JsonObject a, JsonObject b, boolean reversed) {
+        int turn = reversed ? a.get("turn").getAsInt() : gameTurn(a);
+        int other = reversed ? gameTurn(b) : b.get("turn").getAsInt();
         return turn != other ? turn < other
-                : STEPS.indexOf(text(kernel, "phase_step")) < STEPS.indexOf(text(xmage, "phase_step"));
+                : STEPS.indexOf(text(a, "phase_step")) < STEPS.indexOf(text(b, "phase_step"));
+    }
+
+    /** At the same point, XMage has resolved what the kernel still resolves: it has less on its stack. */
+    boolean resolved(JsonObject kernel, JsonObject xmage) {
+        return !before(kernel, xmage) && !before(xmage, kernel, true)
+                && xmage.getAsJsonArray("stack").size() < kernel.getAsJsonArray("stack").size();
     }
 
     String seat(UUID playerId) {
