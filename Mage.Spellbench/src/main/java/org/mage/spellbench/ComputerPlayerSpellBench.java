@@ -96,6 +96,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel, and its kernel candidate. */
     private transient ActivatedAbility acting;
     private transient JsonObject actingSemantic;
+    private transient JsonObject actingDecision;
+    private transient Views.View actingView;
     /**
      * The Archon's arrangement in the kernel (a scry, a surveil): each card's destination, its order picks, and the
      * answers it makes to XMage's dialogs for it, in their order: the cards leaving the top, then one pick each of the
@@ -420,6 +422,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         ActivatedAbility ability = playable(game, view, decision, semantic);
         acting = ability;
         actingSemantic = semantic;
+        actingDecision = decision;
+        actingView = view;
         try {
             if (!activateAbility(ability, game)) {
                 throw new LockstepDivergence("XMage refused the Archon's " + semantic);
@@ -490,6 +494,15 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     protected boolean makeChoiceHelper(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+        JsonElement cost = acting instanceof ManaAbility ? actingSemantic.remove("cost_target") : null;
+        if (cost != null && !cost.isJsonNull()) { // the object the Archon's mana ability costs, chosen with it
+            return guard(game, () -> {
+                JsonObject ref = cost.getAsJsonObject();
+                target.add(ref.has("player") ? views.player(Views.text(ref, "player"))
+                        : xmage(game, actingView, actingDecision, ref.getAsJsonObject("object")), game);
+                return true;
+            }, false);
+        }
         Boolean arranged = guard(game, () -> arranged(target, game, fromCards), false);
         if (arranged != null) {
             return arranged;
