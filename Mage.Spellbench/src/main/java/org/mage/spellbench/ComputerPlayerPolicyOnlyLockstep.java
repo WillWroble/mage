@@ -174,8 +174,10 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     @Override
     public boolean activateAbility(ActivatedAbility ability, Game game) {
-        // recorded before it runs: the dialogs it asks (targets, modes, X, costs) are recorded after it, in order
-        boolean action = live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0;
+        // recorded before it runs: the dialogs it asks (targets, modes, X, costs) are recorded after it, in order;
+        // mana made while paying a cost (an unless-payment) is the payment's, which the kernel makes itself
+        boolean action = live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0
+                && !payManaMode && !isPayingMana;
         if (action) {
             moves.add(new Move(Move.Kind.ACTION, view.apply(game), ability));
         }
