@@ -150,17 +150,19 @@ final class Views {
 
     /**
      * The differences between a kernel observation and an XMage one as game states (the kernel's turn counted as the
-     * game's). Left out: combat fields outside combat (mtg-kernel keeps them to the end of the turn), object ids (opaque per engine and
+     * game's). Left out: combat fields outside combat (mtg-kernel keeps them past it), summoning sickness of a
+     * non-creature, object ids (opaque per engine and
      * viewer), {@code known} and {@code passed_seats} (bookkeeping), each engine's rendering of card text
      * ({@code full_name}, {@code characteristics}), a spell's name on the stack (mtg-kernel names the card, XMage the
      * cast face). A non-modal object without X is {@code modes [0]}, {@code x_value 0} on mtg-kernel and null in the
-     * projection. XMage keeps no chosen order in exile or graveyards (its exile zones are hash maps, a graveyard
-     * keeps the order cards arrive in, never asking anyone), so those compare by card.
+     * projection. XMage keeps no chosen order on the battlefield, in exile or in graveyards (the battlefield and
+     * exile zones are maps, a graveyard keeps the order cards arrive in, never asking anyone), so those compare as
+     * sets of cards.
      */
     List<String> diff(JsonObject kernel, JsonObject xmage) {
         JsonObject game = kernel.deepCopy();
         game.addProperty("turn", gameTurn(kernel));
-        boolean combat = COMBAT.contains(text(xmage, "phase_step"));
+        boolean combat = COMBAT.contains(text(xmage, "phase_step")) && COMBAT.contains(text(kernel, "phase_step"));
         List<String> out = new ArrayList<>();
         walk("", state(game, combat), state(xmage, combat), out);
         return out;
@@ -171,10 +173,17 @@ final class Views {
             "combat_damage", "end_of_combat");
     private static final Set<String> COMBAT_FIELDS = Set.of("attacking", "attack_target", "blocking",
             "blocked_attackers");
+    private static final Set<String> UNORDERED = Set.of("battlefield", "exile", "graveyard");
 
     private static JsonElement state(JsonElement e, boolean combat) {
         if (e.isJsonObject()) {
             JsonObject in = e.getAsJsonObject();
+            if (in.has("permanent") && in.get("permanent").isJsonObject() && !creature(in)) {
+                // summoning sickness matters only to creatures: a land's is no state (the engines tap different
+                // identical lands to pay)
+                in = in.deepCopy();
+                in.getAsJsonObject("permanent").remove("summoning_sick");
+            }
             JsonObject out = new JsonObject();
             for (Map.Entry<String, JsonElement> entry : in.entrySet()) {
                 String k = entry.getKey();
@@ -192,7 +201,7 @@ final class Views {
                     v = new JsonPrimitive(0);
                 }
                 v = state(v, combat);
-                if (k.equals("exile") || k.equals("graveyard")) {
+                if (UNORDERED.contains(k) && v.isJsonArray()) {
                     List<JsonElement> cards = new ArrayList<>();
                     v.getAsJsonArray().forEach(cards::add);
                     cards.sort((x, y) -> x.toString().compareTo(y.toString()));
@@ -210,6 +219,12 @@ final class Views {
             return out;
         }
         return e;
+    }
+
+    private static boolean creature(JsonObject object) {
+        JsonElement characteristics = object.get("characteristics");
+        return characteristics != null && characteristics.isJsonObject()
+                && characteristics.getAsJsonObject().getAsJsonArray("types").contains(new JsonPrimitive("creature"));
     }
 
     private static void walk(String path, JsonElement a, JsonElement b, List<String> out) {
@@ -272,7 +287,10 @@ final class Views {
         return null;
     }
 
-    /** Each zone's objects in the order the observation lists them, keyed "seat zone" (the stack: "all stack"). */
+    /**
+     * Each zone's objects keyed "seat zone" (the stack: "all stack"): an ordered zone as the observation lists it, an
+     * unordered one by its cards' state, the order both engines share when their states are equal.
+     */
     private static Map<String, List<JsonObject>> zones(JsonObject observation) {
         Map<String, List<JsonObject>> out = new HashMap<>();
         for (JsonElement p : observation.getAsJsonArray("players")) {
@@ -282,6 +300,9 @@ final class Views {
                 if (objects != null && objects.isJsonArray()) {
                     List<JsonObject> list = new ArrayList<>();
                     objects.getAsJsonArray().forEach(o -> list.add(o.getAsJsonObject()));
+                    if (UNORDERED.contains(zone)) {
+                        list.sort((x, y) -> state(x, true).toString().compareTo(state(y, true).toString()));
+                    }
                     out.put(text(player, "seat") + " " + zone, list);
                 }
             }

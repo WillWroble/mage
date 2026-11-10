@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -66,6 +67,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** A selection's first pick, which the Archon made to answer XMage's yes/no before the selection. */
     private transient Pick pendingPick;
     private transient String gameId;
+    private transient Game game;
 
     /** One of the Archon's picks: the kernel decision, its answer, and this seat's XMage view when it was made. */
     private static final class Pick {
@@ -115,6 +117,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         ComputerPlayerPolicyOnlyLockstep policy = (ComputerPlayerPolicyOnlyLockstep) other.getRealPlayer();
         kernel = new KernelMatch(settings, SEAT);
         gameId = game.getId().toString();
+        this.game = game;
         String starting = game.getStartingPlayerId().equals(playerId) ? SEAT : OTHER;
         kernel.start(gameId, starting, opening(game, other), opening(game, this));
         Map<String, Object> flags = new Gson().fromJson(kernel.observationFlags(),
@@ -366,17 +369,19 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     @Override
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText,
                              Ability source, Game game) {
-        boolean use = guard(game, () -> use(game), false);
+        boolean use = guard(game, () -> use(game, trueText), false);
         getPlayerHistory().useSequence.add(use); // as ComputerPlayer records a yes/no
         return use;
     }
 
     /**
-     * A yes/no: the Archon's boolean, or, where the kernel asks one selection whose finish is the no (an optional
-     * search), whether the Archon picks; that pick then answers XMage's selection.
+     * A yes/no: the Archon's boolean; or its option of an optional effect; or its choice of costs where XMage asks one as yes for the first; or, where the
+     * kernel asks one selection whose finish is the no (an optional search), whether the Archon picks, and that pick
+     * then answers XMage's selection.
      */
-    private boolean use(Game game) {
-        JsonObject decision = advance(game, Set.of("choose_boolean", "optional_cost", "select_object", "choose_target"));
+    private boolean use(Game game, String trueText) {
+        JsonObject decision = advance(game, Set.of("choose_boolean", "optional_cost", "choose_cost_option",
+                "choose_option", "select_object", "choose_target"));
         if (decision == null) {
             throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel waits on MageZero");
         }
@@ -385,6 +390,16 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         String kind = Views.text(semantic, "kind");
         if (kind.equals("choose_boolean") || kind.equals("optional_cost")) {
             return semantic.has("value") ? semantic.get("value").getAsBoolean() : semantic.get("pay").getAsBoolean();
+        }
+        if (kind.equals("choose_option")) {
+            Boolean may = Lockstep.may(semantic);
+            if (may == null) {
+                throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel asks it " + semantic);
+            }
+            return may;
+        }
+        if (kind.equals("choose_cost_option")) { // XMage asks a choice of two costs as yes: the first, no: the second
+            return Lockstep.names(trueText, Views.text(semantic, "choice"));
         }
         if (kind.startsWith("finish_")) {
             return false;
@@ -396,27 +411,33 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     @Override
     public Mode chooseModeHelper(Modes modes, Ability source, Game game) {
         return guard(game, () -> {
-            JsonObject semantic = answer(game, "choose_spell_mode");
+            JsonObject semantic = answer(game, "choose_spell_mode", "a mode");
             return new ArrayList<>(modes.values()).get(semantic.get("mode_index").getAsInt());
         }, null);
     }
 
     @Override
     protected int makeChoiceAmountHelper(int min, int max, Game game, Ability source, boolean isManaPay) {
-        return guard(game, () -> answer(game, "choose_number").get("value").getAsInt(), min);
+        return guard(game, () -> answer(game, "choose_number", "a number").get("value").getAsInt(), min);
     }
 
     @Override
     public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
         return guard(game, () -> {
-            String color = Views.text(answer(game, "choose_color"), "color");
+            String color = Views.text(answer(game, "choose_color", "\"" + choice.getMessage() + "\" " + choice.getChoices()), "color");
             choice.setChoice(color.substring(0, 1).toUpperCase(Locale.ROOT) + color.substring(1));
             return true;
         }, false);
     }
 
-    /** The Archon's answer to the kernel's next decision of {@code kind}. */
-    private JsonObject answer(Game game, String kind) {
+    /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */
+    private JsonObject answer(Game game, String kind, String dialog) {
+        if (kernel.terminal() == null && SEAT.equals(kernel.actingSeat()) && !kind.equals(Lockstep.firstKind(kernel.decision()))
+                && !Lockstep.isPriority(kernel.decision()) && kernel.decision().getAsJsonArray("candidates").size() > 1
+                && !kernelOnly(kernel.decision())) {
+            throw new LockstepDivergence("XMage asks the Archon " + dialog + "; the kernel asks it "
+                    + Lockstep.firstKind(kernel.decision()));
+        }
         if (advance(game, Set.of(kind)) == null) {
             throw new LockstepDivergence("XMage asks the Archon " + kind + "; the kernel waits on MageZero");
         }
@@ -455,9 +476,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         try {
             return step.get();
         } catch (LockstepDivergence e) {
-            dump(game);
-            finish(game, e.getMessage());
-            game.end();
+            if (!over) { // a divergence inside another step surfaces again in the outer one: record it once
+                dump(game);
+                finish(e.getMessage());
+                game.end();
+            }
             return otherwise;
         }
     }
@@ -467,8 +490,40 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     public void abort() {
         super.abort();
         if (kernel != null && !over) {
-            finish(null, null);
+            finish(ending());
         }
+    }
+
+    /** How the kernel's end differs from XMage's, once MageZero's last moves are given to it; null when it agrees. */
+    private String ending() {
+        try {
+            advance(game, null);
+        } catch (LockstepDivergence e) {
+            return e.getMessage();
+        }
+        JsonObject terminal = kernel.terminal();
+        String winner = winner();
+        if (terminal == null) {
+            return "XMage's game is over (winner " + winner + "); the kernel asks " + kernel.actingSeat() + " "
+                    + Lockstep.firstKind(kernel.decision());
+        }
+        String kernelWinner = terminal.get("winner").isJsonNull() ? null : terminal.get("winner").getAsString();
+        return Objects.equals(winner, kernelWinner) ? null
+                : "XMage's winner is " + winner + ", the kernel's " + kernelWinner;
+    }
+
+    /** The seat of XMage's winner, null for none: XMage ends the game once a player lost, before naming the winner. */
+    private String winner() {
+        String winner = null;
+        for (Player player : game.getState().getPlayers().values()) {
+            if (!player.hasLost()) {
+                if (winner != null) {
+                    return null;
+                }
+                winner = views.seat(player.getId());
+            }
+        }
+        return winner;
     }
 
     /** For a divergence: the kernel's pending decision and both seats' XMage views, side by side. */
@@ -484,15 +539,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
     }
 
-    private void finish(Game game, String divergence) {
+    private void finish(String divergence) {
         over = true;
         JsonObject record = new JsonObject();
         record.addProperty("game_id", gameId);
         record.addProperty("divergence", divergence);
-        JsonObject terminal = kernel == null ? null : kernel.terminal();
-        record.add("kernel", terminal);
-        record.addProperty("archon_won", hasWon());
-        record.addProperty("archon_lost", hasLost());
+        record.add("kernel", kernel == null ? null : kernel.terminal());
+        record.addProperty("turn", game == null ? null : game.getTurnNum());
+        record.addProperty("xmage_winner", game == null ? null : winner());
         if (kernel != null) {
             kernel.close();
         }

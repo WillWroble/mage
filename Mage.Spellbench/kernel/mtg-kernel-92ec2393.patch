@@ -264,7 +264,7 @@ index db6d4a21..46aeb8ec 100644
  
  pub fn build_burn_mirror_state(seed: u64) -> GameState {
 diff --git a/mtg-kernel/src/rl_session.rs b/mtg-kernel/src/rl_session.rs
-index 46d63ea4..01707eb6 100644
+index 46d63ea4..b22ca27a 100644
 --- a/mtg-kernel/src/rl_session.rs
 +++ b/mtg-kernel/src/rl_session.rs
 @@ -4359,6 +4359,35 @@ impl RlEpisodeSessionV1 {
@@ -382,28 +382,43 @@ index 46d63ea4..01707eb6 100644
          (ResetRandomization::Legacy { env_seed }, None) => build_deck_pair_state(
              env_seed,
              resolved_decks[0].card_ids,
-@@ -7549,6 +7631,61 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
+@@ -7549,6 +7631,76 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
      }
  }
  
 +/// Spellbench lockstep: puts a seat's library in the host's order (card
 +/// names, top first) after the host's own engine shuffled it. The order must
-+/// be a permutation of the library; nothing else changes.
++/// be a permutation of the library. A card already at a position that names
++/// it stays there, so a library already in that order keeps every object
++/// (and what is known about it) in place; nothing else changes.
 +fn arrange_library_v1(
 +    state: &mut crate::state::GameState,
 +    player: PlayerId,
 +    order: &[String],
 +) -> Result<(), RlSessionError> {
-+    let mut left = state.players[player.index()].library.clone();
++    let library = state.players[player.index()].library.clone();
++    let name = |id: ObjectId| crate::rl::card_name(state.objects[id].card_def);
++    let mut placed: Vec<Option<ObjectId>> = library
++        .iter()
++        .zip(order)
++        .map(|(&id, wanted)| (name(id) == *wanted).then_some(id))
++        .collect();
++    placed.resize(order.len(), None);
++    let mut left: Vec<ObjectId> = library
++        .iter()
++        .copied()
++        .filter(|id| !placed.contains(&Some(*id)))
++        .collect();
 +    let mut arranged = Vec::with_capacity(order.len());
-+    for name in order {
-+        let Some(index) = left
-+            .iter()
-+            .position(|&id| crate::rl::card_name(state.objects[id].card_def) == *name)
-+        else {
++    for (position, wanted) in order.iter().enumerate() {
++        if let Some(id) = placed[position] {
++            arranged.push(id);
++            continue;
++        }
++        let Some(index) = left.iter().position(|&id| name(id) == *wanted) else {
 +            return Err(session_error(
 +                RlSessionErrorCode::UnsupportedDeck,
-+                &format!("library order names {name:?}, which the library does not have left"),
++                &format!("library order names {wanted:?}, which the library does not have left"),
 +            ));
 +        };
 +        arranged.push(left.remove(index));

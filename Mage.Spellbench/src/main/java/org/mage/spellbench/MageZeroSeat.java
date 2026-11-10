@@ -31,6 +31,8 @@ final class MageZeroSeat {
     /** The selection being given to the kernel pick by pick: its move and the picks left. */
     private Move selection;
     private Deque<UUID> picks;
+    /** How many cards the arrangement being given keeps on top. */
+    private int kept;
     /** The combat declaration being given creature by creature. */
     private Move declaration;
     /** How the kernel's last unanswered priority differed from MageZero's last pass before it. */
@@ -55,7 +57,14 @@ final class MageZeroSeat {
                 return pick(decision, game);
             case "choose_boolean":
             case "optional_cost":
-                return value(decision, Move.Kind.USE, (c, v) -> Objects.equals(bool(c, "value", "pay"), v));
+                return value(decision, Move.Kind.USE,
+                        (c, v) -> Objects.equals(bool(c, "value", "pay"), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
+            case "choose_option":
+                return value(decision, Move.Kind.USE,
+                        (c, v) -> Objects.equals(Lockstep.may(c), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
+            case "choose_cost_option":
+                return value(decision, Move.Kind.USE,
+                        (c, v) -> Lockstep.names(((ComputerPlayerPolicyOnlyLockstep.Use) v).option, Views.text(c, "choice")));
             case "choose_spell_mode":
                 return value(decision, Move.Kind.MODE, (c, v) -> Objects.equals(number(c, "mode_index"), v));
             case "choose_number":
@@ -69,7 +78,7 @@ final class MageZeroSeat {
             case "arrange_card":
                 return arrange(decision, game);
             case "order_pick":
-                return order(decision);
+                return order(decision, game);
             default:
                 throw new LockstepDivergence("XMage asks MageZero nothing for the kernel's " + kind);
         }
@@ -146,6 +155,8 @@ final class MageZeroSeat {
     /**
      * A scry or surveil, which the kernel asks card by card and XMage as one selection of the cards that leave the top:
      * a card MageZero selected takes the other destination, the rest stay on top. Library cards are shown by name.
+     * XMage then asks the order of each destination one card at a time (the last card of each is forced); those picks
+     * are consumed with the last card, since the kernel's order picks are answered from where XMage put the cards.
      */
     private Integer arrange(JsonObject decision, Game game) {
         if (Lockstep.substep(decision) == 0 || selection == null) {
@@ -157,6 +168,7 @@ final class MageZeroSeat {
             @SuppressWarnings("unchecked")
             List<UUID> chosen = (List<UUID>) selection.value;
             picks.addAll(chosen);
+            kept = 0;
         }
         String purpose = Views.text(Lockstep.semantic(decision, 0), "purpose");
         if (!"scry".equals(purpose) && !"surveil".equals(purpose)) {
@@ -172,16 +184,40 @@ final class MageZeroSeat {
         }
         picks.remove(picked);
         String destination = picked == null ? "top" : "scry".equals(purpose) ? "bottom" : "graveyard";
+        if (picked == null) {
+            kept++;
+        }
+        JsonObject card = Lockstep.semantic(decision, 0);
+        int count = card.get("card_count").getAsInt();
+        if (card.get("card_index").getAsInt() == count - 1) {
+            int moved = count - kept;
+            int orders = Math.max(0, kept - 1) + ("scry".equals(purpose) ? Math.max(0, moved - 1) : 0);
+            for (int i = 0; i < orders; i++) {
+                next(Move.Kind.TARGETS);
+            }
+        }
         return candidate(decision, c -> destination.equals(Views.text(c, "destination")), name + " to " + destination);
     }
 
     /**
-     * An order the kernel asks and XMage makes itself. Cards put in a library are hidden there and the kernel's
-     * library takes XMage's order at the next checkpoint; a graveyard's order is not compared (XMage keeps the order
-     * cards arrive in, never asking anyone). So any order stands.
+     * The order of an arrangement's destinations, which XMage has already made: the kernel orders the cards kept on
+     * top, then the ones put on the bottom, each top to bottom, so each position takes the card XMage has there. The
+     * kernel's library then needs no reordering, which would move cards it knows. A graveyard's order is not compared
+     * (XMage keeps the order cards arrive in), so any order stands there.
      */
-    private int order(JsonObject decision) {
-        return 0;
+    private int order(JsonObject decision, Game game) {
+        JsonObject first = Lockstep.semantic(decision, 0);
+        JsonObject object = first.getAsJsonObject("item").getAsJsonObject("object");
+        if (!"library".equals(Views.text(object, "zone"))) {
+            return 0;
+        }
+        List<mage.cards.Card> library = game.getPlayer(views.player(Views.text(object, "owner_seat")))
+                .getLibrary().getCards(game);
+        int position = first.get("position").getAsInt();
+        int count = first.get("count").getAsInt();
+        String name = library.get(position < kept ? position : library.size() - count + position).getName();
+        return candidate(decision, c -> name.equals(Views.text(
+                c.getAsJsonObject("item").getAsJsonObject("object"), "card_name")), "XMage's order, " + name);
     }
 
     private interface Match {

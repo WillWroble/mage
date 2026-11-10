@@ -8,6 +8,7 @@ import mage.abilities.common.PassAbility;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
+import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
 import mage.game.Game;
 import mage.game.combat.CombatGroup;
@@ -20,9 +21,11 @@ import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -52,6 +55,22 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         @Override
         public String toString() {
             return kind + " " + value;
+        }
+    }
+
+    /** A yes/no answer, with the text of the option it names when the dialog names its options (a choice of costs). */
+    static final class Use {
+        final boolean value;
+        final String option;
+
+        Use(boolean value, String option) {
+            this.value = value;
+            this.option = option;
+        }
+
+        @Override
+        public String toString() {
+            return value + (option == null ? "" : " (" + option + ")");
         }
     }
 
@@ -103,6 +122,24 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     }
 
     // ------------------------------------------------------------------ priority
+
+    /** The steps in which mtg-kernel opens priority: the lockstep game's only priority windows. */
+    private static final Set<PhaseStep> WINDOWS = EnumSet.of(PhaseStep.PRECOMBAT_MAIN, PhaseStep.DECLARE_ATTACKERS,
+            PhaseStep.DECLARE_BLOCKERS, PhaseStep.POSTCOMBAT_MAIN);
+
+    /**
+     * The lockstep game's rules: no priority outside the kernel's windows, where this player passes without deciding
+     * (taking the last-priority snapshot as every player does).
+     */
+    @Override
+    public boolean priority(Game game) {
+        if (live(game) && !WINDOWS.contains(game.getTurnStepType())) {
+            game.setLastPriority(playerId);
+            pass(game);
+            return false;
+        }
+        return super.priority(game);
+    }
 
     @Override
     public boolean activateAbility(ActivatedAbility ability, Game game) {
@@ -173,7 +210,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     public boolean chooseUse(Outcome outcome, String message, String secondMessage, String trueText, String falseText,
                              Ability source, Game game) {
         return dialog(game, Move.Kind.USE,
-                () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game), r -> r);
+                () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game),
+                r -> new Use(r, r ? trueText : falseText));
     }
 
     @Override
