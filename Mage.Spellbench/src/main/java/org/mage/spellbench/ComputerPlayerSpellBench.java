@@ -466,7 +466,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         JsonObject decision = advance(game, Set.of("choose_boolean", "optional_cost", "optional_cast",
                 "choose_cost_option", "choose_option", "select_object", "choose_target"));
         if (decision == null) {
-            throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel waits on MageZero");
+            // the kernel waits on MageZero, so it has passed this point: it offers an option only when it can be taken
+            // (a payment the Archon can make), and did not offer this one
+            return false;
         }
         Views.View view = views.view(game, SEAT);
         JsonObject semantic = archon();
