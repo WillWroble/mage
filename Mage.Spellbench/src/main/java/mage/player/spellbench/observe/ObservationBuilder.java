@@ -11,6 +11,9 @@ import mage.cards.Card;
 import mage.cards.CardWithSpellOption;
 import mage.cards.ModalDoubleFacedCard;
 import mage.cards.SplitCard;
+import mage.abilities.DelayedTriggeredAbility;
+import mage.abilities.common.delayed.OnLeaveReturnExiledAbility;
+import mage.abilities.effects.common.ReturnFromExileForSourceEffect;
 import mage.constants.AbilityType;
 import mage.constants.PhaseStep;
 import mage.constants.SubType;
@@ -427,11 +430,29 @@ public final class ObservationBuilder {
                 Object linked = game.getState().getValue(CardUtil.getObjectZoneString(CardUtil.SOURCE_EXILE_ZONE_TEXT,
                         p.getId(), game, p.getZoneChangeCounter(game), false));
                 Map<String, Object> ref = held.get(p.getId());
-                if (zone.getId().equals(linked) && ref != null) {
+                if (zone.getId().equals(linked) && ref != null && returns(p)) {
                     return new LinkedHashMap<>(ref);
                 }
             }
             return null;
+        }
+
+        /**
+         * The permanent may return the cards it exiled (Section 6.4: no {@code exiled_by} without a returning link, as for
+         * a card exiled as a cost): an ability of its own returns them, or an "until it leaves" return waits for it.
+         */
+        boolean returns(Permanent p) {
+            for (Ability a : p.getAbilities(game)) {
+                if (a.getEffects().stream().anyMatch(e -> e instanceof ReturnFromExileForSourceEffect)) {
+                    return true;
+                }
+            }
+            for (DelayedTriggeredAbility a : game.getState().getDelayed()) {
+                if (a instanceof OnLeaveReturnExiledAbility && p.getId().equals(a.getSourceId())) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /** The permanent's public statuses (Section 6.10) that XMage keeps, in the spec's order. */
