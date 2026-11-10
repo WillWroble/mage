@@ -25,6 +25,7 @@ import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
 import mage.constants.RangeOfInfluence;
+import mage.constants.Zone;
 import mage.game.Game;
 import mage.player.ai.ComputerPlayer;
 import mage.players.ChooseCreatureToBlockAbility;
@@ -92,6 +93,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel, and its kernel candidate. */
     private transient ActivatedAbility acting;
     private transient JsonObject actingSemantic;
+    /**
+     * The Archon's arrangement in the kernel (a scry, a surveil): each card's destination, its order picks, and the
+     * answers it makes to XMage's dialogs for it, in their order: the cards leaving the top, then one pick each of the
+     * bottom's order (topmost first) and of the top's (deepest first, as XMage places them).
+     */
+    private final transient List<String[]> partition = new ArrayList<>();
+    private final transient List<String> ordered = new ArrayList<>();
+    private final transient Deque<List<String>> arrangement = new ArrayDeque<>();
     /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
      * the targets of a cast whose cost XMage asks first. */
     private final transient Deque<Pick> picks = new ArrayDeque<>();
@@ -246,6 +255,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      */
     private void step(int candidate) {
         JsonObject decision = kernel.decision();
+        if (seat.equals(kernel.actingSeat())) {
+            arranged(decision, Lockstep.semantic(decision, candidate));
+        }
         for (JsonElement p : Lockstep.isPriority(decision) ? Lockstep.observation(decision).getAsJsonArray("players")
                 : new JsonArray()) {
             String each = Views.text(p.getAsJsonObject(), "seat");
@@ -255,6 +267,75 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
         }
         kernel.step(candidate);
+    }
+
+    /** Records the Archon's answers to an arrangement; once complete, the answers to XMage's dialogs for it. */
+    private void arranged(JsonObject decision, JsonObject chosen) {
+        String kind = Views.text(chosen, "kind");
+        if ("arrange_card".equals(kind)) {
+            if (chosen.get("card_index").getAsInt() == 0) {
+                partition.clear();
+                ordered.clear();
+            }
+            partition.add(new String[]{Views.text(chosen.getAsJsonObject("card"), "card_name"),
+                    Views.text(chosen, "destination"), Views.text(chosen, "purpose")});
+        } else if ("order_pick".equals(kind) && "arrangement".equals(Views.text(chosen, "purpose"))) {
+            ordered.add(Views.text(chosen.getAsJsonObject("item").getAsJsonObject("object"), "card_name"));
+        } else {
+            return;
+        }
+        JsonElement group = decision.get("group");
+        boolean last = group == null || group.isJsonNull() || group.getAsJsonObject().get("substep_index").getAsInt() + 1
+                >= group.getAsJsonObject().get("substep_count").getAsInt();
+        String purpose = partition.get(0)[2];
+        if (!last || !Set.of("scry", "surveil").contains(purpose)) {
+            return;
+        }
+        // each destination's cards in the kernel's order: its picks, then the implied last card
+        List<String[]> left = new ArrayList<>(partition);
+        Map<String, List<String>> by = new HashMap<>();
+        for (String name : ordered) {
+            String[] card = left.stream().filter(c -> c[0].equals(name)).findFirst().orElseThrow();
+            left.remove(card);
+            by.computeIfAbsent(card[1], d -> new ArrayList<>()).add(name);
+        }
+        left.forEach(card -> by.computeIfAbsent(card[1], d -> new ArrayList<>()).add(card[0]));
+        List<String> moved = new ArrayList<>();
+        partition.stream().filter(c -> !c[1].equals("top")).forEach(c -> moved.add(c[0]));
+        arrangement.add(moved);
+        List<String> bottom = by.getOrDefault("bottom", List.of());
+        for (int i = 0; i < bottom.size() - 1; i++) {
+            arrangement.add(List.of(bottom.get(i)));
+        }
+        List<String> top = by.getOrDefault("top", List.of());
+        for (int i = top.size() - 1; i > 0; i--) {
+            arrangement.add(List.of(top.get(i)));
+        }
+    }
+
+    /**
+     * A choice among library cards while the Archon's arrangement is pending: its next answer (XMage's one-card choices
+     * included, which it would otherwise make itself, a scry of one card to the bottom).
+     */
+    @Override
+    protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+        if (fromCards == null || fromCards.getCards(game).stream()
+                .noneMatch(card -> game.getState().getZone(card.getId()) == Zone.LIBRARY)) {
+            return super.makeChoice(outcome, target, source, game, fromCards);
+        }
+        if (arrangement.isEmpty()) {
+            guard(game, () -> next(game, TARGETS), null); // the kernel's arrangement, if it asks one, is recorded on the way
+        }
+        if (arrangement.isEmpty()) {
+            return super.makeChoice(outcome, target, source, game, fromCards);
+        }
+        for (String name : arrangement.poll()) {
+            fromCards.getCards(game).stream()
+                    .filter(card -> card.getName().equals(name) && !target.contains(card.getId()))
+                    .findFirst().ifPresent(card -> target.add(card.getId(), game));
+        }
+        getPlayerHistory().targetSequence.addAll(target.getTargets()); // as ComputerPlayer records a choice
+        return true;
     }
 
     /** The Archon's decision of one of {@code kinds} (null: priority). */
@@ -285,6 +366,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     public boolean priority(Game game) {
+        arrangement.clear(); // an arrangement XMage did not ask about is over
         game.setLastPriority(playerId); // as every XMage AI player: MageZero's simulations replay from here
         game.getState().setPriorityPlayerId(playerId);
         game.firePriorityEvent(playerId);
