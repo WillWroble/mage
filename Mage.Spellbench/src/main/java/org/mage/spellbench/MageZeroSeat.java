@@ -57,8 +57,9 @@ final class MageZeroSeat {
                 return pick(decision, game);
             case "choose_boolean":
             case "optional_cost":
+            case "optional_cast":
                 return value(decision, Move.Kind.USE,
-                        (c, v) -> Objects.equals(bool(c, "value", "pay"), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
+                        (c, v) -> Objects.equals(bool(c), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
             case "choose_option":
                 return value(decision, Move.Kind.USE,
                         (c, v) -> Objects.equals(Lockstep.may(c), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
@@ -114,8 +115,10 @@ final class MageZeroSeat {
         String kind = ability instanceof PlayLandAbility ? "play_land"
                 : ability instanceof SpellAbility ? "cast_spell"
                 : ability instanceof ManaAbility ? "activate_mana_ability" : "activate_ability";
+        // a cast with an alternative cost is a candidate of its own, which MageZero's moves do not answer yet
         return candidate(decision, c -> kind.equals(Views.text(c, "kind")) && source != null
-                && source.equals(Views.text(c.getAsJsonObject("source"), "object_id")), move + " as " + kind);
+                && source.equals(Views.text(c.getAsJsonObject("source"), "object_id"))
+                && (!c.has("method") || c.get("method").isJsonNull()), move + " as " + kind);
     }
 
     // ------------------------------------------------------------------ dialogs
@@ -318,8 +321,9 @@ final class MageZeroSeat {
         return ref == null || ref.isJsonNull() ? null : Views.text(ref.getAsJsonObject(), "object_id");
     }
 
-    private static Object bool(JsonObject semantic, String... fields) {
-        for (String field : fields) {
+    /** The yes/no a candidate answers: a boolean, an optional cost paid, an optional cast made. */
+    static Boolean bool(JsonObject semantic) {
+        for (String field : new String[]{"value", "pay", "cast_it"}) {
             if (semantic.has(field)) {
                 return semantic.get(field).getAsBoolean();
             }

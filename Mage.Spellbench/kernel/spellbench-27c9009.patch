@@ -1,3 +1,18 @@
+diff --git a/integrations/mtg_kernel/kernel_arrangement_v2.py b/integrations/mtg_kernel/kernel_arrangement_v2.py
+index e68caf6..bb5ca50 100644
+--- a/integrations/mtg_kernel/kernel_arrangement_v2.py
++++ b/integrations/mtg_kernel/kernel_arrangement_v2.py
+@@ -204,8 +204,8 @@ def native_arrangement_pick(view, result, binding):
+         wanted = result["bottom" if purpose == "scry" else "hand"]
+     else:
+         wanted = result["graveyard" if purpose == "reveal_partition" else "bottom" if stage == "bottom_order" else "top"]
+-        if purpose == "look":
+-            wanted = tuple(reversed(wanted))  # old chooser puts its first pick deepest
++        if purpose == "look" or (purpose == "scry" and stage == "top_order"):
++            wanted = tuple(reversed(wanted))  # these native choosers put their first pick deepest
+     if selected > len(wanted):
+         raise ArrangementError("native arrangement exceeds the captured completed plan")
+     candidate_object = None if selected == len(wanted) else binding.cards[wanted[selected]]
 diff --git a/integrations/mtg_kernel/kernel_engine_v2.py b/integrations/mtg_kernel/kernel_engine_v2.py
 index 0aed6c8..59687a4 100644
 --- a/integrations/mtg_kernel/kernel_engine_v2.py
