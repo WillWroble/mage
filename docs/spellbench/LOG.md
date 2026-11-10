@@ -101,3 +101,19 @@ Spec gaps in the kernel's protocol engine (Jack's wrapper), found while matching
 - `cast_spell` always has `method: null`, also when no `choose_cast_method` follows (spec 7.2);
 - the stack is listed top first (spec 6.4: index 0 is the bottom); read bottom first here, the Archon's input
   unchanged.
+
+### 2026-11-11, commit fd157773
+
+Fixed from the schedule on 674141cb:
+- the Archon's mana: XMage's AI payer could pay a generic mana with Heap Gate's filter ({1},{T}: any color), spend a
+  second Gate on it and come up short, then pay with lands the kernel left untapped (Prismatic Strands refused; Journey
+  to Nowhere paid with Citadel Gate). While paying for the Archon, a mana ability that costs mana is used only when the
+  kernel tapped more permanents than the mana left to pay (it filtered too);
+- combat damage division when several attackers are blocked: the group is the one whose blockers XMage's dialog names
+  (Nyxborn Hydra and Elvish Mystic, each blocked by one creature);
+- the initiative: XMage puts Undercity in the command zone and sources its rooms' triggers there, the kernel keeps
+  only the designation and sources the triggers by the object that gave it; compared without the dungeon card and
+  without the initiative holder's trigger sources;
+- `exiled_by` for Mesmeric Fiend (its leaving returns the card);
+- the Archon's X (Nyxborn Hydra): XMage's AI capped it by the mana in its pool, which is still empty when X is
+  announced.
