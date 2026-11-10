@@ -120,21 +120,57 @@ public final class Continuation {
             result.put("replayed", (long) earlier.size());
             bindLooks(game, Json.arr(current, "known"));
             Map<String, Object> projected;
+            Map<String, Object> projectionFlags = new LinkedHashMap<>(flags);
+            projectionFlags.put("known_cards", false);
             try {
-                projected = RoundTrip.project(w, flags, Json.str(current, "priority_seat"), Json.arr(current, "known"));
+                projected = RoundTrip.project(w, projectionFlags, Json.str(current, "priority_seat"), Json.arr(current, "known"));
             } catch (Exception e) {
                 fail("projection failed: " + e);
                 return;
             }
-            List<String> diff = ObsCompare.diff(current, projected, 40);
+            List<String> diff = ObsCompare.diff(gameState(current), gameState(projected), 40);
             result.put("diff", new ArrayList<Object>(diff));
             if (!diff.isEmpty()) {
                 result.put("match", false);
                 throw new Stop();
             }
             result.put("match", true);
-            result.put("align", ObsCompare.alignIds(projected, current));
+            result.put("align", ObsCompare.alignIds(gameState(projected), gameState(current)));
             result.put("projected", projected);
+        }
+
+        /**
+         * MageZero fork: what the comparison checks of an observation, which is the game state: zones, objects, players
+         * and the stack. Left out are {@code known}, which the projection takes from the received observation, and
+         * each engine's rendering of card text ({@code full_name}, {@code characteristics}: keyword lists, type order).
+         * A non-modal object without X is {@code modes [0]}, {@code x_value 0} on mtg-kernel and null on XMage.
+         */
+        private Object gameState(Object o) {
+            if (o instanceof Map) {
+                Map<String, Object> out = new LinkedHashMap<>();
+                for (Map.Entry<String, Object> e : Json.obj(o).entrySet()) {
+                    String k = e.getKey();
+                    if (k.equals("known") || k.equals("full_name") || k.equals("characteristics")) {
+                        continue;
+                    }
+                    Object v = e.getValue();
+                    if (k.equals("modes") && v == null) {
+                        v = Collections.singletonList(0L);
+                    } else if (k.equals("x_value") && v == null) {
+                        v = 0L;
+                    }
+                    out.put(k, gameState(v));
+                }
+                return out;
+            }
+            if (o instanceof List) {
+                List<Object> out = new ArrayList<>();
+                for (Object x : (List<?>) o) {
+                    out.add(gameState(x));
+                }
+                return out;
+            }
+            return o;
         }
 
         /**

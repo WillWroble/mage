@@ -2,6 +2,7 @@ package mage.player.spellbench.observe;
 
 import mage.Mana;
 import mage.MageObject;
+import mage.ObjectColor;
 import mage.abilities.Ability;
 import mage.abilities.Mode;
 import mage.abilities.Modes;
@@ -12,6 +13,7 @@ import mage.cards.ModalDoubleFacedCard;
 import mage.cards.SplitCard;
 import mage.constants.AbilityType;
 import mage.constants.PhaseStep;
+import mage.constants.SubType;
 import mage.constants.Zone;
 import mage.counters.Counter;
 import mage.counters.CounterType;
@@ -75,7 +77,7 @@ public final class ObservationBuilder {
 
     /** Flags whose fields this builder can fill; the others are declared false and always null. */
     static final List<String> IMPLEMENTED = Collections.unmodifiableList(Arrays.asList(
-            "poison", "designations", "player_progress", "day_night", "passed_seats", "pending_triggers", "keywords", "full_name", "stack_text"));
+            "poison", "designations", "exiled_by", "permanent_details", "player_progress", "day_night", "passed_seats", "pending_triggers", "keywords", "full_name", "stack_text"));
 
     private static final Field TARGET_ZCC = field(TargetImpl.class, "zoneChangeCounters");
     private static final Field LONDON_STARTING = field(LondonMulligan.class, "startingHandSizes");
@@ -170,6 +172,7 @@ public final class ObservationBuilder {
         final Map<UUID, Map<String, Object>> held = new HashMap<>();
         final List<Map<String, Object>> audit = new ArrayList<>();
         final List<Object[]> permanents = new ArrayList<>(); // {Permanent, its permanent map}
+        final List<Object[]> exiledCards = new ArrayList<>(); // {Card, its record}
         final List<Object[]> stackEntries = new ArrayList<>(); // {StackObject, its entry}
 
         Pass(String viewer, UUID viewerId, ViewerIds ids) {
@@ -200,6 +203,9 @@ public final class ObservationBuilder {
             // references inside the observation, once every held object exists (Section 5.1)
             for (Object[] p : permanents) {
                 fillPermanent((Permanent) p[0], castMap(p[1]));
+            }
+            for (Object[] e : exiledCards) {
+                castMap(e[1]).put("exiled_by", exiledBy((Card) e[0]));
             }
             for (Object[] s : stackEntries) {
                 fillStackEntry((StackObject) s[0], castMap(s[1]));
@@ -395,7 +401,76 @@ public final class ObservationBuilder {
             r.put("characteristics", named ? characteristics(c, c.getAbilities(game)) : null);
             r.put("permanent", null);
             r.put("exiled_by", null);
+            if (zone.equals("exile") && flag("exiled_by")) {
+                exiledCards.add(new Object[]{c, r}); // filled once every object is held
+            }
             return r;
+        }
+
+        /**
+         * The permanent whose linked exile zone holds this card (it may return it), else null. XMage keeps a source's
+         * zone id in the game state under its {@code SourceExileZone} key; it is read, never created.
+         */
+        Map<String, Object> exiledBy(Card c) {
+            ExileZone zone = null;
+            for (ExileZone z : game.getExile().getExileZones()) {
+                if (z.contains(c.getId())) {
+                    zone = z;
+                }
+            }
+            if (zone == null) {
+                return null;
+            }
+            for (Permanent p : game.getBattlefield().getAllPermanents()) {
+                Object linked = game.getState().getValue(CardUtil.getObjectZoneString(CardUtil.SOURCE_EXILE_ZONE_TEXT,
+                        p.getId(), game, p.getZoneChangeCounter(game), false));
+                Map<String, Object> ref = held.get(p.getId());
+                if (zone.getId().equals(linked) && ref != null) {
+                    return new LinkedHashMap<>(ref);
+                }
+            }
+            return null;
+        }
+
+        /** The permanent's public statuses (Section 6.10) that XMage keeps, in the spec's order. */
+        List<Object> statuses(Permanent perm) {
+            List<Object> out = new ArrayList<>();
+            if (!perm.getGoadingPlayers().isEmpty()) {
+                out.add("goaded");
+            }
+            if (perm.isSuspected()) {
+                out.add("suspected");
+            }
+            if (perm.isMonstrous()) {
+                out.add("monstrous");
+            }
+            if (perm.isRenowned()) {
+                out.add("renowned");
+            }
+            return out;
+        }
+
+        /** The values chosen for this permanent under XMage's common keys (ChooseColorEffect, ChooseCreatureTypeEffect). */
+        List<Object> chosen(Permanent perm) throws ObservationException {
+            List<Object> out = new ArrayList<>();
+            Object color = game.getState().getValue(perm.getId() + "_color");
+            if (color instanceof ObjectColor) {
+                for (Object c : Vocabulary.colors((ObjectColor) color)) {
+                    out.add(chosenValue("color", c));
+                }
+            }
+            Object type = game.getState().getValue(perm.getId() + "_type");
+            if (type instanceof SubType) {
+                out.add(chosenValue("creature_type", Vocabulary.normalizeName(((SubType) type).getDescription(), "subtype")));
+            }
+            return out;
+        }
+
+        Map<String, Object> chosenValue(String kind, Object value) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("kind", kind);
+            m.put("value", value);
+            return m;
         }
 
         Map<String, Object> permanentRecord(Permanent perm) throws ObservationException {
@@ -426,9 +501,10 @@ public final class ObservationBuilder {
             pm.put("blocking", perm.getBlocking() > 0);
             pm.put("blocked_attackers", new ArrayList<Object>());
             pm.put("phased_out", !perm.isPhasedIn());
-            pm.put("statuses", null);
-            pm.put("class_level", null);
-            pm.put("chosen", null);
+            boolean details = flag("permanent_details");
+            pm.put("statuses", details ? statuses(perm) : null);
+            pm.put("class_level", details && perm.hasSubtype(SubType.CLASS, game) ? perm.getClassLevel() : null);
+            pm.put("chosen", details ? chosen(perm) : null);
             r.put("permanent", pm);
             r.put("exiled_by", null);
             permanents.add(new Object[]{perm, pm});

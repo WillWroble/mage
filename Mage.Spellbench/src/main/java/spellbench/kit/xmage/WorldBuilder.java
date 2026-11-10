@@ -16,11 +16,13 @@ import mage.abilities.effects.common.TapTargetEffect;
 import mage.abilities.keyword.FlashbackAbility;
 import mage.abilities.keyword.KickerAbility;
 import mage.cards.Card;
+import mage.cards.CardWithSpellOption;
 import mage.cards.MeldCard;
 import mage.cards.decks.Deck;
 import mage.cards.repository.TokenInfo;
 import mage.cards.repository.TokenRepository;
 import mage.cards.repository.TokenType;
+import mage.constants.CardType;
 import mage.constants.AbilityType;
 import mage.constants.PhaseStep;
 import mage.constants.TurnPhase;
@@ -60,9 +62,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -1182,7 +1186,8 @@ public final class WorldBuilder {
                 Player p = game.getPlayer(controller);
                 Map<String, Object> cast = stackCast(id);
                 boolean flashback = cast != null && "flashback".equals(Json.str(cast, "method"));
-                SpellAbility sa = flashback ? flashbackAbility(c, controller) : c.getSpellAbility();
+                Card face = flashback ? c : spellFace(c, e);
+                SpellAbility sa = flashback ? flashbackAbility(c, controller) : face.getSpellAbility();
                 if (sa == null || c.isLand(game)) {
                     flag(flashback ? "unsupported:stack_flashback" : "unsupported:stack_spell_not_castable");
                     placeholder(e, controller);
@@ -1195,8 +1200,8 @@ public final class WorldBuilder {
                 } else {
                     p.getHand().add(c);
                 }
-                c.cast(game, from, sa, controller);
-                Spell spell = game.getStack().getSpell(c.getId());
+                face.cast(game, from, sa, controller);
+                Spell spell = game.getStack().getSpell(face.getId());
                 if (spell == null) {
                     flag("unsupported:stack_cast_failed");
                     placeholder(e, controller);
@@ -1401,6 +1406,23 @@ public final class WorldBuilder {
     private Map<String, Object> stackCast(String id) {
         Map<String, Object> casts = spec.history == null ? null : Json.obj(spec.history, "stack_casts");
         return casts == null ? null : Json.obj(casts, id);
+    }
+
+    /**
+     * MageZero fork: the face a stack spell was cast as. An entry names the card, but its characteristics are the
+     * cast face's: an adventurer whose entry has its adventure's types (Sagu Wildling as Roost Seek) is that adventure.
+     */
+    private Card spellFace(Card c, Map<String, Object> e) {
+        if (!(c instanceof CardWithSpellOption)) {
+            return c;
+        }
+        Card option = ((CardWithSpellOption) c).getSpellCard();
+        List<Object> types = new ArrayList<>();
+        for (CardType t : option.getCardType(game)) {
+            types.add(t.toString().toLowerCase(Locale.ROOT));
+        }
+        Map<String, Object> ch = Json.obj(e, "characteristics");
+        return ch != null && new HashSet<>(Json.arr(ch, "types")).equals(new HashSet<>(types)) ? option : c;
     }
 
     /** The card's one flashback ability, cast by the spell's controller, else null. */
