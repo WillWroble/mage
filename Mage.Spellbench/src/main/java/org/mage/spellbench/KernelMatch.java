@@ -31,6 +31,8 @@ final class KernelMatch implements AutoCloseable {
         String seat = "p1";
         String setup;
         String logs;
+        /** Keep each process's protocol transcript in the logs (large: every observation). */
+        boolean transcript;
 
         static Settings load(String path) {
             try {
@@ -73,7 +75,8 @@ final class KernelMatch implements AutoCloseable {
         this.gameId = gameId;
         File logs = new File(settings.logs);
         logs.mkdirs();
-        engine = new NdjsonProcess(settings.engine, new File(logs, gameId + "-engine.log"));
+        engine = new NdjsonProcess(settings.engine, new File(logs, gameId + "-engine.log"),
+                settings.transcript ? new File(logs, gameId + "-engine.jsonl") : null);
         JsonObject hello = expect(engine.request(PROTOCOL, "hello", minor()), "hello_ok");
         observationFlags = hello.getAsJsonObject("observation");
         JsonObject reset = new JsonObject();
@@ -92,7 +95,7 @@ final class KernelMatch implements AutoCloseable {
         reset.add("library_orders", orders);
         current = engine.request(PROTOCOL, "x_lockstep_reset", reset);
 
-        archon = new NdjsonProcess(settings.archon, new File(logs, gameId + "-archon.log"));
+        archon = new NdjsonProcess(settings.archon, new File(logs, gameId + "-archon.log"), null);
         expect(archon.request(PROTOCOL, "hello", minor()), "hello_ok");
         int seat = archonSeat.equals("p0") ? 0 : 1;
         JsonObject start = new JsonObject();

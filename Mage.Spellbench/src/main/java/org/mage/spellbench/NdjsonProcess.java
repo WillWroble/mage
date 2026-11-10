@@ -5,6 +5,7 @@ import com.google.gson.JsonParser;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -22,9 +23,11 @@ final class NdjsonProcess implements AutoCloseable {
     private final Process process;
     private final Writer in;
     private final BufferedReader out;
+    /** Every request and response, one per line, when a transcript is kept. */
+    private final Writer transcript;
     private int requests;
 
-    NdjsonProcess(List<String> command, File stderr) {
+    NdjsonProcess(List<String> command, File stderr, File transcript) {
         try {
             process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.appendTo(stderr)).start();
         } catch (IOException e) {
@@ -32,6 +35,12 @@ final class NdjsonProcess implements AutoCloseable {
         }
         in = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8);
         out = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
+        try {
+            this.transcript = transcript == null ? null
+                    : new OutputStreamWriter(new FileOutputStream(transcript), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     /** Sends {@code request} with the protocol envelope and returns the response. */
@@ -47,6 +56,10 @@ final class NdjsonProcess implements AutoCloseable {
             if (line == null) {
                 throw new IllegalStateException(type + ": the process ended");
             }
+            if (transcript != null) {
+                transcript.write(message + "\n" + line + "\n");
+                transcript.flush();
+            }
             return JsonParser.parseString(line).getAsJsonObject();
         } catch (IOException e) {
             throw new UncheckedIOException(type + ": the process failed", e);
@@ -56,5 +69,12 @@ final class NdjsonProcess implements AutoCloseable {
     @Override
     public void close() {
         process.destroy();
+        try {
+            if (transcript != null) {
+                transcript.close();
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }
