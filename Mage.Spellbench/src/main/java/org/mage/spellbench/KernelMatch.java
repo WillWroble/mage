@@ -181,16 +181,17 @@ final class KernelMatch implements AutoCloseable {
         }
     }
 
-    /** Puts a seat's library in XMage's order (card names, top first) after XMage shuffled it. */
+    /**
+     * Puts a seat's library in XMage's order (card names, top first) after XMage shuffled it; one the kernel's library
+     * cannot take (XMage has resolved an effect the kernel has not: Sagu Wildling's omen shuffled in, a Forest out) is
+     * left for later, as the next comparison checks the libraries' cards.
+     */
     void arrangeLibrary(String seat, List<String> library) {
         JsonObject arrange = new JsonObject();
         arrange.addProperty("game_id", gameId);
         arrange.addProperty("seat", seat);
         arrange.add("library", new Gson().toJsonTree(library));
-        JsonObject response = engine.request(PROTOCOL, "x_lockstep_arrange_library", arrange);
-        if (!"library_arranged".equals(response.get("response_type").getAsString())) {
-            throw new LockstepDivergence("the kernel's library of " + seat + " is not XMage's: " + response);
-        }
+        engine.request(PROTOCOL, "x_lockstep_arrange_library", arrange);
     }
 
     @Override
