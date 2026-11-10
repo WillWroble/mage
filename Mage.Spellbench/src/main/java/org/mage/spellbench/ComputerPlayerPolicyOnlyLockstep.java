@@ -87,9 +87,13 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     private transient int dialogDepth;
     /** Activations inside another one (its mana payment) are part of it. */
     private transient int actionDepth;
-    /** Where this player last acted at priority: its turn and step, and the stack's size after the action. */
+    /**
+     * Where this player last acted at priority: its turn and step, and what it put on the stack (else the stack's size
+     * after the action). The round it acted in lasts until the step changes or something resolves.
+     */
     private transient int actedTurn;
     private transient PhaseStep actedStep;
+    private transient UUID actedObject;
     private transient int actedStack;
     /** Its last action used the stack, and this player has not had priority since. */
     private transient boolean actedOnStack;
@@ -156,7 +160,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     private boolean passes(Game game) {
         PhaseStep step = game.getTurnStepType();
-        boolean round = actedStep == step && actedTurn == game.getTurnNum() && game.getStack().size() >= actedStack;
+        boolean round = actedStep == step && actedTurn == game.getTurnNum() && (actedObject != null
+                ? game.getStack().getStackObject(actedObject) != null : game.getStack().size() >= actedStack);
         boolean onStack = actedOnStack;
         actedOnStack = false;
         return round && (step == PhaseStep.DECLARE_ATTACKERS || step == PhaseStep.DECLARE_BLOCKERS || onStack);
@@ -177,6 +182,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
                 actedStep = game.getTurnStepType();
                 actedStack = game.getStack().size();
                 actedOnStack = ability.isUsesStack();
+                actedObject = actedOnStack && !game.getStack().isEmpty() ? game.getStack().getFirst().getId() : null;
             }
             return done;
         } finally {

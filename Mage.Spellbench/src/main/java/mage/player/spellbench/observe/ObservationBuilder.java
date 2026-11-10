@@ -677,8 +677,11 @@ public final class ObservationBuilder {
             } else {
                 StackAbility sa = (StackAbility) so;
                 abilities.add(sa.getStackAbility());
+                // its source while it still exists (Section 6.5): XMage keeps a leaves-the-battlefield trigger's source,
+                // the card in its new zone, which is no longer the object the ability works from
                 MageObject source = sa.getSourceObjectIfItStillExists(game);
-                if (source != null) {
+                Zone from = sa.getStackAbility().getZone();
+                if (source != null && (from == null || from == Zone.ALL || from == game.getState().getZone(source.getId()))) {
                     Map<String, Object> ref = held.get(source.getId());
                     e.put("source", ref == null ? null : new LinkedHashMap<>(ref));
                 }
