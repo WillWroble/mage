@@ -12,6 +12,7 @@ import mage.abilities.Modes;
 import mage.abilities.PlayLandAbility;
 import mage.abilities.SpellAbility;
 import mage.abilities.TriggeredAbility;
+import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.abilities.mana.ManaAbility;
 import mage.abilities.keyword.TrampleAbility;
 import mage.constants.MultiAmountType;
@@ -534,6 +535,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 return target.isChosen(game);
             }
             UUID chosen = picked(game, pick.view, pick.decision, pick.semantic);
+            if ("sacrifice".equals(Views.text(pick.semantic, "cost_kind"))) {
+                tapBeforeSacrifice(game, chosen);
+            }
             if (target.isNotTarget()) {
                 target.add(chosen, game);
             } else {
@@ -546,6 +550,49 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             boolean complete = target.isChoiceCompleted(target.getAffectedAbilityControllerId(playerId), source, game, null);
             if (lastSubstep && !"select_object".equals(Views.text(pick.semantic, "kind")) || complete) {
                 return target.isChosen(game);
+            }
+        }
+    }
+
+    /** The Archon's permanents the kernel has tapped beyond XMage's, by name. */
+    private Map<String, Integer> tappedBeyond(Game game) {
+        Map<String, Integer> more = new HashMap<>();
+        for (JsonElement p : Lockstep.observation(kernel.decision()).getAsJsonArray("players")) {
+            if (seat.equals(Views.text(p.getAsJsonObject(), "seat"))) {
+                for (JsonElement b : p.getAsJsonObject().getAsJsonArray("battlefield")) {
+                    JsonObject permanent = b.getAsJsonObject().getAsJsonObject("permanent");
+                    if (permanent != null && permanent.get("tapped").getAsBoolean()) {
+                        more.merge(Views.text(b.getAsJsonObject(), "card_name"), 1, Integer::sum);
+                    }
+                }
+            }
+        }
+        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(playerId)) {
+            if (permanent.isTapped()) {
+                more.computeIfPresent(permanent.getName(), (name, n) -> n > 1 ? n - 1 : null);
+            }
+        }
+        return more;
+    }
+
+    /**
+     * The kernel pays a cast's mana before its other costs, so it may tap a permanent the cast then sacrifices; XMage
+     * sacrifices first. When the permanents the kernel tapped beyond XMage's do not cover the Archon's mana cost, the
+     * rest came from what it sacrifices, which XMage taps for mana first (the mana floats until XMage pays).
+     */
+    private void tapBeforeSacrifice(Game game, UUID sacrificed) {
+        Permanent permanent = game.getPermanent(sacrificed);
+        if (acting == null || permanent == null || permanent.isTapped()) {
+            return;
+        }
+        int needed = acting.getManaCostsToPay().getMana().count() - getManaPool().getMana().count();
+        int tapped = tappedBeyond(game).values().stream().mapToInt(Integer::intValue).sum();
+        if (needed <= tapped) {
+            return;
+        }
+        for (ActivatedManaAbilityImpl ability : permanent.getAbilities().getActivatedManaAbilities(Zone.BATTLEFIELD)) {
+            if (ability.canActivate(playerId, game).canActivate() && activateAbility(ability, game)) {
+                return;
             }
         }
     }
@@ -597,22 +644,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /** Of {@code producers}, those the kernel tapped beyond XMage, by name; all of them when the kernel tapped none. */
     private <T extends MageObject> List<T> kernelTapped(Game game, List<T> producers) {
-        Map<String, Integer> more = new HashMap<>();
-        for (JsonElement p : Lockstep.observation(kernel.decision()).getAsJsonArray("players")) {
-            if (seat.equals(Views.text(p.getAsJsonObject(), "seat"))) {
-                for (JsonElement b : p.getAsJsonObject().getAsJsonArray("battlefield")) {
-                    JsonObject permanent = b.getAsJsonObject().getAsJsonObject("permanent");
-                    if (permanent != null && permanent.get("tapped").getAsBoolean()) {
-                        more.merge(Views.text(b.getAsJsonObject(), "card_name"), 1, Integer::sum);
-                    }
-                }
-            }
-        }
-        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(playerId)) {
-            if (permanent.isTapped()) {
-                more.computeIfPresent(permanent.getName(), (name, n) -> n > 1 ? n - 1 : null);
-            }
-        }
+        Map<String, Integer> more = tappedBeyond(game);
         List<T> chosen = new ArrayList<>();
         for (T producer : producers) {
             if (more.containsKey(producer.getName())) {
