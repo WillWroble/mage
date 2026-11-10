@@ -16,7 +16,6 @@ ARCHONS = [("a48", "archon-1-pauper", "a", "774e936da26468358257774fe41ae9457826
            ("c12", "archon-2-pauper", "b", "5c14c025e3cc87fb2c3eea28e1dbd770d7d257344174296d6259020f720da9de"),
            ("g115", "archon-3-pauper", "b", "8139016ca561961714f25e22a9d6f7fc888548fc332e45b6bce402dfc43159f2")]
 KERNEL_COMMIT = "92ec2393db34bea805a85991163458b9ff890f57"
-AGENT_VERSION = "0.3.0+1f9e47ebcd47"  # the mz entry with --model MZ-Pauper-Faeries-v15
 
 
 def scorer_config(repo: pathlib.Path, name: str, side: str) -> pathlib.Path:
@@ -40,12 +39,15 @@ def main():
     for a in ["spellbench", "kernel", "archons", "db", "work", "out"]:
         p.add_argument(f"--{a}", required=True, type=lambda s: pathlib.Path(s).resolve())
     p.add_argument("--pairs", type=int, default=16, help="seat-swapped pairs per Archon (8 per rotation of the decks)")
+    p.add_argument("--model", default="MZ-Pauper-Faeries-v15", help="the model's name, bound into the bot version")
+    p.add_argument("--version", default="0.3.0+1f9e47ebcd47",
+                   help="the agent's hello version for --model (the mz entry's digest includes the model name)")
     p.add_argument("--decks", nargs="*", help="only these pool decks (default: the board's eight)")
     p.add_argument("--agent", default=str(pathlib.Path(__file__).resolve().parent.parent / "scripts/agent.sh"))
     a = p.parse_args()
     py, sb, k = sys.executable, a.spellbench, a.kernel
-    bots = [{"name": "magezero-policy", "version": AGENT_VERSION, "type": "subprocess",
-             "command": ["bash", a.agent, "--db", str(a.db), "--work", str(a.work), "--model", "MZ-Pauper-Faeries-v15",
+    bots = [{"name": "magezero-policy", "version": a.version, "type": "subprocess",
+             "command": ["bash", a.agent, "--db", str(a.db), "--work", str(a.work), "--model", a.model,
                          "--log-dir", str(a.out / "logs")]}]
     for name, repo, side, state in ARCHONS:
         bots.append({"name": name, "version": "pauper-v2.0.0", "type": "subprocess",
