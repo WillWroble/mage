@@ -73,6 +73,26 @@ final class Lockstep {
                 || PRIORITY.contains(firstKind(decision));
     }
 
+    /**
+     * A selection that must take every candidate it offers: no decision, and XMage makes it without asking (its
+     * auto-choice, as two Mountains to sacrifice of two).
+     */
+    static boolean takesAll(JsonObject decision) {
+        JsonObject first = semantic(decision, 0);
+        if (!first.has("minimum") || !first.has("maximum") || !first.has("selected_count")
+                || first.get("minimum").getAsInt() != first.get("maximum").getAsInt()) {
+            return false;
+        }
+        int offered = 0;
+        for (JsonElement c : decision.getAsJsonArray("candidates")) {
+            if (Views.text(c.getAsJsonObject().getAsJsonObject("semantic"), "kind").startsWith("finish_")) {
+                return false;
+            }
+            offered++;
+        }
+        return offered == first.get("minimum").getAsInt() - first.get("selected_count").getAsInt();
+    }
+
     /** How many picks of its selection are made: a selection may be asked pick by pick outside a decision group. */
     static int selected(JsonObject decision) {
         for (JsonElement c : decision.getAsJsonArray("candidates")) {

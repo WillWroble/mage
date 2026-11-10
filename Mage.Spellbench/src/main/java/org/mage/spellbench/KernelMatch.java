@@ -167,6 +167,7 @@ final class KernelMatch implements AutoCloseable {
         line.add("seat", decision.get("acting_seat"));
         line.add("turn", observation.get("turn"));
         line.add("step", observation.get("phase_step"));
+        line.addProperty("stack", observation.getAsJsonArray("stack").size());
         line.add("chosen", decision.getAsJsonArray("candidates").get(candidateId).getAsJsonObject().get("semantic"));
         line.addProperty("of", decision.getAsJsonArray("candidates").size());
         try (java.io.FileWriter out = new java.io.FileWriter(new File(settings.logs, gameId + "-trace.jsonl"), true)) {

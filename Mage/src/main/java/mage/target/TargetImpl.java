@@ -476,6 +476,7 @@ public abstract class TargetImpl implements Target {
         List<UUID> randomPossibleTargets = new ArrayList<>(possibleTargets(playerId, source, game));
 
         chosen = false;
+        boolean autoChosen = false;
         do {
             int prevTargetsCount = this.getTargets().size();
 
@@ -509,7 +510,8 @@ public abstract class TargetImpl implements Target {
                 // player's choice
 
                 UUID autoChosenId = tryToAutoChoose(playerId, source, game);
-                if (autoChosenId != null && !this.contains(autoChosenId)) {
+                autoChosen = autoChosenId != null && !this.contains(autoChosenId);
+                if (autoChosen) {
                     // auto-choose
                     addTarget(autoChosenId, source, game);
                     // continue to next target (example: auto-choose must fill min/max = 2 from 2 possible cards)
@@ -537,8 +539,8 @@ public abstract class TargetImpl implements Target {
                 break;
             }
 
-            //stop by being computer player
-            if(game.getPlayer(playerId).isComputer()) {
+            // stop by being computer player, whose own choice fills the target at once (an auto-choice adds one)
+            if (!autoChosen && game.getPlayer(playerId).isComputer()) {
                 break;
             }
 

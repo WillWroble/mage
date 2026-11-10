@@ -189,8 +189,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         while (kernel.terminal() == null) {
             JsonObject decision = kernel.decision();
             boolean wanted = wanted(decision, kinds);
-            if (decision.getAsJsonArray("candidates").size() == 1 && !wanted) {
-                kernel.step(0); // forced: one candidate, whoever is asked (an engine may make it without asking)
+            if (decision.getAsJsonArray("candidates").size() == 1 && !wanted || Lockstep.takesAll(decision)) {
+                kernel.step(0); // forced: one candidate, or all to take, whoever is asked (XMage makes it unasked)
                 continue;
             }
             if (OTHER.equals(kernel.actingSeat())) {
