@@ -62,6 +62,9 @@ import java.util.function.Supplier;
 public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     private static final long serialVersionUID = 1L;
+    /** XMage's color choice for each of the protocol's mana symbols. */
+    private static final Map<String, String> MANA_COLORS = Map.of("W", "White", "U", "Blue", "B", "Black", "R", "Red",
+            "G", "Green");
     /** The kernel's decisions that answer an XMage yes/no. */
     private static final Set<String> USE = Set.of("choose_boolean", "optional_cost", "optional_cast",
             "choose_cost_option", "choose_option", "select_object", "choose_target");
@@ -86,8 +89,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient Map<UUID, UUID> declaration;
     /** This combat's blockers, either seat's, in the order the kernel declared them: its order of combat damage. */
     private final transient List<UUID> blockers = new ArrayList<>();
-    /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel. */
+    /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel, and its kernel candidate. */
     private transient ActivatedAbility acting;
+    private transient JsonObject actingSemantic;
     /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
      * the targets of a cast whose cost XMage asks first. */
     private final transient Deque<Pick> picks = new ArrayDeque<>();
@@ -316,6 +320,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
         ActivatedAbility ability = playable(game, view, decision, semantic);
         acting = ability;
+        actingSemantic = semantic;
         try {
             if (!activateAbility(ability, game)) {
                 throw new LockstepDivergence("XMage refused the Archon's " + semantic);
@@ -606,6 +611,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
+        if (paying) {
+            return super.chooseHelper(outcome, choice, game); // the kernel paid without a decision: XMage pays as it would
+        }
+        JsonElement mana = acting instanceof ManaAbility ? actingSemantic.get("mana_choice") : null;
+        if (mana != null && !mana.isJsonNull()) { // the color the Archon's mana ability makes, chosen with it
+            choice.setChoice(MANA_COLORS.get(mana.getAsString()));
+            return true;
+        }
         if (acting instanceof SpellAbility && choice.isKeyChoice()) {
             return guard(game, () -> {
                 choice.setChoiceByKey(cost(game, choice));
