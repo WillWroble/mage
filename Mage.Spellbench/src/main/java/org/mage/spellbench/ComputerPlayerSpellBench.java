@@ -325,28 +325,26 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /**
-     * A choice among library cards while the Archon's arrangement is pending: its next answer (XMage's one-card choices
-     * included, which it would otherwise make itself, a scry of one card to the bottom).
+     * A choice among library cards that the Archon's arrangement in the kernel answers (a scry's cards to the bottom,
+     * then each pick of an order), or null when it is no such choice. The kernel may reach the arrangement only now.
      */
-    @Override
-    protected boolean makeChoice(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+    private Boolean arranged(Target target, Game game, Cards fromCards) {
         if (fromCards == null || fromCards.getCards(game).stream()
                 .noneMatch(card -> game.getState().getZone(card.getId()) == Zone.LIBRARY)) {
-            return super.makeChoice(outcome, target, source, game, fromCards);
+            return null;
         }
         if (arrangement.isEmpty()) {
-            guard(game, () -> next(game, TARGETS), null); // the kernel's arrangement, if it asks one, is recorded on the way
+            next(game, TARGETS); // the kernel's arrangement, if it asks one, is recorded on the way
         }
         if (arrangement.isEmpty()) {
-            return super.makeChoice(outcome, target, source, game, fromCards);
+            return null;
         }
         for (String name : arrangement.poll()) {
             fromCards.getCards(game).stream()
                     .filter(card -> card.getName().equals(name) && !target.contains(card.getId()))
                     .findFirst().ifPresent(card -> target.add(card.getId(), game));
         }
-        getPlayerHistory().targetSequence.addAll(target.getTargets()); // as ComputerPlayer records a choice
-        return true;
+        return target.isChosen(game);
     }
 
     /** The Archon's decision of one of {@code kinds} (null: priority). */
@@ -460,6 +458,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     protected boolean makeChoiceHelper(Outcome outcome, Target target, Ability source, Game game, Cards fromCards) {
+        Boolean arranged = guard(game, () -> arranged(target, game, fromCards), false);
+        if (arranged != null) {
+            return arranged;
+        }
         if (source instanceof ChooseToAttackAbility || source instanceof ChooseCreatureToBlockAbility) {
             return guard(game, () -> declare(game, target, source), false);
         }
