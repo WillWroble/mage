@@ -8,7 +8,6 @@ import mage.abilities.ActivatedAbility;
 import mage.abilities.PlayLandAbility;
 import mage.abilities.SpellAbility;
 import mage.abilities.mana.ManaAbility;
-import mage.constants.Zone;
 import mage.game.Game;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
@@ -164,8 +163,9 @@ final class MageZeroSeat {
             String seat = views.seat(pick);
             return candidate(decision, c -> seat.equals(player(c)), what);
         }
-        if (game.getState().getZone(pick) == Zone.LIBRARY) {
-            // a library card is shown by name only: any card of that name in that library is the same pick
+        if (Lockstep.offersLibraryCards(decision) && game.getCard(pick) != null) {
+            // a library card is shown by name only: any card of that name in that library is the same pick (XMage
+            // may have moved MageZero's pick already, a searched land onto the battlefield)
             String name = game.getCard(pick).getName();
             return candidate(decision, c -> {
                 JsonObject object = object(c);

@@ -116,6 +116,17 @@ final class Lockstep {
         return offered == first.get("minimum").getAsInt() - first.get("selected_count").getAsInt();
     }
 
+    /** The decision offers cards in a library (a search). */
+    static boolean offersLibraryCards(JsonObject decision) {
+        for (JsonElement c : decision.getAsJsonArray("candidates")) {
+            JsonObject object = MageZeroSeat.object(c.getAsJsonObject().getAsJsonObject("semantic"));
+            if (object != null && "library".equals(Views.text(object, "zone"))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** How many picks of its selection are made: a selection may be asked pick by pick outside a decision group. */
     static int selected(JsonObject decision) {
         for (JsonElement c : decision.getAsJsonArray("candidates")) {

@@ -199,7 +199,9 @@ final class Views {
                 JsonElement v = in.get(k);
                 if (k.equals("object_id") || k.equals("known") || k.equals("passed_seats") || k.equals("full_name")
                         || k.equals("characteristics") || !combat && COMBAT_FIELDS.contains(k)
-                        || k.equals("card_name") && in.has("stack_kind") && "spell".equals(text(in, "stack_kind"))) {
+                        || k.equals("card_name") && in.has("stack_kind")) {
+                    // a stack entry's name is its source's, which the engines withhold differently (a spell's face,
+                    // an ability whose source left a hidden zone: Generous Ent's cycling); its source is compared
                     continue;
                 }
                 if (k.equals("modes") && v.isJsonNull()) {
