@@ -1,6 +1,5 @@
 package org.mage.spellbench;
 
-import com.google.gson.JsonObject;
 import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.Mode;
@@ -41,10 +40,10 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         enum Kind { ACTION, PASS, TARGETS, USE, MODE, NUMBER, CHOICE, ATTACKERS, BLOCKERS }
 
         final Kind kind;
-        final JsonObject view;
+        final Views.View view;
         final Object value;
 
-        Move(Kind kind, JsonObject view, Object value) {
+        Move(Kind kind, Views.View view, Object value) {
             this.kind = kind;
             this.view = view;
             this.value = value;
@@ -59,7 +58,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     /** The decisions not yet given to the kernel, oldest first. */
     final transient Deque<Move> moves = new ArrayDeque<>();
     /** The game as this seat sees it, written as the kernel's observation; set by the relay when its game starts. */
-    transient Function<Game, JsonObject> view;
+    transient Function<Game, Views.View> view;
     /** A dialog's own nested calls (one overload calling another) are part of that dialog. */
     private transient int dialogDepth;
 
@@ -89,7 +88,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         if (!live(game) || dialogDepth > 0) {
             return decision.decide();
         }
-        JsonObject before = view.apply(game);
+        Views.View before = view.apply(game);
         dialogDepth++;
         T result;
         try {

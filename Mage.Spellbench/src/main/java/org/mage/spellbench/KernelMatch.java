@@ -56,6 +56,8 @@ final class KernelMatch implements AutoCloseable {
     private NdjsonProcess engine;
     private NdjsonProcess archon;
     private String gameId;
+    /** The engine's declared observation flags (its hello_ok profile). */
+    private JsonObject observationFlags;
     /** The engine's last answer: a decision or the terminal. */
     private JsonObject current;
 
@@ -72,6 +74,7 @@ final class KernelMatch implements AutoCloseable {
         logs.mkdirs();
         engine = new NdjsonProcess(settings.engine, new File(logs, gameId + "-engine.log"));
         JsonObject hello = expect(engine.request(PROTOCOL, "hello", minor()), "hello_ok");
+        observationFlags = hello.getAsJsonObject("profile").getAsJsonObject("observation");
         JsonObject reset = new JsonObject();
         reset.addProperty("game_id", gameId);
         reset.add("format", setup.get("format"));
@@ -105,6 +108,11 @@ final class KernelMatch implements AutoCloseable {
         start.add("resources", setup.get("resources"));
         start.addProperty("agent_seed", new SecureRandom().nextLong() & Long.MAX_VALUE);
         expect(archon.request(PROTOCOL, "game_start", start), "ack");
+    }
+
+    /** The observation fields the engine fills (spec 6.9), as flags. */
+    JsonObject observationFlags() {
+        return observationFlags;
     }
 
     /** The pending seat decision, or null once the game is over. */
