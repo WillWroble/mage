@@ -20,7 +20,7 @@ DATA_CENTER = "EU-RO-1"
 POD = '''export OUT=/workspace/runs/{name}; mkdir -p $OUT; rm -f $OUT/DONE
 exec > $OUT/boot.log 2>&1  # the boot steps' output, so a failed clone shows why
 set -x
-apt-get update -qq && apt-get install -y -qq git curl >/dev/null
+apt-get update -qq; apt-get install -y -qq git curl >/dev/null  # the image has both: some hosts can't reach apt
 git clone -q --filter=blob:none https://github.com/WillWroble/mage /tmp/mage && git -C /tmp/mage checkout -q {commit}
 GIT_LFS_SKIP_SMUDGE=1 git clone -q --depth 1 -b {magezero} https://github.com/WillWroble/MageZero /tmp/code && cd /tmp/code
 MAGE_COMMIT={commit} {env} timeout {hours}h bash /tmp/mage/Mage.Spellbench/bench/pod.sh > $OUT/script.log 2>&1
@@ -43,7 +43,7 @@ def main():
     env = " ".join(k + "=" + shlex.quote(v) for k, v in (e.split("=", 1) for e in a.env))
     script = POD.format(name=a.name, commit=commit, magezero=a.magezero, env=env, hours=a.hours)
     body = {"name": f"mz-{a.name}", "computeType": "CPU", "cpuFlavorIds": ["cpu5c", "cpu3c"], "vcpuCount": a.cpu,
-            "imageName": "ubuntu:22.04", "containerDiskInGb": 60, "dockerStartCmd": ["bash", "-c", script],
+            "imageName": "buildpack-deps:22.04", "containerDiskInGb": 60, "dockerStartCmd": ["bash", "-c", script],
             "networkVolumeId": VOLUME, "volumeMountPath": "/workspace", "dataCenterIds": [DATA_CENTER]}
     req = urllib.request.Request(f"{API}/pods", method="POST", data=json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {os.environ['RUNPOD_API_KEY']}",

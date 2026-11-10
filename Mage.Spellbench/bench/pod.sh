@@ -16,7 +16,7 @@ A=$C/archons
 PAIRS=${PAIRS:-32}
 SHARDS=${SHARDS:-$(( $(nproc) / 4 ))}
 mkdir -p $C
-apt-get install -y -qq curl git build-essential pkg-config >/dev/null
+apt-get install -y -qq curl git build-essential pkg-config >/dev/null || true  # in the image already
 source runpod/java.sh
 lscpu > $OUT/cpu.txt; free -g > $OUT/mem.txt
 
