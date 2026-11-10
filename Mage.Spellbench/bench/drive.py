@@ -1,8 +1,9 @@
 """Plays a tournament config through Spellbench's host and live validator, like engines/xmage/kit/tests/play.py
 (preflight, schedule, play_game), without `spellbench run`'s rated-run isolation gate. Local and unrated.
 
-    SPELLBENCH=<spellbench checkout> python drive.py CONFIG.json OUT.jsonl [--shards N] [--record DIR]
+    SPELLBENCH=<spellbench checkout> python drive.py CONFIG.json OUT.jsonl [--shards N] [--record DIR] [--secret HEX]
 
+--secret HEX replays a run's games (the same deals and shuffles), for comparing two agents on identical games.
 --record DIR writes every decision each seat receives, with its answer, to DIR/<game index>-<seat>-<bot>.jsonl.
 """
 import json
@@ -88,7 +89,7 @@ def main():
     if record:
         os.makedirs(record, exist_ok=True)
     config = TournamentConfig.from_json(json.load(open(config_path)))
-    secret_hex = secrets.token_hex(32)
+    secret_hex = sys.argv[sys.argv.index("--secret") + 1] if "--secret" in sys.argv else secrets.token_hex(32)
     print(json.dumps({"run_secret": secret_hex}), file=sys.stderr, flush=True)  # to replay any game of the run
     indexes = [c.game_index for c in schedule(config, RunSecret.from_hex(secret_hex))]
     chunks = [indexes[i::shards] for i in range(shards)]
