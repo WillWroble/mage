@@ -291,21 +291,22 @@ public class KitPolicy extends ComputerPlayerPolicyOnly {
     }
 
     /**
-     * The cards the encoder shows as the option pile. Training encodes the cards XMage passes with the dialog (a library
-     * search, for example); a dialog the kit synthesizes passes none, so its library cards, which no zone encodes, are
-     * passed here instead.
+     * The cards the encoder shows as the option pile. Training encodes the cards XMage passes with the dialog: for a
+     * library search, the searcher's whole library. A dialog the kit synthesizes passes none, so when its options are
+     * library cards, the owner's library is passed here instead.
      */
     private static Cards optionPile(Game game, Set<UUID> possible, Cards fromCards) {
         if (fromCards != null) {
             return fromCards;
         }
-        Cards pile = new CardsImpl();
         for (UUID id : possible) {
             if (game.getState().getZone(id) == Zone.LIBRARY) {
-                pile.add(id);
+                Cards pile = new CardsImpl();
+                pile.addAll(game.getPlayer(game.getOwnerId(id)).getLibrary().getCardList());
+                return pile;
             }
         }
-        return pile.isEmpty() ? null : pile;
+        return null;
     }
 
     private boolean policyUse(String message, Ability source, Game game) {
