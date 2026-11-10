@@ -288,9 +288,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         ActivatedAbility ability = playable(game, view, decision, semantic);
         acting = ability;
         try {
-            debugCosts("before", ability, game);
             if (!activateAbility(ability, game)) {
-                debugCosts("refused", ability, game);
                 throw new LockstepDivergence("XMage refused the Archon's " + semantic);
             }
             if (!picks.isEmpty()) {
@@ -301,35 +299,6 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             picks.clear();
         }
         return true;
-    }
-
-    private void debugCosts(String when, ActivatedAbility ability, Game game) {
-        if (when.equals("before")) {
-            for (String n : new String[]{"mage.abilities", "mage.players", "mage.target", "mage.game.stack"}) {
-                org.apache.log4j.Logger l = org.apache.log4j.Logger.getLogger(n);
-                l.setLevel(org.apache.log4j.Level.DEBUG);
-                if (!l.getAllAppenders().hasMoreElements()) {
-                    l.addAppender(new org.apache.log4j.ConsoleAppender(new org.apache.log4j.PatternLayout("LOG %p %c{1}.%M %m%n"), "System.err"));
-                }
-            }
-        }
-        mage.cards.Card card = game.getCard(ability.getSourceId());
-        if (card == null) return;
-        for (Ability a : card.getAbilities(game)) {
-            if (a instanceof mage.abilities.costs.AlternativeCostSourceAbility) {
-                java.util.List<mage.abilities.costs.Cost> all = new ArrayList<>();
-                try {
-                    java.lang.reflect.Field f = mage.abilities.costs.AlternativeCostSourceAbility.class.getDeclaredField("alternateCosts");
-                    f.setAccessible(true);
-                    for (Object alt : (Iterable<?>) f.get(a)) for (Object c : (Iterable<?>) alt) all.add((mage.abilities.costs.Cost) c);
-                } catch (Exception e) { System.err.println("DEBUG reflect " + e); }
-                for (mage.abilities.costs.Cost c : all) {
-                    for (Target t : c.getTargets()) {
-                        System.err.println("DEBUG " + when + " alt " + a + " cost " + c + " selected=" + t.isChoiceSelected() + " chosen=" + t.isChosen(game) + " targets=" + t.getTargets() + " canChoose=" + t.canChoose(playerId, ability, game) + " canRespond=" + canRespond());
-                    }
-                }
-            }
-        }
     }
 
     /**
