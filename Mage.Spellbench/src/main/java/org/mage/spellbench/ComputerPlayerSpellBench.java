@@ -69,6 +69,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** The kernel's decisions that answer an XMage yes/no. */
     private static final Set<String> USE = Set.of("choose_boolean", "optional_cost", "optional_cast",
             "choose_cost_option", "choose_option", "select_object", "choose_target");
+    /** The kernel's decisions in casting a spell that it asks before paying and XMage only on resolution. */
+    private static final Set<String> LATER = Set.of("choose_color");
     /** The kernel's decisions in casting a spell that XMage asks before the cost. */
     private static final Set<String> CAST = Set.of("choose_target", "choose_cast_method");
     private static final Set<String> TARGETS = Set.of("choose_target", "select_object", "choose_cost_target",
@@ -101,6 +103,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private final transient List<String[]> partition = new ArrayList<>();
     private final transient List<String> ordered = new ArrayList<>();
     private final transient Deque<List<String>> arrangement = new ArrayDeque<>();
+    /** The Archon's answers to decisions of its cast that XMage asks later, on resolution. */
+    private final transient List<JsonObject> later = new ArrayList<>();
     /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
      * the targets of a cast whose cost XMage asks first. */
     private final transient Deque<Pick> picks = new ArrayDeque<>();
@@ -504,6 +508,16 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      */
     @Override
     public boolean playMana(Ability ability, mage.abilities.costs.mana.ManaCost unpaid, String promptText, Game game) {
+        if (acting != null && !over && kernel.terminal() == null) {
+            guard(game, () -> {
+                // the kernel pays at the end of the cast: its decisions XMage asks only later (a color on resolution)
+                // are the Archon's now, and kept for XMage's dialogs
+                for (JsonObject d = next(game, LATER); d != null && wanted(d, LATER); d = next(game, LATER)) {
+                    later.add(archon());
+                }
+                return null;
+            }, null);
+        }
         paying = acting != null && !over && kernel.terminal() == null;
         try {
             return super.playMana(ability, unpaid, promptText, game);
@@ -792,6 +806,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */
     private JsonObject answer(Game game, String kind, String dialog) {
+        for (JsonObject semantic : later) {
+            if (kind.equals(Views.text(semantic, "kind"))) {
+                later.remove(semantic);
+                return semantic;
+            }
+        }
         if (kernel.terminal() == null && seat.equals(kernel.actingSeat()) && !kind.equals(Lockstep.firstKind(kernel.decision()))
                 && !Lockstep.isPriority(kernel.decision()) && kernel.decision().getAsJsonArray("candidates").size() > 1
                 && !kernelOnly(kernel.decision())) {
