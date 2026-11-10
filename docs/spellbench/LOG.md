@@ -26,8 +26,8 @@ stack-using action).
 
 Batch of 6: 4 full games (all MageZero wins in both engines, 51 to 179 kernel decisions), 2 divergences (open: a
 Guttersnipe/end-step mismatch, a draw-step mismatch). Earlier batch on 8c4866bb: 3 of 6 full; the Archon cast Fireblast
-three times successfully. Full games so far: 9, two of them Archon wins (game 53) or MageZero wins (the rest), winners
-always equal across engines.
+three times successfully. Full games so far: 10 (41, 45, 53, 62-64, 67-69, 71): one Archon win (53), nine MageZero
+wins; the winner was the same in both engines every time.
 
 Rules disagreements seen in earlier runs (counted as divergences, not worked around):
 - Of One Mind: XMage casts it reduced to {U} with a Human and a non-Human; the kernel does not see Humbling Elder as a
