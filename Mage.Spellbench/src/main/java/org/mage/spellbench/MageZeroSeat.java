@@ -38,7 +38,7 @@ final class MageZeroSeat {
     private Move declaration;
     /** This combat's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
     private final List<UUID> blockers;
-    /** How the kernel's last unanswered priority differed from MageZero's last pass before it. */
+    /** How the kernel's priority differed from MageZero's first pass dropped since the last match. */
     String mismatch = "";
 
     MageZeroSeat(Deque<Move> moves, Views views, List<UUID> blockers) {
@@ -108,16 +108,19 @@ final class MageZeroSeat {
             List<String> diff = views.diff(Lockstep.observation(decision), move.view.json);
             if (diff.isEmpty()) {
                 moves.poll();
+                mismatch = "";
                 return move.kind == Move.Kind.PASS
                         ? candidate(decision, c -> "pass".equals(Views.text(c, "kind")), "pass")
                         : action(decision, move);
             }
             if (move.kind == Move.Kind.ACTION) {
                 throw new LockstepDivergence("MageZero's " + move + " in XMage is where the kernel asks nothing: " + diff
-                        + "; its last pass before differed by " + mismatch);
+                        + "; its first pass since the last match differed by " + mismatch);
             }
             moves.poll(); // a pass where the kernel did not ask
-            mismatch = diff.toString();
+            if (mismatch.isEmpty()) {
+                mismatch = diff.toString();
+            }
         }
         return null;
     }

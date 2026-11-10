@@ -232,8 +232,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 Integer candidate = mageZero.answer(decision, game);
                 if (candidate == null) {
                     if (views.before(Lockstep.observation(decision), views.view(game, seat).json)) {
-                        throw new LockstepDivergence("XMage went past the kernel's decision for MageZero; its last pass"
-                                + " differed by " + mageZero.mismatch);
+                        throw new LockstepDivergence("XMage went past the kernel's decision for MageZero; its first pass"
+                                + " since the last match differed by " + mageZero.mismatch);
                     }
                     return null;
                 }
