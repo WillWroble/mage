@@ -219,6 +219,27 @@ index 65aa217f..0c092302 100644
          let mut game = SpellbenchBridgeGameV1 {
              game_id: game_id.to_string(),
              episode_id,
+diff --git a/mtg-kernel/src/engine.rs b/mtg-kernel/src/engine.rs
+index 8ab4196f..dc0a53c6 100644
+--- a/mtg-kernel/src/engine.rs
++++ b/mtg-kernel/src/engine.rs
+@@ -4628,7 +4628,15 @@ fn effective_normal_cast_cost(
+                 {
+                     continue;
+                 }
+-                if has_effective_subtype(state, object_id, subtype) {
++                // the card data spells some subtypes in capitals ("HUMAN"): those are the same subtype
++                let all_caps = match subtype {
++                    card_def::Subtype::Human => Some(card_def::Subtype::HumanAllCaps),
++                    card_def::Subtype::Faerie => Some(card_def::Subtype::FaerieAllCaps),
++                    _ => None,
++                };
++                if has_effective_subtype(state, object_id, subtype)
++                    || all_caps.is_some_and(|caps| has_effective_subtype(state, object_id, caps))
++                {
+                     has_subtype = true;
+                 } else {
+                     lacks_subtype = true;
 diff --git a/mtg-kernel/src/rl.rs b/mtg-kernel/src/rl.rs
 index db6d4a21..46aeb8ec 100644
 --- a/mtg-kernel/src/rl.rs
