@@ -209,8 +209,13 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
             kernel.step(kernel.archonChoice());
         }
-        if (!game.getState().isGameOver()) {
-            throw new LockstepDivergence("the kernel's game ended while XMage's goes on: " + kernel.terminal());
+        // a natural end may come before XMage's (the damage of a combat both seats passed through): until XMage gets
+        // there the Archon only passes, and the results are compared at XMage's end
+        boolean natural = "natural".equals(kernel.terminal().get("classification").getAsString());
+        if (!game.getState().isGameOver() && (!natural || kinds != null)) {
+            throw new LockstepDivergence("the kernel's game ended " + kernel.terminal().get("outcome").getAsString()
+                    + " (" + kernel.terminal().get("reason").getAsString() + ") while XMage's goes on"
+                    + (kinds == null ? "" : " and asks the Archon " + kinds));
         }
         return null;
     }

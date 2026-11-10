@@ -94,6 +94,10 @@ final class MageZeroSeat {
     private Integer priority(JsonObject decision) {
         while (!moves.isEmpty()) {
             Move move = moves.peek();
+            if ((move.kind == Move.Kind.ATTACKERS || move.kind == Move.Kind.BLOCKERS) && ((Map<?, ?>) move.value).isEmpty()) {
+                moves.poll(); // nothing declared where the kernel asks nothing: no creature of MageZero's could
+                continue;
+            }
             if (move.kind != Move.Kind.PASS && move.kind != Move.Kind.ACTION) {
                 throw new LockstepDivergence("the kernel asks MageZero priority; its next move in XMage is " + move);
             }

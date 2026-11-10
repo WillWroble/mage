@@ -1,5 +1,6 @@
 package org.mage.spellbench;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -14,8 +15,21 @@ final class Lockstep {
     private Lockstep() {
     }
 
+    /**
+     * The decision's observation, its stack bottom first as spec 6.4 has it: mtg-kernel's protocol engine lists it top
+     * first. A copy, so what the Archon is sent stays as the engine wrote it.
+     */
     static JsonObject observation(JsonObject decision) {
-        return decision.getAsJsonObject("observation");
+        JsonObject observation = decision.getAsJsonObject("observation");
+        JsonObject copy = new JsonObject();
+        observation.entrySet().forEach(e -> copy.add(e.getKey(), e.getValue()));
+        JsonArray stack = new JsonArray();
+        JsonArray topFirst = observation.getAsJsonArray("stack");
+        for (int i = topFirst.size() - 1; i >= 0; i--) {
+            stack.add(topFirst.get(i));
+        }
+        copy.add("stack", stack);
+        return copy;
     }
 
     static JsonObject semantic(JsonObject decision, int candidate) {
