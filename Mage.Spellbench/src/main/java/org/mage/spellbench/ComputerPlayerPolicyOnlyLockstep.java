@@ -83,6 +83,12 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     private transient int dialogDepth;
     /** Activations inside another one (its mana payment) are part of it. */
     private transient int actionDepth;
+    /** Where this player last acted at priority: its turn and step, and the stack's size after the action. */
+    private transient int actedTurn;
+    private transient PhaseStep actedStep;
+    private transient int actedStack;
+    /** Its last action used the stack, and this player has not had priority since. */
+    private transient boolean actedOnStack;
 
     public ComputerPlayerPolicyOnlyLockstep(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
@@ -129,12 +135,14 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
             PhaseStep.DECLARE_BLOCKERS, PhaseStep.POSTCOMBAT_MAIN);
 
     /**
-     * The lockstep game's rules: no priority outside the kernel's windows, where this player passes without deciding
-     * (taking the last-priority snapshot as every player does).
+     * The lockstep game's rules, the kernel's priority surface (mtg-kernel {@code surface.rs}, after the reference
+     * harness), where this player passes without deciding (taking the last-priority snapshot as every player does):
+     * no priority outside the kernel's windows; in declare attackers and declare blockers, one action per round (until
+     * the step changes or something resolves); and no priority right after its own action that uses the stack.
      */
     @Override
     public boolean priority(Game game) {
-        if (live(game) && !WINDOWS.contains(game.getTurnStepType())) {
+        if (live(game) && (!WINDOWS.contains(game.getTurnStepType()) || passes(game))) {
             game.setLastPriority(playerId);
             pass(game);
             return false;
@@ -142,15 +150,31 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         return super.priority(game);
     }
 
+    private boolean passes(Game game) {
+        PhaseStep step = game.getTurnStepType();
+        boolean round = actedStep == step && actedTurn == game.getTurnNum() && game.getStack().size() >= actedStack;
+        boolean onStack = actedOnStack;
+        actedOnStack = false;
+        return round && (step == PhaseStep.DECLARE_ATTACKERS || step == PhaseStep.DECLARE_BLOCKERS || onStack);
+    }
+
     @Override
     public boolean activateAbility(ActivatedAbility ability, Game game) {
         // recorded before it runs: the dialogs it asks (targets, modes, X, costs) are recorded after it, in order
-        if (live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0) {
+        boolean action = live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0;
+        if (action) {
             moves.add(new Move(Move.Kind.ACTION, view.apply(game), ability));
         }
         actionDepth++;
         try {
-            return super.activateAbility(ability, game);
+            boolean done = super.activateAbility(ability, game);
+            if (action && done) {
+                actedTurn = game.getTurnNum();
+                actedStep = game.getTurnStepType();
+                actedStack = game.getStack().size();
+                actedOnStack = ability.isUsesStack();
+            }
+            return done;
         } finally {
             actionDepth--;
         }
