@@ -59,6 +59,17 @@ final class Lockstep {
                 || PRIORITY.contains(firstKind(decision));
     }
 
+    /** How many picks of its selection are made: a selection may be asked pick by pick outside a decision group. */
+    static int selected(JsonObject decision) {
+        for (JsonElement c : decision.getAsJsonArray("candidates")) {
+            JsonElement selected = c.getAsJsonObject().getAsJsonObject("semantic").get("selected_count");
+            if (selected != null) {
+                return selected.getAsInt();
+            }
+        }
+        return substep(decision);
+    }
+
     /** Which substep of its decision group this decision is (0 for the first, or an ungrouped decision). */
     static int substep(JsonObject decision) {
         JsonElement group = decision.get("group");

@@ -4,6 +4,7 @@ import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.Mode;
 import mage.abilities.Modes;
+import mage.abilities.TriggeredAbility;
 import mage.abilities.common.PassAbility;
 import mage.cards.Cards;
 import mage.choices.Choice;
@@ -40,7 +41,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     /** One finished decision: what it was, and the game as this seat saw it then. */
     static final class Move {
-        enum Kind { ACTION, PASS, TARGETS, USE, MODE, NUMBER, CHOICE, ATTACKERS, BLOCKERS }
+        enum Kind { ACTION, PASS, TARGETS, USE, MODE, NUMBER, CHOICE, ATTACKERS, BLOCKERS, TRIGGER }
 
         final Kind kind;
         final Views.View view;
@@ -234,6 +235,11 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     public boolean choose(Outcome outcome, Choice choice, Game game) {
         return dialog(game, Move.Kind.CHOICE, () -> super.choose(outcome, choice, game),
                 r -> choice.isKeyChoice() ? choice.getChoiceKey() : choice.getChoice());
+    }
+
+    @Override
+    public TriggeredAbility chooseTriggeredAbility(List<TriggeredAbility> abilities, Game game) {
+        return dialog(game, Move.Kind.TRIGGER, () -> super.chooseTriggeredAbility(abilities, game), a -> a);
     }
 
     // ------------------------------------------------------------------ combat

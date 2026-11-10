@@ -174,7 +174,8 @@ final class Views {
             "combat_damage", "end_of_combat");
     private static final Set<String> COMBAT_FIELDS = Set.of("attacking", "attack_target", "blocking",
             "blocked_attackers");
-    private static final Set<String> UNORDERED = Set.of("battlefield", "exile", "graveyard");
+    /** Zones whose order the engines keep differently and the rules do not use (a hand is in the order cards arrive). */
+    private static final Set<String> UNORDERED = Set.of("hand", "battlefield", "exile", "graveyard");
 
     private static JsonElement state(JsonElement e, boolean combat) {
         if (e.isJsonObject()) {
@@ -285,6 +286,21 @@ final class Views {
             }
         }
         return null;
+    }
+
+    /** The ids of the objects in {@code observation} that look the same as the one at {@code at}, it included. */
+    static List<String> twins(JsonObject observation, Locator at) {
+        List<String> out = new ArrayList<>();
+        String id = find(observation, at);
+        List<JsonObject> zone = zones(observation).getOrDefault(at.owner + " " + at.zone, Collections.emptyList());
+        zone.stream().filter(o -> id != null && id.equals(text(o, "object_id"))).findFirst().ifPresent(object -> {
+            for (JsonObject other : zone) {
+                if (state(other, true).equals(state(object, true))) {
+                    out.add(text(other, "object_id"));
+                }
+            }
+        });
+        return out;
     }
 
     /**

@@ -3,6 +3,7 @@ package org.mage.spellbench;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import mage.abilities.Ability;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.PlayLandAbility;
 import mage.abilities.SpellAbility;
@@ -12,6 +13,7 @@ import mage.game.Game;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,8 @@ final class MageZeroSeat {
     private int kept;
     /** The combat declaration being given creature by creature. */
     private Move declaration;
+    /** MageZero's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
+    final List<UUID> blockers = new ArrayList<>();
     /** How the kernel's last unanswered priority differed from MageZero's last pass before it. */
     String mismatch = "";
 
@@ -124,7 +128,7 @@ final class MageZeroSeat {
     // ------------------------------------------------------------------ dialogs
 
     private Integer pick(JsonObject decision, Game game) {
-        if (Lockstep.substep(decision) == 0 || selection == null) {
+        if (Lockstep.selected(decision) == 0 || selection == null) {
             selection = next(Move.Kind.TARGETS);
             if (selection == null) {
                 return null;
@@ -208,8 +212,11 @@ final class MageZeroSeat {
      * kernel's library then needs no reordering, which would move cards it knows. A graveyard's order is not compared
      * (XMage keeps the order cards arrive in), so any order stands there.
      */
-    private int order(JsonObject decision, Game game) {
+    private Integer order(JsonObject decision, Game game) {
         JsonObject first = Lockstep.semantic(decision, 0);
+        if (first.getAsJsonObject("item").has("trigger")) {
+            return trigger(decision);
+        }
         JsonObject object = first.getAsJsonObject("item").getAsJsonObject("object");
         if (!"library".equals(Views.text(object, "zone"))) {
             return 0;
@@ -221,6 +228,19 @@ final class MageZeroSeat {
         String name = library.get(position < kept ? position : library.size() - count + position).getName();
         return candidate(decision, c -> name.equals(Views.text(
                 c.getAsJsonObject("item").getAsJsonObject("object"), "card_name")), "XMage's order, " + name);
+    }
+
+    /** A trigger put on the stack: the one MageZero's XMage put there next (position 0 is put there first). */
+    private Integer trigger(JsonObject decision) {
+        Move move = next(Move.Kind.TRIGGER);
+        if (move == null) {
+            return null;
+        }
+        String source = kernelId(decision, move.view, ((Ability) move.value).getSourceId());
+        return candidate(decision, c -> {
+            JsonElement ref = c.getAsJsonObject("item").getAsJsonObject("trigger").get("source");
+            return source != null && ref.isJsonObject() && source.equals(Views.text(ref.getAsJsonObject(), "object_id"));
+        }, move.toString());
     }
 
     private interface Match {
@@ -238,6 +258,9 @@ final class MageZeroSeat {
             if (declaration == null) {
                 return null;
             }
+            if (!attack) {
+                blockers.clear();
+            }
         }
         JsonObject first = Lockstep.semantic(decision, 0);
         UUID creature = declaration.view.objects.get(Views.find(declaration.view.json,
@@ -246,6 +269,9 @@ final class MageZeroSeat {
         List<UUID> into = ((Map<UUID, List<UUID>>) declaration.value).get(creature);
         if (into == null || into.isEmpty()) {
             return candidate(decision, c -> c.get(attack ? "defender" : "attacker").isJsonNull(), "no declaration");
+        }
+        if (!attack) {
+            blockers.add(creature);
         }
         String target = attack ? views.seat(into.get(0)) : kernelId(decision, declaration.view, into.get(0));
         return candidate(decision, c -> {

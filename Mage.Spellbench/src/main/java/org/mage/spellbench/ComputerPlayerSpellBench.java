@@ -10,7 +10,14 @@ import mage.abilities.Mode;
 import mage.abilities.Modes;
 import mage.abilities.PlayLandAbility;
 import mage.abilities.SpellAbility;
+import mage.abilities.TriggeredAbility;
 import mage.abilities.mana.ManaAbility;
+import mage.abilities.keyword.TrampleAbility;
+import mage.constants.MultiAmountType;
+import mage.constants.PhaseStep;
+import mage.game.combat.CombatGroup;
+import mage.game.permanent.Permanent;
+import mage.util.MultiAmountMessage;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
@@ -214,9 +221,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 : kinds.contains(Lockstep.firstKind(decision)));
     }
 
-    /** A decision XMage makes itself: the order of cards it moves together, an effect's option XMage has no dialog for. */
+    /**
+     * A decision XMage makes itself: the order of cards it moves together (not of triggers, which it asks), an effect's
+     * option XMage has no dialog for.
+     */
     private static boolean kernelOnly(JsonObject decision) {
-        return Set.of("order_pick", "arrange_card", "choose_option").contains(Lockstep.firstKind(decision));
+        String kind = Lockstep.firstKind(decision);
+        return kind.equals("arrange_card") || kind.equals("choose_option") || kind.equals("order_pick")
+                && !Lockstep.semantic(decision, 0).getAsJsonObject("item").has("trigger");
     }
 
     /** The Archon's answer to the kernel's pending decision; the kernel steps with it. */
@@ -283,25 +295,33 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         return true;
     }
 
-    /** XMage's playable ability for the Archon's action. */
+    /**
+     * XMage's playable ability for the Archon's action. Its source may be any object that looks the same as the kernel's
+     * in the observation (two plotted cards, one castable this turn): the observation cannot tell them apart.
+     */
     private ActivatedAbility playable(Game game, Views.View view, JsonObject decision, JsonObject semantic) {
         String kind = Views.text(semantic, "kind");
-        UUID source = xmage(game, view, decision, semantic.getAsJsonObject("source"));
-        List<ActivatedAbility> matches = new ArrayList<>();
-        for (ActivatedAbility ability : getPlayable(game, true)) {
-            boolean ofKind = kind.equals("play_land") ? ability instanceof PlayLandAbility
-                    : kind.equals("cast_spell") ? ability instanceof SpellAbility
-                    : kind.equals("activate_mana_ability") ? ability instanceof ManaAbility
-                    : !(ability instanceof PlayLandAbility || ability instanceof SpellAbility || ability instanceof ManaAbility);
-            if (ofKind && ability.getSourceId().equals(source)) {
-                matches.add(ability);
+        int index = semantic.has("ability_index") ? semantic.get("ability_index").getAsInt() : 0;
+        Views.Locator at = Views.locate(Lockstep.observation(decision),
+                Views.text(semantic.getAsJsonObject("source"), "object_id"));
+        List<ActivatedAbility> playable = getPlayable(game, true);
+        for (String id : at == null ? List.<String>of() : Views.twins(view.json, at)) {
+            UUID source = view.objects.get(id);
+            List<ActivatedAbility> matches = new ArrayList<>();
+            for (ActivatedAbility ability : playable) {
+                boolean ofKind = kind.equals("play_land") ? ability instanceof PlayLandAbility
+                        : kind.equals("cast_spell") ? ability instanceof SpellAbility
+                        : kind.equals("activate_mana_ability") ? ability instanceof ManaAbility
+                        : !(ability instanceof PlayLandAbility || ability instanceof SpellAbility || ability instanceof ManaAbility);
+                if (ofKind && ability.getSourceId().equals(source)) {
+                    matches.add(ability);
+                }
+            }
+            if (index < matches.size()) {
+                return matches.get(index);
             }
         }
-        int index = semantic.has("ability_index") ? semantic.get("ability_index").getAsInt() : 0;
-        if (index >= matches.size()) {
-            throw new LockstepDivergence("XMage has no playable counterpart for the Archon's " + semantic);
-        }
-        return matches.get(index);
+        throw new LockstepDivergence("XMage has no playable counterpart for the Archon's " + semantic);
     }
 
     // ------------------------------------------------------------------ dialogs
@@ -353,6 +373,27 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             return views.player(player);
         }
         return xmage(game, view, decision, MageZeroSeat.object(semantic));
+    }
+
+    /** The trigger the Archon puts on the stack next, from its order in the kernel (position 0 goes there first). */
+    @Override
+    public TriggeredAbility chooseTriggeredAbility(List<TriggeredAbility> abilities, Game game) {
+        return guard(game, () -> {
+            JsonObject decision = advance(game, Set.of("order_pick"));
+            if (decision == null || !Lockstep.semantic(decision, 0).getAsJsonObject("item").has("trigger")) {
+                throw new LockstepDivergence("XMage asks the Archon an order of triggers; the kernel does not");
+            }
+            Views.View view = views.view(game, SEAT);
+            JsonObject semantic = archon();
+            JsonElement source = semantic.getAsJsonObject("item").getAsJsonObject("trigger").get("source");
+            UUID id = source.isJsonObject() ? xmage(game, view, decision, source.getAsJsonObject()) : null;
+            for (TriggeredAbility ability : abilities) {
+                if (ability.getSourceId().equals(id)) {
+                    return ability;
+                }
+            }
+            throw new LockstepDivergence("XMage has no trigger for the Archon's " + semantic);
+        }, abilities.get(0));
     }
 
     /** One creature of a combat declaration; the first one asked takes the Archon's whole declaration. */
@@ -498,6 +539,46 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
             return getManaAvailable(game).enough(acting.getManaCosts().getMana()) ? "2" : "1";
         }
+    }
+
+    /**
+     * The only division XMage asks the Archon is its combat damage among blockers, which the kernel assigns itself
+     * (spec 7.6, {@code engine_order}): lethal damage to each blocker in the order the kernel declared them, the rest
+     * to the last, or with trample to the defender.
+     */
+    @Override
+    public List<Integer> getMultiAmountWithIndividualConstraints(Outcome outcome, List<MultiAmountMessage> messages,
+                                                                 int totalMin, int totalMax, MultiAmountType type,
+                                                                 Game game) {
+        return guard(game, () -> {
+            List<CombatGroup> groups = new ArrayList<>();
+            for (CombatGroup group : game.getCombat().getGroups()) {
+                if (group.getBlockers().size() == messages.size()
+                        && playerId.equals(game.getControllerId(group.getAttackers().get(0)))) {
+                    groups.add(group);
+                }
+            }
+            if (game.getTurnStepType() != PhaseStep.COMBAT_DAMAGE || groups.size() != 1
+                    || !mageZero.blockers.containsAll(groups.get(0).getBlockers())) {
+                throw new LockstepDivergence("XMage asks the Archon a division the kernel does not: " + type);
+            }
+            List<UUID> blockers = groups.get(0).getBlockers();
+            Permanent attacker = game.getPermanent(groups.get(0).getAttackers().get(0));
+            boolean trample = attacker.getAbilities().containsKey(TrampleAbility.getInstance().getId());
+            List<UUID> order = new ArrayList<>(mageZero.blockers);
+            order.retainAll(blockers);
+            Map<UUID, Integer> damage = new HashMap<>();
+            int remaining = totalMax;
+            for (UUID blocker : order) {
+                int lethal = game.getPermanent(blocker).getLethalDamage(attacker.getId(), game);
+                int assigned = trample || !blocker.equals(order.get(order.size() - 1)) ? Math.min(remaining, lethal) : remaining;
+                damage.put(blocker, assigned);
+                remaining -= assigned;
+            }
+            List<Integer> amounts = new ArrayList<>();
+            blockers.forEach(blocker -> amounts.add(damage.get(blocker)));
+            return amounts;
+        }, MultiAmountType.prepareDefaultValues(messages, totalMin, totalMax));
     }
 
     /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */
