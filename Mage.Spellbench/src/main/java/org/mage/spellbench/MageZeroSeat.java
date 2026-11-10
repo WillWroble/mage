@@ -95,8 +95,11 @@ final class MageZeroSeat {
     private Integer priority(JsonObject decision) {
         while (!moves.isEmpty()) {
             Move move = moves.peek();
-            if ((move.kind == Move.Kind.ATTACKERS || move.kind == Move.Kind.BLOCKERS) && ((Map<?, ?>) move.value).isEmpty()) {
-                moves.poll(); // nothing declared where the kernel asks nothing: no creature of MageZero's could
+            if ((move.kind == Move.Kind.ATTACKERS || move.kind == Move.Kind.BLOCKERS) && ((Map<?, ?>) move.value).isEmpty()
+                    || move.kind == Move.Kind.USE) {
+                // nothing declared where the kernel asks nothing (no creature of MageZero's could), or a yes/no it did
+                // not offer: it offers an option only when it can be taken (a payment MageZero cannot make)
+                moves.poll();
                 continue;
             }
             if (move.kind != Move.Kind.PASS && move.kind != Move.Kind.ACTION) {
@@ -303,8 +306,10 @@ final class MageZeroSeat {
      * were at priority windows the kernel does not open (it is asking a dialog now).
      */
     private Move next(Move.Kind kind) {
-        while (!moves.isEmpty() && moves.peek().kind == Move.Kind.PASS) {
-            moves.poll();
+        boolean declaration = kind == Move.Kind.ATTACKERS || kind == Move.Kind.BLOCKERS;
+        while (!moves.isEmpty() && (moves.peek().kind == Move.Kind.PASS
+                || declaration && moves.peek().kind == Move.Kind.USE)) {
+            moves.poll(); // passes where the kernel opens no priority; at combat, yes/no's before it the kernel did not offer
         }
         Move move = moves.poll();
         if (move != null && move.kind != kind) {
