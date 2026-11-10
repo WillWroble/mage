@@ -18,6 +18,7 @@ import mage.constants.PhaseStep;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
 import mage.util.MultiAmountMessage;
+import mage.MageObject;
 import mage.cards.Card;
 import mage.cards.Cards;
 import mage.choices.Choice;
@@ -72,6 +73,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient String seat;
     private transient String other;
     private transient KernelMatch kernel;
+    /** XMage pays mana for the Archon's action. */
+    private transient boolean paying;
     private transient Views views;
     private transient MageZeroSeat mageZero;
     private transient String logs;
@@ -389,6 +392,60 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             return views.player(player);
         }
         return xmage(game, view, decision, MageZeroSeat.object(semantic));
+    }
+
+    /**
+     * The Archon's mana payment is the kernel's (engine autopay, no decision): while XMage pays for the Archon's action,
+     * its producers are the permanents the kernel tapped and XMage has not, by name (permanents of a name are alike).
+     * XMage's own payment picks the mana from them; with none, it pays as it would, and the next comparison checks it.
+     */
+    @Override
+    public boolean playMana(Ability ability, mage.abilities.costs.mana.ManaCost unpaid, String promptText, Game game) {
+        paying = acting != null && !over && kernel.terminal() == null;
+        try {
+            return super.playMana(ability, unpaid, promptText, game);
+        } finally {
+            paying = false;
+        }
+    }
+
+    @Override
+    public List<MageObject> getAvailableManaProducers(Game game) {
+        return paying ? kernelTapped(game, super.getAvailableManaProducers(game)) : super.getAvailableManaProducers(game);
+    }
+
+    @Override
+    public List<Permanent> getAvailableManaProducersWithCost(Game game) {
+        List<Permanent> producers = super.getAvailableManaProducersWithCost(game);
+        return paying ? kernelTapped(game, producers) : producers;
+    }
+
+    /** Of {@code producers}, those the kernel tapped beyond XMage, by name; all of them when the kernel tapped none. */
+    private <T extends MageObject> List<T> kernelTapped(Game game, List<T> producers) {
+        Map<String, Integer> more = new HashMap<>();
+        for (JsonElement p : Lockstep.observation(kernel.decision()).getAsJsonArray("players")) {
+            if (seat.equals(Views.text(p.getAsJsonObject(), "seat"))) {
+                for (JsonElement b : p.getAsJsonObject().getAsJsonArray("battlefield")) {
+                    JsonObject permanent = b.getAsJsonObject().getAsJsonObject("permanent");
+                    if (permanent != null && permanent.get("tapped").getAsBoolean()) {
+                        more.merge(Views.text(b.getAsJsonObject(), "card_name"), 1, Integer::sum);
+                    }
+                }
+            }
+        }
+        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(playerId)) {
+            if (permanent.isTapped()) {
+                more.computeIfPresent(permanent.getName(), (name, n) -> n > 1 ? n - 1 : null);
+            }
+        }
+        List<T> chosen = new ArrayList<>();
+        for (T producer : producers) {
+            if (more.containsKey(producer.getName())) {
+                chosen.add(producer);
+                more.computeIfPresent(producer.getName(), (name, n) -> n > 1 ? n - 1 : null);
+            }
+        }
+        return chosen.isEmpty() ? producers : chosen;
     }
 
     /** The trigger the Archon puts on the stack next, from its order in the kernel (position 0 goes there first). */
