@@ -285,7 +285,7 @@ index db6d4a21..46aeb8ec 100644
  
  pub fn build_burn_mirror_state(seed: u64) -> GameState {
 diff --git a/mtg-kernel/src/rl_session.rs b/mtg-kernel/src/rl_session.rs
-index 46d63ea4..b22ca27a 100644
+index 46d63ea4..39206bda 100644
 --- a/mtg-kernel/src/rl_session.rs
 +++ b/mtg-kernel/src/rl_session.rs
 @@ -4359,6 +4359,35 @@ impl RlEpisodeSessionV1 {
@@ -403,7 +403,7 @@ index 46d63ea4..b22ca27a 100644
          (ResetRandomization::Legacy { env_seed }, None) => build_deck_pair_state(
              env_seed,
              resolved_decks[0].card_ids,
-@@ -7549,6 +7631,76 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
+@@ -7549,6 +7631,85 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
      }
  }
  
@@ -449,6 +449,15 @@ index 46d63ea4..b22ca27a 100644
 +            RlSessionErrorCode::UnsupportedDeck,
 +            "library order leaves library cards out",
 +        ));
++    }
++    // A card some player knows the position of stays where it is: the host's order would move it only when it is
++    // behind this game (an arrangement it has not made yet), and is then left for later.
++    for observer in [PlayerId::P0, PlayerId::P1] {
++        for entry in state.known_library_cards(observer, player) {
++            if arranged.get(entry.position as usize) != Some(&entry.object) {
++                return Ok(());
++            }
++        }
 +    }
 +    state.players[player.index()].library = arranged;
 +    Ok(())
