@@ -12,6 +12,7 @@ import mage.abilities.Modes;
 import mage.abilities.PlayLandAbility;
 import mage.abilities.SpellAbility;
 import mage.abilities.TriggeredAbility;
+import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.abilities.mana.ManaAbility;
 import mage.abilities.keyword.TrampleAbility;
@@ -82,8 +83,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient String seat;
     private transient String other;
     private transient KernelMatch kernel;
-    /** XMage pays mana for the Archon's action. */
-    private transient boolean paying;
+    /** The mana XMage has left to pay for the Archon's action, while it pays it. */
+    private transient ManaCost paying;
     private transient Views views;
     private transient MageZeroSeat mageZero;
     private transient String logs;
@@ -661,7 +662,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      * XMage's own payment picks the mana from them; with none, it pays as it would, and the next comparison checks it.
      */
     @Override
-    public boolean playMana(Ability ability, mage.abilities.costs.mana.ManaCost unpaid, String promptText, Game game) {
+    public boolean playMana(Ability ability, ManaCost unpaid, String promptText, Game game) {
         if (acting != null && !over && kernel.terminal() == null) {
             guard(game, () -> {
                 // the kernel pays at the end of the cast: its decisions XMage asks only later (a color on resolution)
@@ -672,23 +673,36 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 return null;
             }, null);
         }
-        paying = acting != null && !over && kernel.terminal() == null;
+        paying = acting != null && !over && kernel.terminal() == null ? unpaid : null;
         try {
             return super.playMana(ability, unpaid, promptText, game);
         } finally {
-            paying = false;
+            paying = null;
         }
+    }
+
+    /**
+     * While paying for the Archon, a mana ability that costs mana itself (Heap Gate's filter) only when the kernel
+     * filtered too: when it tapped more permanents than the mana left to pay. XMage's payer may pick it otherwise.
+     */
+    @Override
+    public boolean activateAbility(ActivatedAbility ability, Game game) {
+        if (paying != null && ability instanceof ManaAbility && !ability.getManaCosts().isEmpty()
+                && tappedBeyond(game).values().stream().mapToInt(Integer::intValue).sum() <= paying.getMana().count()) {
+            return false;
+        }
+        return super.activateAbility(ability, game);
     }
 
     @Override
     public List<MageObject> getAvailableManaProducers(Game game) {
-        return paying ? kernelTapped(game, super.getAvailableManaProducers(game)) : super.getAvailableManaProducers(game);
+        return paying != null ? kernelTapped(game, super.getAvailableManaProducers(game)) : super.getAvailableManaProducers(game);
     }
 
     @Override
     public List<Permanent> getAvailableManaProducersWithCost(Game game) {
         List<Permanent> producers = super.getAvailableManaProducersWithCost(game);
-        return paying ? kernelTapped(game, producers) : producers;
+        return paying != null ? kernelTapped(game, producers) : producers;
     }
 
     /** Of {@code producers}, those the kernel tapped beyond XMage, by name; all of them when the kernel tapped none. */
@@ -876,6 +890,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }, null);
     }
 
+    /** The Archon's X, as the kernel asks it (XMage's AI caps it by the mana in its pool, made only after). */
+    @Override
+    public int announceX(int min, int max, String message, Game game, Ability source, boolean isManaPay) {
+        return makeChoiceAmount(min, max, game, source, isManaPay);
+    }
+
     @Override
     protected int makeChoiceAmountHelper(int min, int max, Game game, Ability source, boolean isManaPay) {
         return guard(game, () -> answer(game, "choose_number", "a number").get("value").getAsInt(), min);
@@ -883,7 +903,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
-        if (paying) {
+        if (paying != null) {
             return super.chooseHelper(outcome, choice, game); // the kernel paid without a decision: XMage pays as it would
         }
         JsonElement mana = acting instanceof ManaAbility ? actingSemantic.get("mana_choice") : null;
@@ -936,7 +956,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                                                                  int totalMin, int totalMax, MultiAmountType type,
                                                                  Game game) {
         return guard(game, () -> {
-            List<Integer> amounts = engineOrder(game, playerId, blockers, messages.size(), totalMax);
+            List<Integer> amounts = engineOrder(game, playerId, blockers, messages, totalMax);
             if (amounts == null) {
                 throw new LockstepDivergence("XMage asks the Archon a division the kernel does not: " + type);
             }
@@ -948,22 +968,20 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      * The only division XMage asks a player of the lockstep game: the combat damage of its attacker among blockers,
      * which the kernel assigns itself (spec 7.6, {@code engine_order}): lethal damage to each blocker in the order the
      * blocks were declared there, the rest to the last, or with trample to the defender. In XMage's order of the
-     * blockers; null when XMage's division is not that.
+     * blockers, which its {@code messages} name one each; null when XMage's division is not that.
      */
-    static List<Integer> engineOrder(Game game, UUID attacking, List<UUID> blockOrder, int blockerCount, int damage) {
-        List<CombatGroup> groups = new ArrayList<>();
-        for (CombatGroup group : game.getCombat().getGroups()) {
-            if (group.getBlockers().size() == blockerCount
-                    && attacking.equals(game.getControllerId(group.getAttackers().get(0)))) {
-                groups.add(group);
-            }
-        }
-        if (game.getTurnStepType() != PhaseStep.COMBAT_DAMAGE || groups.size() != 1
-                || !blockOrder.containsAll(groups.get(0).getBlockers())) {
+    static List<Integer> engineOrder(Game game, UUID attacking, List<UUID> blockOrder, List<MultiAmountMessage> messages,
+                                     int damage) {
+        CombatGroup group = game.getCombat().getGroups().stream()
+                .filter(g -> !g.getAttackers().isEmpty() && attacking.equals(game.getControllerId(g.getAttackers().get(0)))
+                        && names(game, g.getBlockers(), messages))
+                .findFirst().orElse(null);
+        if (game.getTurnStepType() != PhaseStep.COMBAT_DAMAGE || group == null
+                || !blockOrder.containsAll(group.getBlockers())) {
             return null;
         }
-        List<UUID> blockers = groups.get(0).getBlockers();
-        Permanent attacker = game.getPermanent(groups.get(0).getAttackers().get(0));
+        List<UUID> blockers = group.getBlockers();
+        Permanent attacker = game.getPermanent(group.getAttackers().get(0));
         boolean trample = attacker.getAbilities().containsKey(TrampleAbility.getInstance().getId());
         List<UUID> order = new ArrayList<>(blockOrder);
         order.retainAll(blockers);
@@ -978,6 +996,20 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         List<Integer> amounts = new ArrayList<>();
         blockers.forEach(blocker -> amounts.add(assigned.get(blocker)));
         return amounts;
+    }
+
+    /** Whether XMage's division {@code messages} are for {@code blockers}: each message starts with its log name. */
+    private static boolean names(Game game, List<UUID> blockers, List<MultiAmountMessage> messages) {
+        if (blockers.size() != messages.size()) {
+            return false;
+        }
+        for (int i = 0; i < blockers.size(); i++) {
+            Permanent blocker = game.getPermanent(blockers.get(i));
+            if (blocker == null || !messages.get(i).message.startsWith(blocker.getLogName() + ",")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */

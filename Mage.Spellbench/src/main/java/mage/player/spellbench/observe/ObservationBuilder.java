@@ -12,6 +12,7 @@ import mage.cards.CardWithSpellOption;
 import mage.cards.ModalDoubleFacedCard;
 import mage.cards.SplitCard;
 import mage.abilities.DelayedTriggeredAbility;
+import mage.abilities.common.LeavesBattlefieldTriggeredAbility;
 import mage.abilities.common.delayed.OnLeaveReturnExiledAbility;
 import mage.abilities.effects.common.ReturnFromExileForSourceEffect;
 import mage.constants.AbilityType;
@@ -439,11 +440,13 @@ public final class ObservationBuilder {
 
         /**
          * The permanent may return the cards it exiled (Section 6.4: no {@code exiled_by} without a returning link, as for
-         * a card exiled as a cost): an ability of its own returns them, or an "until it leaves" return waits for it.
+         * a card exiled as a cost): an ability of its own returns them (or its leaving does: Mesmeric Fiend's), or an
+         * "until it leaves" return waits for it.
          */
         boolean returns(Permanent p) {
             for (Ability a : p.getAbilities(game)) {
-                if (a.getEffects().stream().anyMatch(e -> e instanceof ReturnFromExileForSourceEffect)) {
+                if (a instanceof LeavesBattlefieldTriggeredAbility
+                        || a.getEffects().stream().anyMatch(e -> e instanceof ReturnFromExileForSourceEffect)) {
                     return true;
                 }
             }

@@ -19,6 +19,7 @@ import mage.players.Player;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -161,11 +162,35 @@ final class Views {
      * sets of cards.
      */
     List<String> diff(JsonObject kernel, JsonObject xmage) {
-        JsonObject game = kernel.deepCopy();
+        JsonObject game = undercity(kernel);
         game.addProperty("turn", gameTurn(kernel));
         boolean combat = COMBAT.contains(text(xmage, "phase_step")) && COMBAT.contains(text(kernel, "phase_step"));
         List<String> out = new ArrayList<>();
-        walk("", state(game, combat), state(xmage, combat), out);
+        walk("", state(game, combat), state(undercity(xmage), combat), out);
+        return out;
+    }
+
+    /**
+     * The initiative's Undercity as both engines have it: XMage puts the dungeon card in the command zone and sources
+     * its rooms' triggers there, mtg-kernel has only the designation and sources the initiative's triggers by the
+     * object that gave it. So no dungeon, and the initiative holder's triggers on the stack without their source.
+     */
+    private static JsonObject undercity(JsonObject observation) {
+        JsonObject out = observation.deepCopy();
+        Set<String> initiative = new HashSet<>();
+        for (JsonElement p : out.getAsJsonArray("players")) {
+            JsonObject player = p.getAsJsonObject();
+            if (player.getAsJsonArray("designations").contains(new JsonPrimitive("initiative"))) {
+                initiative.add(text(player, "seat"));
+            }
+            player.getAsJsonArray("command").asList().removeIf(c -> ofType(c.getAsJsonObject(), "dungeon"));
+        }
+        for (JsonElement e : out.getAsJsonArray("stack")) {
+            JsonObject entry = e.getAsJsonObject();
+            if ("triggered_ability".equals(text(entry, "stack_kind")) && initiative.contains(text(entry, "controller_seat"))) {
+                entry.remove("source");
+            }
+        }
         return out;
     }
 
@@ -180,7 +205,7 @@ final class Views {
     private static JsonElement state(JsonElement e, boolean combat) {
         if (e.isJsonObject()) {
             JsonObject in = e.getAsJsonObject();
-            if (in.has("permanent") && in.get("permanent").isJsonObject() && !creature(in)) {
+            if (in.has("permanent") && in.get("permanent").isJsonObject() && !ofType(in, "creature")) {
                 // summoning sickness matters only to creatures: a land's is no state (the engines tap different
                 // identical lands to pay)
                 in = in.deepCopy();
@@ -232,10 +257,10 @@ final class Views {
         return e;
     }
 
-    private static boolean creature(JsonObject object) {
+    private static boolean ofType(JsonObject object, String type) {
         JsonElement characteristics = object.get("characteristics");
         return characteristics != null && characteristics.isJsonObject()
-                && characteristics.getAsJsonObject().getAsJsonArray("types").contains(new JsonPrimitive("creature"));
+                && characteristics.getAsJsonObject().getAsJsonArray("types").contains(new JsonPrimitive(type));
     }
 
     private static void walk(String path, JsonElement a, JsonElement b, List<String> out) {

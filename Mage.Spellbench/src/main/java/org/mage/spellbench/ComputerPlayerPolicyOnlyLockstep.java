@@ -291,7 +291,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
                                                                  int totalMin, int totalMax, MultiAmountType type,
                                                                  Game game) {
         List<Integer> amounts = live(game) ? ComputerPlayerSpellBench.engineOrder(game, playerId, blockOrder,
-                messages.size(), totalMax) : null;
+                messages, totalMax) : null;
         return amounts != null ? amounts : super.getMultiAmountWithIndividualConstraints(outcome, messages, totalMin,
                 totalMax, type, game);
     }
