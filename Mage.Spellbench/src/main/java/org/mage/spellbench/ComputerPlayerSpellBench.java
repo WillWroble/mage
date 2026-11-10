@@ -20,6 +20,7 @@ import mage.constants.MultiAmountType;
 import mage.constants.PhaseStep;
 import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
+import mage.util.CardUtil;
 import mage.util.MultiAmountMessage;
 import mage.MageObject;
 import mage.cards.Card;
@@ -521,21 +522,44 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
         for (String id : at == null ? List.<String>of() : Views.twins(view.json, at)) {
             List<UUID> sources = halves(game, view.objects.get(id), form);
-            List<ActivatedAbility> matches = new ArrayList<>();
+            List<Ability> matches = new ArrayList<>();
             for (ActivatedAbility ability : playable) {
-                boolean ofKind = kind.equals("play_land") ? ability instanceof PlayLandAbility
-                        : kind.equals("cast_spell") ? ability instanceof SpellAbility
-                        : kind.equals("activate_mana_ability") ? ability instanceof ManaAbility
-                        : !(ability instanceof PlayLandAbility || ability instanceof SpellAbility || ability instanceof ManaAbility);
-                if (ofKind && sources.contains(ability.getSourceId())) {
+                if (ofKind(kind, ability) && sources.contains(ability.getSourceId())) {
                     matches.add(ability);
                 }
             }
-            if (index < matches.size()) {
-                return matches.get(index);
+            // an activated ability's index counts all of the object's abilities of its kind, playable or not (a
+            // land's cycling from the hand); a spell's or mana ability's counts those XMage can play now
+            List<Ability> indexed = matches;
+            if (kind.equals("activate_ability")) {
+                indexed = new ArrayList<>(CardUtil.getAbilities(game.getObject(sources.get(0)), game));
+                indexed.removeIf(ability -> !ofKind(kind, ability));
+            }
+            if (index < indexed.size()) {
+                UUID wanted = indexed.get(index).getOriginalId();
+                for (Ability match : matches) {
+                    if (match.getOriginalId().equals(wanted)) {
+                        return (ActivatedAbility) match;
+                    }
+                }
             }
         }
         throw new LockstepDivergence("XMage has no playable counterpart for the Archon's " + semantic);
+    }
+
+    /** Whether {@code ability} is of the Archon's action {@code kind}. */
+    private static boolean ofKind(String kind, Ability ability) {
+        switch (kind) {
+            case "play_land":
+                return ability instanceof PlayLandAbility;
+            case "cast_spell":
+                return ability instanceof SpellAbility;
+            case "activate_mana_ability":
+                return ability instanceof ManaAbility;
+            default:
+                return ability instanceof ActivatedAbility && !(ability instanceof PlayLandAbility
+                        || ability instanceof SpellAbility || ability instanceof ManaAbility);
+        }
     }
 
     // ------------------------------------------------------------------ dialogs
