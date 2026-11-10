@@ -17,9 +17,10 @@ API = "https://rest.runpod.io/v1"
 VOLUME = "0ksqf5sep2"  # magezero-data, EU-RO-1
 DATA_CENTER = "EU-RO-1"
 
-POD = '''set -x
+POD = '''export OUT=/workspace/runs/{name}; mkdir -p $OUT; rm -f $OUT/DONE
+exec > $OUT/boot.log 2>&1  # the boot steps' output, so a failed clone shows why
+set -x
 apt-get update -qq && apt-get install -y -qq git curl >/dev/null
-export OUT=/workspace/runs/{name}; mkdir -p $OUT; rm -f $OUT/DONE
 git clone -q --filter=blob:none https://github.com/WillWroble/mage /tmp/mage && git -C /tmp/mage checkout -q {commit}
 GIT_LFS_SKIP_SMUDGE=1 git clone -q --depth 1 -b {magezero} https://github.com/WillWroble/MageZero /tmp/code && cd /tmp/code
 MAGE_COMMIT={commit} {env} timeout {hours}h bash /tmp/mage/Mage.Spellbench/bench/pod.sh > $OUT/script.log 2>&1
