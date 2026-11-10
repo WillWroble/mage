@@ -102,6 +102,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      */
     private final transient List<String[]> partition = new ArrayList<>();
     private final transient List<String> ordered = new ArrayList<>();
+    private transient boolean destinationChosen;
     private final transient Deque<List<String>> arrangement = new ArrayDeque<>();
     /** The Archon's answers to decisions of its cast that XMage asks later, on resolution. */
     private final transient List<JsonObject> later = new ArrayList<>();
@@ -281,7 +282,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 partition.clear();
                 ordered.clear();
                 arrangement.clear();
+                destinationChosen = false;
             }
+            destinationChosen |= decision.getAsJsonArray("candidates").size() > 1;
             partition.add(new String[]{Views.text(chosen.getAsJsonObject("card"), "card_name"),
                     Views.text(chosen, "destination"), Views.text(chosen, "purpose")});
         } else if ("order_pick".equals(kind) && "arrangement".equals(Views.text(chosen, "purpose"))) {
@@ -293,7 +296,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         boolean last = group == null || group.isJsonNull() || group.getAsJsonObject().get("substep_index").getAsInt() + 1
                 >= group.getAsJsonObject().get("substep_count").getAsInt();
         String purpose = partition.get(0)[2];
-        if (!last || !Set.of("scry", "surveil").contains(purpose)) {
+        // XMage asks a dig only when a card's destination is a choice (Lead the Stampede, not Winding Way)
+        if (!last || !Set.of("scry", "surveil", "dig").contains(purpose) || purpose.equals("dig") && !destinationChosen) {
             return;
         }
         // each destination's cards in the kernel's order: its picks, then the implied last card
@@ -305,8 +309,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             by.computeIfAbsent(card[1], d -> new ArrayList<>()).add(name);
         }
         left.forEach(card -> by.computeIfAbsent(card[1], d -> new ArrayList<>()).add(card[0]));
+        // the cards XMage asks for: those leaving the top (scry, surveil), those a dig puts into the hand
         List<String> moved = new ArrayList<>();
-        partition.stream().filter(c -> !c[1].equals("top")).forEach(c -> moved.add(c[0]));
+        partition.stream().filter(c -> purpose.equals("dig") ? c[1].equals("hand") : !c[1].equals("top"))
+                .forEach(c -> moved.add(c[0]));
         arrangement.add(moved);
         List<String> bottom = by.getOrDefault("bottom", List.of());
         for (int i = 0; i < bottom.size() - 1; i++) {
