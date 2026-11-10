@@ -728,36 +728,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** One creature of a combat declaration; the first one asked takes the Archon's whole declaration. */
     private boolean declare(Game game, Target target, Ability source) {
         if (declaration == null) {
-            declaration = new HashMap<>();
-            boolean attack = source instanceof ChooseToAttackAbility;
-            String kind = attack ? "declare_attack" : "declare_block";
-            if (!attack) {
-                blockers.clear();
-            }
-            do {
-                JsonObject decision = next(game, Set.of(kind));
-                if (decision == null || !wanted(decision, Set.of(kind))) {
-                    // the kernel went past this declaration without asking: no creature of the Archon's can attack or
-                    // block there, so it declares none (XMage's one-at-a-time loop offers every attacker regardless)
-                    JsonObject now = views.view(game, seat).json;
-                    if (kernel.terminal() != null || !views.before(Lockstep.observation(kernel.decision()), now)) {
-                        break;
-                    }
-                    throw new LockstepDivergence("XMage asks the Archon to " + kind + "; the kernel waits on MageZero"
-                            + " at an earlier point");
-                }
-                Views.View view = views.view(game, seat);
-                JsonObject semantic = archon();
-                UUID creature = xmage(game, view, decision, semantic.getAsJsonObject(attack ? "attacker" : "blocker"));
-                JsonElement into = semantic.get(attack ? "defender" : "attacker");
-                if (!attack && !into.isJsonNull()) {
-                    blockers.add(creature);
-                }
-                declaration.put(creature, into.isJsonNull() ? null
-                        : attack ? views.player(Views.text(into.getAsJsonObject(), "player"))
-                        : xmage(game, view, decision, into.getAsJsonObject()));
-            } while (kernel.terminal() == null && seat.equals(kernel.actingSeat())
-                    && kind.equals(Lockstep.firstKind(kernel.decision())) && Lockstep.substep(kernel.decision()) > 0);
+            collect(game, source instanceof ChooseToAttackAbility);
         }
         UUID into = declaration.get(source.getSourceId());
         if (into == null) {
@@ -767,16 +738,70 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         return true;
     }
 
+    /** The Archon's whole declaration in the kernel: each creature with what it attacks or blocks (null: none). */
+    private void collect(Game game, boolean attack) {
+        declaration = new HashMap<>();
+        String kind = attack ? "declare_attack" : "declare_block";
+        if (!attack) {
+            blockers.clear();
+        }
+        do {
+            JsonObject decision = next(game, Set.of(kind));
+            if (decision == null || !wanted(decision, Set.of(kind))) {
+                // the kernel went past this declaration without asking: no creature of the Archon's can attack or
+                // block there, so it declares none (XMage's one-at-a-time loop offers every attacker regardless)
+                JsonObject now = views.view(game, seat).json;
+                if (kernel.terminal() != null || !views.before(Lockstep.observation(kernel.decision()), now)) {
+                    break;
+                }
+                throw new LockstepDivergence("XMage asks the Archon to " + kind + "; the kernel waits on MageZero"
+                        + " at an earlier point");
+            }
+            Views.View view = views.view(game, seat);
+            JsonObject semantic = archon();
+            UUID creature = xmage(game, view, decision, semantic.getAsJsonObject(attack ? "attacker" : "blocker"));
+            JsonElement into = semantic.get(attack ? "defender" : "attacker");
+            if (!attack && !into.isJsonNull()) {
+                blockers.add(creature);
+            }
+            declaration.put(creature, into.isJsonNull() ? null
+                    : attack ? views.player(Views.text(into.getAsJsonObject(), "player"))
+                    : xmage(game, view, decision, into.getAsJsonObject()));
+        } while (kernel.terminal() == null && seat.equals(kernel.actingSeat())
+                && kind.equals(Lockstep.firstKind(kernel.decision())) && Lockstep.substep(kernel.decision()) > 0);
+    }
+
+    /**
+     * The Archon's declaration is taken from the kernel whole, before XMage asks it creature by creature (XMage may
+     * offer no creature the kernel declares, and then asks nothing); each creature it declares must then be declared.
+     */
+    private void declareAll(Game game, boolean attack, Runnable xmage) {
+        guard(game, () -> {
+            collect(game, attack);
+            return null;
+        }, null);
+        xmage.run();
+        guard(game, () -> {
+            for (Map.Entry<UUID, UUID> e : declaration.entrySet()) {
+                boolean declared = attack ? game.getCombat().getAttackers().contains(e.getKey())
+                        : game.getCombat().getBlockers().contains(e.getKey());
+                if (e.getValue() != null && !declared) {
+                    throw new LockstepDivergence("XMage did not declare the Archon's " + (attack ? "attacker " : "blocker ")
+                            + game.getPermanent(e.getKey()));
+                }
+            }
+            return null;
+        }, null);
+    }
+
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
-        declaration = null;
-        selectAttackersOneAtATime(game, attackingPlayerId);
+        declareAll(game, true, () -> selectAttackersOneAtATime(game, attackingPlayerId));
     }
 
     @Override
     public void selectBlockers(Ability source, Game game, UUID defendingPlayerId) {
-        declaration = null;
-        selectBlockersOneAtATime(source, game, defendingPlayerId);
+        declareAll(game, false, () -> selectBlockersOneAtATime(source, game, defendingPlayerId));
     }
 
     @Override
