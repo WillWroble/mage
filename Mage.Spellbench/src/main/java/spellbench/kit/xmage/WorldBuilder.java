@@ -16,6 +16,8 @@ import mage.abilities.effects.common.TapTargetEffect;
 import mage.abilities.keyword.FlashbackAbility;
 import mage.abilities.keyword.KickerAbility;
 import mage.cards.Card;
+import mage.game.ExileZone;
+import mage.util.CardUtil;
 import mage.cards.CardWithSpellOption;
 import mage.cards.MeldCard;
 import mage.cards.decks.Deck;
@@ -245,6 +247,7 @@ public final class WorldBuilder {
         for (String seat : SEATS) {
             playerState(seat);
         }
+        exileLinks();
         if (!pregame) {
             positionTurn(active, (int) turn, phaseStep, startingSeat);
             combat(active, phaseStep);
@@ -497,6 +500,29 @@ public final class WorldBuilder {
         for (Card c : libraryCards.get(seat)) {
             c.setZone(Zone.LIBRARY, game);
             p.getLibrary().putOnBottom(c, game);
+        }
+    }
+
+    /**
+     * MageZero fork: a card shown {@code exiled_by} a permanent is in that permanent's linked exile zone (Mesmeric
+     * Fiend's), keyed as XMage keys a source's zone ({@link CardUtil#getExileZoneId}), so it can return it.
+     */
+    private void exileLinks() {
+        for (String seat : SEATS) {
+            for (Object o : Json.arr(playersObs.get(seat), "exile")) {
+                Map<String, Object> rec = Json.obj(o);
+                Map<String, Object> by = Json.obj(rec, "exiled_by");
+                UUID card = world.idToUuid.get(Json.str(rec, "object_id"));
+                UUID byId = by == null ? null : world.idToUuid.get(Json.str(by, "object_id"));
+                Permanent source = byId == null ? null : game.getPermanent(byId);
+                if (card == null || source == null) {
+                    continue;
+                }
+                UUID zone = CardUtil.getExileZoneId(game, source.getId(), source.getZoneChangeCounter(game));
+                ExileZone linked = game.getExile().getExileZone(zone);
+                game.getExile().moveToAnotherZone(game.getCard(card), game,
+                        linked != null ? linked : game.getExile().createZone(zone, source.getIdName()));
+            }
         }
     }
 

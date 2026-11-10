@@ -20,6 +20,7 @@ import spellbench.kit.core.Sampler;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -145,13 +146,15 @@ public final class Continuation {
          * each engine's rendering of card text ({@code full_name}, {@code characteristics}: keyword lists, type order).
          * A non-modal object without X is {@code modes [0]}, {@code x_value 0} on mtg-kernel and null on XMage.
          */
+        @SuppressWarnings("unchecked")
         private Object gameState(Object o) {
             if (o instanceof Map) {
                 Map<String, Object> out = new LinkedHashMap<>();
                 for (Map.Entry<String, Object> e : Json.obj(o).entrySet()) {
                     String k = e.getKey();
-                    if (k.equals("known") || k.equals("full_name") || k.equals("characteristics")) {
-                        continue;
+                    if (k.equals("known") || k.equals("full_name") || k.equals("characteristics")
+                            || k.equals("card_name") && "spell".equals(Json.obj(o).get("stack_kind"))) {
+                        continue; // a spell's name: mtg-kernel names the card, XMage the cast face (an adventure)
                     }
                     Object v = e.getValue();
                     if (k.equals("modes") && v == null) {
@@ -159,7 +162,13 @@ public final class Continuation {
                     } else if (k.equals("x_value") && v == null) {
                         v = 0L;
                     }
-                    out.put(k, gameState(v));
+                    v = gameState(v);
+                    if (k.equals("exile")) {
+                        // XMage's exile zones are hash maps: a rebuilt world cannot know arrival order, so a zone
+                        // compares as its cards by name
+                        ((List<Object>) v).sort(Comparator.comparing(c -> String.valueOf(Json.obj(c).get("card_name"))));
+                    }
+                    out.put(k, v);
                 }
                 return out;
             }
