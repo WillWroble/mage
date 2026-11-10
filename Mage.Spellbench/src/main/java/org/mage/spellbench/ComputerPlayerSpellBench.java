@@ -244,7 +244,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 step(candidate);
                 continue;
             }
-            if (wanted || !kernelOnly(decision)) {
+            // a decision XMage makes itself: one it never asks (an order), or a dialog it is already past (a forced
+            // search XMage made without asking); the Archon answers it, and the next comparison checks XMage did the same
+            boolean past = !Lockstep.isPriority(decision)
+                    && views.before(Lockstep.observation(decision), views.view(game, seat).json);
+            if (wanted || !kernelOnly(decision) && !past) {
                 return decision;
             }
             step(kernel.archonChoice());
