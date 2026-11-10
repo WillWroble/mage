@@ -60,9 +60,6 @@ import java.util.function.Supplier;
 public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     private static final long serialVersionUID = 1L;
-    /** The Archon's seat in the kernel; MageZero's is p0. */
-    private static final String SEAT = "p1";
-    private static final String OTHER = "p0";
     /** The kernel's decisions that answer an XMage yes/no. */
     private static final Set<String> USE = Set.of("choose_boolean", "optional_cost", "optional_cast",
             "choose_cost_option", "choose_option", "select_object", "choose_target");
@@ -71,6 +68,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private static final Set<String> TARGETS = Set.of("choose_target", "select_object", "choose_cost_target",
             "finish_selection");
 
+    /** The Archon's seat in the kernel, and MageZero's. */
+    private transient String seat;
+    private transient String other;
     private transient KernelMatch kernel;
     private transient Views views;
     private transient MageZeroSeat mageZero;
@@ -134,18 +134,22 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private void start(Game game) {
         KernelMatch.Settings settings = KernelMatch.Settings.load(System.getProperty("spellbench.lockstep"));
         logs = settings.logs;
-        Player other = game.getOpponent(playerId);
-        ComputerPlayerPolicyOnlyLockstep policy = (ComputerPlayerPolicyOnlyLockstep) other.getRealPlayer();
-        kernel = new KernelMatch(settings, SEAT);
+        seat = settings.seat;
+        other = seat.equals("p0") ? "p1" : "p0";
+        Player mageZeroPlayer = game.getOpponent(playerId);
+        ComputerPlayerPolicyOnlyLockstep policy = (ComputerPlayerPolicyOnlyLockstep) mageZeroPlayer.getRealPlayer();
+        kernel = new KernelMatch(settings, seat);
         gameId = game.getId().toString();
         this.game = game;
-        String starting = game.getStartingPlayerId().equals(playerId) ? SEAT : OTHER;
-        kernel.start(gameId, starting, opening(game, other), opening(game, this));
+        String starting = game.getStartingPlayerId().equals(playerId) ? seat : other;
+        Player p0 = seat.equals("p0") ? this : mageZeroPlayer;
+        Player p1 = p0 == this ? mageZeroPlayer : this;
+        kernel.start(gameId, starting, opening(game, p0), opening(game, p1));
         Map<String, Object> flags = new Gson().fromJson(kernel.observationFlags(),
                 new TypeToken<Map<String, Object>>() {}.getType());
         flags.put("known_cards", false); // knowledge is not compared, so the projection leaves it out
-        views = new Views(flags, other.getId(), playerId, starting);
-        policy.view = g -> views.view(g, OTHER);
+        views = new Views(flags, p0.getId(), p1.getId(), starting);
+        policy.view = g -> views.view(g, other);
         policy.blockOrder = blockers;
         mageZero = new MageZeroSeat(policy.moves, views, blockers);
     }
@@ -199,10 +203,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 kernel.step(0); // forced: one candidate, or all to take, whoever is asked (XMage makes it unasked)
                 continue;
             }
-            if (OTHER.equals(kernel.actingSeat())) {
+            if (other.equals(kernel.actingSeat())) {
                 Integer candidate = mageZero.answer(decision, game);
                 if (candidate == null) {
-                    if (views.before(Lockstep.observation(decision), views.view(game, SEAT).json)) {
+                    if (views.before(Lockstep.observation(decision), views.view(game, seat).json)) {
                         throw new LockstepDivergence("XMage went past the kernel's decision for MageZero; its last pass"
                                 + " differed by " + mageZero.mismatch);
                     }
@@ -229,7 +233,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /** The Archon's decision of one of {@code kinds} (null: priority). */
     private boolean wanted(JsonObject decision, Set<String> kinds) {
-        return SEAT.equals(kernel.actingSeat()) && (kinds == null ? Lockstep.isPriority(decision)
+        return seat.equals(kernel.actingSeat()) && (kinds == null ? Lockstep.isPriority(decision)
                 : kinds.contains(Lockstep.firstKind(decision)));
     }
 
@@ -272,7 +276,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (decision == null) {
             return false;
         }
-        JsonObject now = views.view(game, SEAT).json;
+        JsonObject now = views.view(game, seat).json;
         List<String> diff = views.diff(Lockstep.observation(decision), now);
         if (!diff.isEmpty()) {
             if (views.before(Lockstep.observation(decision), now)) {
@@ -282,10 +286,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             passedAt = diff;
             return false; // the kernel asks the Archon at a later point
         }
-        for (String seat : new String[]{OTHER, SEAT}) {
-            kernel.arrangeLibrary(seat, library(game, game.getPlayer(views.player(seat))));
+        for (String each : new String[]{other, seat}) {
+            kernel.arrangeLibrary(each, library(game, game.getPlayer(views.player(each))));
         }
-        Views.View view = views.view(game, SEAT);
+        Views.View view = views.view(game, seat);
         JsonObject semantic = archon();
         String kind = Views.text(semantic, "kind");
         if (kind.equals("pass")) {
@@ -355,7 +359,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 if (decision == null) {
                     throw new LockstepDivergence("XMage asks the Archon a selection; the kernel waits on MageZero");
                 }
-                Views.View view = views.view(game, SEAT);
+                Views.View view = views.view(game, seat);
                 pick = new Pick(decision, archon(), view);
             }
             if (Views.text(pick.semantic, "kind").startsWith("finish_")) {
@@ -399,7 +403,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             if (decision == null) {
                 throw new LockstepDivergence("XMage asks the Archon an order of triggers; the kernel does not");
             }
-            Views.View view = views.view(game, SEAT);
+            Views.View view = views.view(game, seat);
             JsonObject semantic = archon();
             JsonElement source = semantic.getAsJsonObject("item").getAsJsonObject("trigger").get("source");
             UUID id = source.isJsonObject() ? xmage(game, view, decision, source.getAsJsonObject()) : null;
@@ -426,14 +430,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 if (decision == null || !wanted(decision, Set.of(kind))) {
                     // the kernel went past this declaration without asking: no creature of the Archon's can attack or
                     // block there, so it declares none (XMage's one-at-a-time loop offers every attacker regardless)
-                    JsonObject now = views.view(game, SEAT).json;
+                    JsonObject now = views.view(game, seat).json;
                     if (kernel.terminal() != null || !views.before(Lockstep.observation(kernel.decision()), now)) {
                         break;
                     }
                     throw new LockstepDivergence("XMage asks the Archon to " + kind + "; the kernel waits on MageZero"
                             + " at an earlier point");
                 }
-                Views.View view = views.view(game, SEAT);
+                Views.View view = views.view(game, seat);
                 JsonObject semantic = archon();
                 UUID creature = xmage(game, view, decision, semantic.getAsJsonObject(attack ? "attacker" : "blocker"));
                 JsonElement into = semantic.get(attack ? "defender" : "attacker");
@@ -443,7 +447,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 declaration.put(creature, into.isJsonNull() ? null
                         : attack ? views.player(Views.text(into.getAsJsonObject(), "player"))
                         : xmage(game, view, decision, into.getAsJsonObject()));
-            } while (kernel.terminal() == null && SEAT.equals(kernel.actingSeat())
+            } while (kernel.terminal() == null && seat.equals(kernel.actingSeat())
                     && kind.equals(Lockstep.firstKind(kernel.decision())) && Lockstep.substep(kernel.decision()) > 0);
         }
         UUID into = declaration.get(source.getSourceId());
@@ -484,13 +488,13 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (decision == null || !wanted(decision, USE)) {
             // the kernel has passed this point (it waits on MageZero, or asks the Archon something later): it offers an
             // option only when it can be taken (a payment the Archon can make), and did not offer this one
-            if (decision != null && views.before(Lockstep.observation(decision), views.view(game, SEAT).json)) {
+            if (decision != null && views.before(Lockstep.observation(decision), views.view(game, seat).json)) {
                 throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel asks it "
                         + Lockstep.firstKind(decision) + " before");
             }
             return false;
         }
-        Views.View view = views.view(game, SEAT);
+        Views.View view = views.view(game, seat);
         JsonObject semantic = archon();
         String kind = Views.text(semantic, "kind");
         Boolean bool = MageZeroSeat.bool(semantic);
@@ -557,7 +561,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             JsonObject decision = next(game, CAST);
             String kind = decision == null ? null : Lockstep.firstKind(decision);
             if ("choose_target".equals(kind)) {
-                Views.View view = views.view(game, SEAT);
+                Views.View view = views.view(game, seat);
                 picks.add(new Pick(decision, archon(), view));
                 continue;
             }
@@ -620,7 +624,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */
     private JsonObject answer(Game game, String kind, String dialog) {
-        if (kernel.terminal() == null && SEAT.equals(kernel.actingSeat()) && !kind.equals(Lockstep.firstKind(kernel.decision()))
+        if (kernel.terminal() == null && seat.equals(kernel.actingSeat()) && !kind.equals(Lockstep.firstKind(kernel.decision()))
                 && !Lockstep.isPriority(kernel.decision()) && kernel.decision().getAsJsonArray("candidates").size() > 1
                 && !kernelOnly(kernel.decision())) {
             throw new LockstepDivergence("XMage asks the Archon " + dialog + "; the kernel asks it "
@@ -721,8 +725,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private void dump(Game game) {
         JsonObject dump = new JsonObject();
         dump.add("kernel", kernel.terminal() == null ? kernel.decision() : kernel.terminal());
-        dump.add("xmage_" + OTHER, views.view(game, OTHER).json);
-        dump.add("xmage_" + SEAT, views.view(game, SEAT).json);
+        dump.add("xmage_" + other, views.view(game, other).json);
+        dump.add("xmage_" + seat, views.view(game, seat).json);
         try (FileWriter out = new FileWriter(logs + "/" + gameId + "-divergence.json")) {
             out.write(dump.toString());
         } catch (IOException e) {
@@ -734,6 +738,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         over = true;
         JsonObject record = new JsonObject();
         record.addProperty("game_id", gameId);
+        record.addProperty("archon_seat", seat);
         record.addProperty("divergence", divergence);
         record.add("kernel", kernel == null ? null : kernel.terminal());
         record.addProperty("turn", game == null ? null : game.getTurnNum());

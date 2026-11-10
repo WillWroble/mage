@@ -13,7 +13,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The kernel's side of a lockstep game: Jack's protocol engine for mtg-kernel (patched to take XMage's hidden zones)
@@ -24,10 +27,11 @@ final class KernelMatch implements AutoCloseable {
 
     private static final String PROTOCOL = "spellbench/v2";
 
-    /** Where the engine and the Archon run, and the matchup's fixed setup (bench/lockstep_setup.py). */
+    /** Where the engine and the Archon run, the Archon's seat, and the matchup's fixed setup (bench/lockstep_setup.py). */
     static final class Settings {
         List<String> engine;
         List<String> archon;
+        String seat = "p1";
         String setup;
         String logs;
 
@@ -58,6 +62,8 @@ final class KernelMatch implements AutoCloseable {
     private String gameId;
     /** The engine's declared observation flags (its hello_ok profile). */
     private JsonObject observationFlags;
+    /** The kernel's name of each double-faced card of the matchup, by its front face's name. */
+    private final Map<String, String> faces = new HashMap<>();
     /** The engine's last answer: a decision or the terminal. */
     private JsonObject current;
 
@@ -65,6 +71,21 @@ final class KernelMatch implements AutoCloseable {
         this.settings = settings;
         this.setup = settings.setup();
         this.archonSeat = archonSeat;
+        for (JsonElement deck : setup.getAsJsonArray("own_decks")) {
+            for (JsonElement row : deck.getAsJsonObject().getAsJsonArray("decklist")) {
+                String name = row.getAsJsonObject().get("name").getAsString();
+                if (name.contains(" // ")) {
+                    faces.put(name.substring(0, name.indexOf(" // ")), name);
+                }
+            }
+        }
+    }
+
+    /** Card names as the kernel writes them: a double-faced card by both faces, where XMage names its front. */
+    private List<String> names(List<String> xmage) {
+        List<String> out = new ArrayList<>();
+        xmage.forEach(name -> out.add(faces.getOrDefault(name, name)));
+        return out;
     }
 
     /** Starts the game with each seat's library order (card names, top first, opening hand included). */
@@ -86,8 +107,8 @@ final class KernelMatch implements AutoCloseable {
         reset.add("max_decisions", setup.getAsJsonObject("limits").get("max_decisions"));
         reset.add("max_steps", setup.getAsJsonObject("limits").get("max_steps"));
         JsonArray orders = new JsonArray();
-        orders.add(new Gson().toJsonTree(p0Library));
-        orders.add(new Gson().toJsonTree(p1Library));
+        orders.add(new Gson().toJsonTree(names(p0Library)));
+        orders.add(new Gson().toJsonTree(names(p1Library)));
         reset.add("library_orders", orders);
         current = engine.request(PROTOCOL, "x_lockstep_reset", reset);
 
@@ -182,7 +203,7 @@ final class KernelMatch implements AutoCloseable {
         JsonObject arrange = new JsonObject();
         arrange.addProperty("game_id", gameId);
         arrange.addProperty("seat", seat);
-        arrange.add("library", new Gson().toJsonTree(library));
+        arrange.add("library", new Gson().toJsonTree(names(library)));
         expect(engine.request(PROTOCOL, "x_lockstep_arrange_library", arrange), "library_arranged");
     }
 
