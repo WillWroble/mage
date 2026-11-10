@@ -533,10 +533,14 @@ public final class Front {
         return stack.isEmpty() ? null : Json.str(Json.obj(stack.get(stack.size() - 1)), "object_id");
     }
 
-    static String contextSource(Map<String, Object> d) {
+    /**
+     * The object a choice decision belongs to: its context's source. MageZero fork: mtg-kernel names none for some
+     * resolution dialogs (a discard while Grab the Prize resolves); the resolving object is then the stack's top.
+     */
+    public static String contextSource(Map<String, Object> d) {
         Map<String, Object> ctx = Json.obj(d, "context");
         Map<String, Object> src = ctx == null ? null : Json.obj(ctx, "source");
-        return src == null ? null : Json.str(src, "object_id");
+        return src != null ? Json.str(src, "object_id") : stackTop(d);
     }
 
     /** The family of a choice decision: the plan family where the plan has one, else the kind and its purpose. */

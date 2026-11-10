@@ -15,6 +15,8 @@ import mage.abilities.effects.common.InfoEffect;
 import mage.abilities.effects.common.TapTargetEffect;
 import mage.abilities.keyword.FlashbackAbility;
 import mage.abilities.keyword.KickerAbility;
+import mage.ObjectColor;
+import mage.constants.SubType;
 import mage.cards.Card;
 import mage.game.ExileZone;
 import mage.util.CardUtil;
@@ -558,6 +560,32 @@ public final class WorldBuilder {
                 flag("approximate:face_down_permanent");
             }
             decorate(perm, pm);
+            restoreChosen(perm, pm);
+        }
+    }
+
+    /**
+     * MageZero fork: the values chosen for a permanent (a Gate's color), under the keys XMage's common choose effects
+     * keep them ({@code ChooseColorEffect}, {@code ChooseCreatureTypeEffect}), so the world's own entry choice does not
+     * stand in for the observed one.
+     */
+    private void restoreChosen(Permanent perm, Map<String, Object> pm) {
+        for (Object o : pm == null || pm.get("chosen") == null ? new ArrayList<>() : Json.arr(pm, "chosen")) {
+            Map<String, Object> ch = Json.obj(o);
+            String value = Json.str(ch, "value");
+            if ("color".equals(Json.str(ch, "kind"))) {
+                for (ObjectColor c : ObjectColor.getAllColors()) {
+                    if (c.getDescription().equalsIgnoreCase(value)) {
+                        game.getState().setValue(perm.getId() + "_color", c);
+                    }
+                }
+            } else if ("creature_type".equals(Json.str(ch, "kind"))) {
+                for (SubType t : SubType.values()) {
+                    if (t.getDescription().toLowerCase(Locale.ROOT).replace("'", "").replace(' ', '_').replace('-', '_').equals(value)) {
+                        game.getState().setValue(perm.getId() + "_type", t);
+                    }
+                }
+            }
         }
     }
 
@@ -925,6 +953,14 @@ public final class WorldBuilder {
         Player p = player(seat);
         Map<String, Object> pm = playersObs.get(seat);
         p.initLife((int) Json.num(pm, "life", 20));
+        // MageZero fork: the monarch, as XMage makes one (its end-step draw included); other designations are flagged
+        for (Object d : pm.get("designations") == null ? new ArrayList<>() : Json.arr(pm, "designations")) {
+            if ("monarch".equals(d)) {
+                game.setMonarchId(fake, p.getId());
+            } else {
+                flag("approximate:designation:" + d);
+            }
+        }
         p.resetLandsPlayed();
         for (int i = 0; i < Json.num(pm, "lands_played_this_turn", 0); i++) {
             p.incrementLandsPlayed();

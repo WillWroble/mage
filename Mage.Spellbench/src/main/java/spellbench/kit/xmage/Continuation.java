@@ -142,7 +142,8 @@ public final class Continuation {
 
         /**
          * MageZero fork: what the comparison checks of an observation, which is the game state: zones, objects, players
-         * and the stack. Left out are {@code known}, which the projection takes from the received observation, and
+         * and the stack. Left out are {@code known}, which the projection takes from the received observation,
+         * {@code passed_seats}, priority bookkeeping that a resolution in progress shows as both seats passed, and
          * each engine's rendering of card text ({@code full_name}, {@code characteristics}: keyword lists, type order).
          * A non-modal object without X is {@code modes [0]}, {@code x_value 0} on mtg-kernel and null on XMage.
          */
@@ -152,7 +153,7 @@ public final class Continuation {
                 Map<String, Object> out = new LinkedHashMap<>();
                 for (Map.Entry<String, Object> e : Json.obj(o).entrySet()) {
                     String k = e.getKey();
-                    if (k.equals("known") || k.equals("full_name") || k.equals("characteristics")
+                    if (k.equals("known") || k.equals("passed_seats") || k.equals("full_name") || k.equals("characteristics")
                             || k.equals("card_name") && "spell".equals(Json.obj(o).get("stack_kind"))) {
                         continue; // a spell's name: mtg-kernel names the card, XMage the cast face (an adventure)
                     }
@@ -166,7 +167,9 @@ public final class Continuation {
                     if (k.equals("exile")) {
                         // XMage's exile zones are hash maps: a rebuilt world cannot know arrival order, so a zone
                         // compares as its cards by name
-                        ((List<Object>) v).sort(Comparator.comparing(c -> String.valueOf(Json.obj(c).get("card_name"))));
+                        ((List<Object>) v).sort(Comparator.comparing((Object c) -> String.valueOf(Json.obj(c).get("card_name")))
+                                .thenComparing(c -> String.valueOf(Json.obj(Json.obj(c).get("exiled_by")) == null ? null
+                                        : Json.obj(Json.obj(c).get("exiled_by")).get("card_name"))));
                     }
                     out.put(k, v);
                 }
@@ -646,7 +649,7 @@ public final class Continuation {
         Map<String, Object> aobs = (Map<String, Object>) Json.copy(Json.obj(anchorDecision, "observation"));
         Map<String, Object> current = Json.obj(decision, "observation");
         String viewer = Json.str(current, "viewer");
-        String source = Json.str(Json.obj(Json.obj(decision, "context"), "source"), "object_id");
+        String source = spellbench.kit.core.Front.contextSource(decision);
         // 1. conditioning: cards new in the viewer's hand were drawn from the top of its library
         Set<String> before = new LinkedHashSet<>();
         for (Object p : Json.arr(aobs, "players")) {
