@@ -66,6 +66,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient MageZeroSeat mageZero;
     private transient String logs;
     private transient boolean over;
+    /** How the kernel's priority for the Archon differed from XMage's at the Archon's last priority it passed. */
+    private transient List<String> passedAt = List.of();
     /** The current combat declaration: each of the Archon's creatures with what it attacks or blocks (null: none). */
     private transient Map<UUID, UUID> declaration;
     /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel. */
@@ -250,8 +252,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         List<String> diff = views.diff(Lockstep.observation(decision), now);
         if (!diff.isEmpty()) {
             if (views.before(Lockstep.observation(decision), now)) {
-                throw new LockstepDivergence("XMage went past the kernel's priority for the Archon: " + diff);
+                throw new LockstepDivergence("XMage went past the kernel's priority for the Archon: " + diff
+                        + "; at the Archon's last priority it differed by " + passedAt);
             }
+            passedAt = diff;
             return false; // the kernel asks the Archon at a later point
         }
         for (String seat : new String[]{OTHER, SEAT}) {
@@ -474,7 +478,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      * XMage's key for the cost the Archon casts with. XMage asks it first, keying a spell's alternative costs from 1,
      * then the cast without one; the kernel asks the Archon's targets first, then how it pays, and only when it can pay
      * both ways. So the kernel's cast is run through here, its targets kept for XMage's target dialogs; when the kernel
-     * does not ask, only one way is payable and XMage's choice is forced: the regular cost if the Archon can pay it.
+     * does not ask, only one way is payable and XMage's choice is forced: the regular mana cost if the Archon has the
+     * mana for it.
      */
     private String cost(Game game, Choice choice) {
         if (choice.getKeyChoices().size() != 2) {
@@ -491,7 +496,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             if ("choose_cast_method".equals(kind)) {
                 return "alternative".equals(Views.text(archon(), "method")) ? "1" : "2";
             }
-            return canPayMinimumManaCost(acting, getManaAvailable(game), game) ? "2" : "1";
+            return getManaAvailable(game).enough(acting.getManaCosts().getMana()) ? "2" : "1";
         }
     }
 
