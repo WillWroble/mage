@@ -253,6 +253,12 @@ public final class PlanBook {
             count("plan_color_deferred");
             return -3;
         }
+        if (values.isEmpty()) {
+            // MageZero fork: a dialog the world never reached (one asked as the action resolves, such as a library
+            // search) has no planned value; the current-dialog path answers it instead of finishing it empty
+            count("plan_dialog_deferred");
+            return -3;
+        }
         int chosen = match(decision, fam, values, p.cursor);
         p.cursor++;
         if (count > 1 && sub == count - 1) {

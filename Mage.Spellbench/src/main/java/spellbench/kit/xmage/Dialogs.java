@@ -105,6 +105,10 @@ public final class Dialogs {
                 }
                 boolean notTarget = !"choose_target".equals(kind);
                 KitTarget t = new KitTarget(possible, Math.min(min, possible.size()), Math.min(max, possible.size()), notTarget);
+                String name = realTargetName(source, kind);
+                if (name != null) {
+                    t.withTargetName(name);
+                }
                 if ("choose_target".equals(kind)) {
                     bot.chooseTarget(outcome, t, source, game);
                 } else {
@@ -221,6 +225,38 @@ public final class Dialogs {
     }
 
     /** The object or player a choice candidate names, as a world UUID. */
+    /**
+     * MageZero fork: the name XMage's own target for this dialog shows (a spell's target, or the target an effect
+     * holds, such as a library search's), else null. MageZero encodes it in the decision text, so a synthesized dialog
+     * that names it "offered object" is a text the model never trained on.
+     */
+    static String realTargetName(Ability source, String kind) {
+        if (source == null) {
+            return null;
+        }
+        if ("choose_target".equals(kind) && !source.getTargets().isEmpty()) {
+            return source.getTargets().get(0).getTargetName();
+        }
+        for (mage.abilities.effects.Effect e : source.getEffects()) {
+            for (Class<?> c = e.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (mage.target.Target.class.isAssignableFrom(f.getType())) {
+                        try {
+                            f.setAccessible(true);
+                            Object v = f.get(e);
+                            if (v != null) {
+                                return ((mage.target.Target) v).getTargetName();
+                            }
+                        } catch (ReflectiveOperationException | RuntimeException ignored) {
+                            // an inaccessible field: keep looking
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     static UUID uuidOf(World w, Map<String, Object> sem) {
         Object t = null;
         switch (Json.str(sem, "kind")) {
