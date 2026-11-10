@@ -109,7 +109,8 @@ final class MageZeroSeat {
                         : action(decision, move);
             }
             if (move.kind == Move.Kind.ACTION) {
-                throw new LockstepDivergence("MageZero's " + move + " in XMage is where the kernel asks nothing: " + diff);
+                throw new LockstepDivergence("MageZero's " + move + " in XMage is where the kernel asks nothing: " + diff
+                        + "; its last pass before differed by " + mismatch);
             }
             moves.poll(); // a pass where the kernel did not ask
             mismatch = diff.toString();
