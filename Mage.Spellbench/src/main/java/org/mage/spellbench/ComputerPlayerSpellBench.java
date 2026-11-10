@@ -435,13 +435,19 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /**
-     * The card whose spell XMage casts for the Archon's cast of {@code card}: a card with a spell option (an omen, an
-     * adventure) casts its option's half when the Archon chose the kernel's second spell form.
+     * The cards whose spell XMage may cast for the Archon's cast of {@code card}: a card with a spell option (an omen,
+     * an adventure) casts its option's half when the Archon chose the kernel's second spell form.
      */
-    private static UUID half(Game game, UUID card, JsonObject form) {
+    private static List<UUID> halves(Game game, UUID card, JsonObject form) {
         Card xmage = game.getCard(card);
-        return xmage instanceof CardWithSpellOption && form != null && form.get("mode_index").getAsInt() == 1
-                ? ((CardWithSpellOption) xmage).getSpellCard().getId() : card;
+        if (!(xmage instanceof CardWithSpellOption)) {
+            return List.of(card);
+        }
+        UUID option = ((CardWithSpellOption) xmage).getSpellCard().getId();
+        if (form == null) {
+            return List.of(card, option); // the kernel asked no form: only one is castable, either way
+        }
+        return List.of(form.get("mode_index").getAsInt() == 1 ? option : card);
     }
 
     /**
@@ -462,14 +468,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             later.remove(form);
         }
         for (String id : at == null ? List.<String>of() : Views.twins(view.json, at)) {
-            UUID source = half(game, view.objects.get(id), form);
+            List<UUID> sources = halves(game, view.objects.get(id), form);
             List<ActivatedAbility> matches = new ArrayList<>();
             for (ActivatedAbility ability : playable) {
                 boolean ofKind = kind.equals("play_land") ? ability instanceof PlayLandAbility
                         : kind.equals("cast_spell") ? ability instanceof SpellAbility
                         : kind.equals("activate_mana_ability") ? ability instanceof ManaAbility
                         : !(ability instanceof PlayLandAbility || ability instanceof SpellAbility || ability instanceof ManaAbility);
-                if (ofKind && ability.getSourceId().equals(source)) {
+                if (ofKind && sources.contains(ability.getSourceId())) {
                     matches.add(ability);
                 }
             }
