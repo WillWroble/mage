@@ -72,6 +72,24 @@ Speed: each game spent ~32 of its ~36 s rebuilding XMage's card database (the pe
 jar). A database built once by the current jar and copied per game loads without rebuilding and with every deck card
 (checked); a full game now takes ~20-25 s including the JVM.
 
+### 2026-11-10/11, continuous fixing (builds up to 97b0f8fb)
+
+Engine setup changes: the kernel's bridge carries two more local fixes (Of One Mind sees a Human spelled HUMAN; a
+library arrangement keeps cards whose position a player knows), and the engine now runs without `--known-cards`
+(the wrapper's hand-knowledge tracker failed closed with "known hand facts exceed the hand count"; neither the Archon
+bot nor the comparison reads `known`, but the board's engine runs with it).
+
+Fixed since the one-build table: two-option effect choices by XMage's named options (Winding Way), the Archon's
+effect options kept when the kernel runs ahead (Ninja's draw), embalmed token names, a stale blocking flag
+(CR 506.4), MageZero's unasked yes/no, mana made while paying not recorded as an action, dies-trigger sources,
+tapping a sacrificed land first (Reckoner's Bargain), a selection the kernel ended, digs with forced destinations,
+Brainstorm's put-back order, combat declarations XMage asks nothing for, library orders the kernel cannot take yet.
+
+On builds since 2a29b4de: 36 games, 17 full (47%); Burn, Faeries and Rally finish nearly every game.
+
+Known gaps (kernel models differ): Avenging Hunter's initiative (XMage's Undercity room trigger and command zone),
+the kernel's autopay using Heap Gate's filtered mana where XMage's payer does not.
+
 Rules disagreements seen in earlier runs (counted as divergences, not worked around):
 - Of One Mind: XMage casts it reduced to {U} with a Human and a non-Human; the kernel does not see Humbling Elder as a
   Human (its card data has `Subtype::HumanAllCaps`; Of One Mind checks `Subtype::Human`), so no reduction.
