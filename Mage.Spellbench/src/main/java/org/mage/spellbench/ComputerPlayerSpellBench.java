@@ -21,6 +21,7 @@ import mage.game.permanent.Permanent;
 import mage.util.MultiAmountMessage;
 import mage.MageObject;
 import mage.cards.Card;
+import mage.cards.CardWithSpellOption;
 import mage.cards.Cards;
 import mage.choices.Choice;
 import mage.constants.Outcome;
@@ -408,6 +409,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (kind.equals("pass")) {
             return false;
         }
+        if (kind.equals("cast_spell")) {
+            // the kernel asks the spell's form next, which XMage takes as which spell is cast (an omen's or an
+            // adventure's half), or asks on its own as a mode: the Archon answers it now and it is kept
+            JsonObject form = next(game, Set.of("choose_spell_mode"));
+            if (form != null && wanted(form, Set.of("choose_spell_mode"))) {
+                later.add(archon());
+            }
+        }
         ActivatedAbility ability = playable(game, view, decision, semantic);
         acting = ability;
         actingSemantic = semantic;
@@ -426,6 +435,16 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /**
+     * The card whose spell XMage casts for the Archon's cast of {@code card}: a card with a spell option (an omen, an
+     * adventure) casts its option's half when the Archon chose the kernel's second spell form.
+     */
+    private static UUID half(Game game, UUID card, JsonObject form) {
+        Card xmage = game.getCard(card);
+        return xmage instanceof CardWithSpellOption && form != null && form.get("mode_index").getAsInt() == 1
+                ? ((CardWithSpellOption) xmage).getSpellCard().getId() : card;
+    }
+
+    /**
      * XMage's playable ability for the Archon's action. Its source may be any object that looks the same as the kernel's
      * in the observation (two plotted cards, one castable this turn): the observation cannot tell them apart.
      */
@@ -435,8 +454,15 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         Views.Locator at = Views.locate(Lockstep.observation(decision),
                 Views.text(semantic.getAsJsonObject("source"), "object_id"));
         List<ActivatedAbility> playable = getPlayable(game, true);
+        // the spell's form, if the Archon chose it: XMage takes it as which half of a card with a spell option is cast
+        JsonObject form = later.stream().filter(l -> "choose_spell_mode".equals(Views.text(l, "kind")))
+                .findFirst().orElse(null);
+        if (form != null && at != null && game.getCard(view.objects.get(Views.find(view.json, at)))
+                instanceof CardWithSpellOption) {
+            later.remove(form);
+        }
         for (String id : at == null ? List.<String>of() : Views.twins(view.json, at)) {
-            UUID source = view.objects.get(id);
+            UUID source = half(game, view.objects.get(id), form);
             List<ActivatedAbility> matches = new ArrayList<>();
             for (ActivatedAbility ability : playable) {
                 boolean ofKind = kind.equals("play_land") ? ability instanceof PlayLandAbility
