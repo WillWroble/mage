@@ -108,6 +108,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private final transient List<String> ordered = new ArrayList<>();
     private transient boolean destinationChosen;
     private final transient Deque<List<String>> arrangement = new ArrayDeque<>();
+    /** The Archon's order of cards it puts on its library, and the picks it answers XMage's placing dialogs with. */
+    private final transient List<String> placing = new ArrayList<>();
+    private final transient Deque<String> placeOrder = new ArrayDeque<>();
     /** The Archon's answers to decisions of its cast that XMage asks later, on resolution. */
     private final transient List<JsonObject> later = new ArrayList<>();
     /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
@@ -297,6 +300,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                     Views.text(chosen, "destination"), Views.text(chosen, "purpose")});
         } else if ("order_pick".equals(kind) && "arrangement".equals(Views.text(chosen, "purpose"))) {
             ordered.add(Views.text(chosen.getAsJsonObject("item").getAsJsonObject("object"), "card_name"));
+        } else if ("order_pick".equals(kind) && Set.of("library_top", "library_bottom").contains(Views.text(chosen, "purpose"))) {
+            placed(decision, chosen);
+            return;
         } else {
             return;
         }
@@ -330,6 +336,34 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         List<String> top = by.getOrDefault("top", List.of());
         for (int i = top.size() - 1; i > 0; i--) {
             arrangement.add(List.of(top.get(i)));
+        }
+    }
+
+    /**
+     * Records the Archon's order of cards it puts on its library (Brainstorm's two back on top); once complete, the
+     * answers to XMage's dialogs for it, which place the cards one at a time: on the top deepest first ("the last one
+     * chosen will be topmost"), on the bottom topmost first. The kernel's last position is implied.
+     */
+    private void placed(JsonObject decision, JsonObject chosen) {
+        int position = chosen.get("position").getAsInt();
+        int count = chosen.get("count").getAsInt();
+        if (position == 0) { // a new placing: one XMage did not ask about is over
+            placing.clear();
+            placeOrder.clear();
+        }
+        placing.add(Views.text(chosen.getAsJsonObject("item").getAsJsonObject("object"), "card_name"));
+        if (position + 2 < count) {
+            return;
+        }
+        for (JsonElement c : decision.getAsJsonArray("candidates")) {
+            JsonObject other = c.getAsJsonObject().getAsJsonObject("semantic");
+            if (!other.equals(chosen)) { // the last card, implied
+                placing.add(Views.text(other.getAsJsonObject("item").getAsJsonObject("object"), "card_name"));
+            }
+        }
+        boolean top = "library_top".equals(Views.text(chosen, "purpose"));
+        for (int i = 0; i < placing.size() - 1; i++) {
+            placeOrder.add(placing.get(top ? placing.size() - 1 - i : i));
         }
     }
 
@@ -512,6 +546,13 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         Boolean arranged = guard(game, () -> arranged(target, game, fromCards), false);
         if (arranged != null) {
             return arranged;
+        }
+        if (!placeOrder.isEmpty() && fromCards != null && fromCards.getCards(game).stream()
+                .allMatch(card -> game.getState().getZone(card.getId()) == Zone.HAND)) {
+            String name = placeOrder.poll(); // a card the Archon put on its library, placed one at a time
+            fromCards.getCards(game).stream().filter(card -> card.getName().equals(name)).findFirst()
+                    .ifPresent(card -> target.add(card.getId(), game));
+            return target.isChosen(game);
         }
         if (source instanceof ChooseToAttackAbility || source instanceof ChooseCreatureToBlockAbility) {
             return guard(game, () -> declare(game, target, source), false);
