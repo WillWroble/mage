@@ -213,7 +213,7 @@ public final class Continuation {
                     if (!"select_object".equals(kind) && !"choose_target".equals(kind) && !"choose_cost_target".equals(kind)) {
                         fail("replay: a " + kind + " answer at a selection dialog");
                     }
-                    UUID u = Dialogs.uuidOf(w, sem);
+                    UUID u = Mapping.uuidOf(w, sem);
                     if (u == null) {
                         fail("replay: a pick the anchor world cannot name");
                     }
@@ -222,6 +222,15 @@ public final class Continuation {
                     } else {
                         target.addTarget(u, source, game);
                     }
+                    if (target.contains(u)) {
+                        getPlayerHistory().targetSequence.add(u);
+                    }
+                }
+                // MageZero replays this dialog from the history: it stops where the answer stopped short
+                UUID controller = target.getAffectedAbilityControllerId(getId());
+                if (!target.isChoiceCompleted(controller, source, game, cards) && target.possibleTargets(controller, source, game, cards)
+                        .stream().anyMatch(id -> !target.contains(id))) {
+                    getPlayerHistory().targetSequence.add(mage.target.TargetImpl.STOP_CHOOSING);
                 }
                 return true;
             }
@@ -363,11 +372,34 @@ public final class Continuation {
                 return super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game);
             }
             int i = index++;
+            if (i < earlier.size() ? isSelection(kindOf(i)) : i == earlier.size() && optionalSelection(decision)) {
+                // XMage asks an optional selection as yes/no, then the selection; the engine asks one selection
+                // whose finish candidate is the no: the yes/no belongs to that selection's dialog
+                index--;
+                if (i < earlier.size()) {
+                    boolean took = !Json.str(Json.obj(picksOf(i).get(0)), "kind").startsWith("finish_");
+                    getPlayerHistory().useSequence.add(took);
+                    if (!took) {
+                        index++; // the selection is never asked
+                    }
+                    return took;
+                }
+                compare(game);
+                boolean r = callBot(() -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
+                if (!r) {
+                    result.put("picks", new ArrayList<>());
+                    if (!finish) {
+                        throw new Stop();
+                    }
+                }
+                return r; // yes: the selection that follows is the current dialog
+            }
             if (i < earlier.size()) {
                 Object v = valueOf(picksOf(i), "choose_boolean", "optional_cost");
                 if (!(v instanceof Boolean)) {
                     fail("replay: no yes/no answer for a yes/no dialog");
                 }
+                getPlayerHistory().useSequence.add((Boolean) v);
                 return (Boolean) v;
             }
             if (i == earlier.size()) {
@@ -388,13 +420,14 @@ public final class Continuation {
             return callBot(() -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game));
         }
 
-        private int number(Game game, java.util.function.IntSupplier bot) {
+        private int number(Game game, int min, java.util.function.IntSupplier bot) {
             int i = index++;
             if (i < earlier.size()) {
                 Object v = valueOf(picksOf(i), "choose_number", null);
                 if (!(v instanceof Number)) {
                     fail("replay: no number for a number dialog");
                 }
+                getPlayerHistory().numSequence.add(((Number) v).intValue() - min);
                 return ((Number) v).intValue();
             }
             if (i == earlier.size()) {
@@ -431,7 +464,7 @@ public final class Continuation {
             if (!active(game)) {
                 return super.getAmount(min, max, message, source, game);
             }
-            return number(game, () -> super.getAmount(min, max, message, source, game));
+            return number(game, min, () -> super.getAmount(min, max, message, source, game));
         }
 
         @Override
@@ -439,7 +472,7 @@ public final class Continuation {
             if (!active(game)) {
                 return super.announceX(min, max, message, game, source, isManaPay);
             }
-            return number(game, () -> super.announceX(min, max, message, game, source, isManaPay));
+            return number(game, min, () -> super.announceX(min, max, message, game, source, isManaPay));
         }
 
         @Override
@@ -450,11 +483,7 @@ public final class Continuation {
             int i = index++;
             List<Mode> all = new ArrayList<>(modes.values());
             if (i < earlier.size()) {
-                Object v = valueOf(picksOf(i), "choose_spell_mode", null);
-                if (!(v instanceof Number) || ((Number) v).intValue() >= all.size()) {
-                    fail("replay: no mode for a mode dialog");
-                }
-                return all.get(((Number) v).intValue());
+                fail("unsupported replay: a mode");
             }
             if (i == earlier.size()) {
                 if (!"choose_spell_mode".equals(Front_firstKind(decision))) {
@@ -493,6 +522,24 @@ public final class Continuation {
                 fail("unsupported continuation: a choice among named options");
             }
             return callBot(() -> super.choose(outcome, choice, game));
+        }
+
+        private String kindOf(int i) {
+            List<Object> picks = picksOf(i);
+            return picks.isEmpty() ? null : Json.str(Json.obj(picks.get(0)), "kind");
+        }
+
+        /** A selection the engine lets this seat finish without a pick. */
+        private boolean optionalSelection(Map<String, Object> d) {
+            boolean finishable = false;
+            for (Object o : Json.arr(d, "candidates")) {
+                finishable |= Json.str(Json.obj(Json.obj(o), "semantic"), "kind").startsWith("finish_");
+            }
+            return finishable && isSelection(Front_firstKind(d));
+        }
+
+        private boolean isSelection(String kind) {
+            return "select_object".equals(kind) || "choose_target".equals(kind) || "finish_selection".equals(kind);
         }
 
         /** The value of a recorded dialog's first answer of these kinds (value, pay or mode_index). */
@@ -540,6 +587,7 @@ public final class Continuation {
      * dialogs answered by the bot), and the result carries the world's observation after it ("after"), with priority
      * to the active seat: the fixtures' resolution transition (design Section 7.1).
      */
+    @SuppressWarnings("unchecked")
     public static Map<String, Object> run(Map<String, Object> gameStart, byte[] idSeed, Map<String, Object> anchor,
                                           List<Object> earlier, Map<String, Object> decision, int skill, boolean finish) {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -643,10 +691,10 @@ public final class Continuation {
             return out;
         }
         if (KitContext.horizon.contains(top.getId())) {
-            // design 5.1 step 4: an approximate source takes the current-dialog path
-            out.put("match", false);
-            out.put("diff", Collections.singletonList("the source is flagged approximate (horizon)"));
-            return out;
+            // MageZero fork: design 5.1 step 4 sends an approximate source to the current-dialog path, which this
+            // agent does not have; the projection check at the dialog and the pick mapping still refuse a wrong
+            // rebuild (a different ability asks a different dialog, or none)
+            ((List<Object>) out.get("flags")).add("continuation:approximate_source");
         }
         for (String f : w.flags) {
             if (f.startsWith("unsupported:")) {

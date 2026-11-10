@@ -91,6 +91,8 @@ public final class WorldBuilder {
         BLOCK,
         /** the observed snapshot, nothing resolved (current dialog) */
         SNAPSHOT,
+        /** the observed step, before its turn-based actions (the cleanup discard) */
+        STEP_START,
         /** pregame (mulligan decisions) */
         PREGAME
     }
@@ -1006,6 +1008,10 @@ public final class WorldBuilder {
                 break;
             case BLOCK:
                 target = PhaseStep.DECLARE_BLOCKERS;
+                part = Step.StepPart.PRE;
+                break;
+            case STEP_START:
+                target = step(phaseStep, damage);
                 part = Step.StepPart.PRE;
                 break;
             default:

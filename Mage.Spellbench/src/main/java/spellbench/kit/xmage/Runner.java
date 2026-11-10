@@ -301,7 +301,7 @@ public final class Runner {
                 spec.mode = WorldBuilder.Mode.PRIORITY;
                 break;
             default:
-                spec.mode = WorldBuilder.Mode.SNAPSHOT;
+                spec.mode = cleanupDiscard(decision) ? WorldBuilder.Mode.STEP_START : WorldBuilder.Mode.SNAPSHOT;
         }
         World w = WorldBuilder.build(spec);
         w.flags.addAll(nameFlags);
@@ -333,7 +333,7 @@ public final class Runner {
                 if (forcing) {
                     o = forced(w, bot0, Json.obj(req, "force_semantic"), index);
                 } else {
-                    o = bot0.decidePriority(w, index, true);
+                    o = bot0.decidePriority(w, index);
                 }
                 res.put("pass", o.pass);
                 res.put("reason", o.reason);
@@ -342,7 +342,7 @@ public final class Runner {
                 res.put("executed_payload", o.executedPayload);
                 res.put("activated", o.activated);
                 if (o.chosen != null) {
-                    // mapping diagnostics (review change 5): what MAD chose, and why it has no v2 form if it has none
+                    // mapping diagnostics (review change 5): what the player chose, and why it has no v2 form if it has none
                     res.put("chosen", Mapping.describe(w, game, o.chosen));
                     String why = Mapping.failure(w, game, o.chosen, index);
                     if (why != null || o.semantic == null) {
@@ -360,18 +360,6 @@ public final class Runner {
                     res.put("non_stack_dialogs", (long) o.answers.size());
                     res.put("non_stack_families", families);
                 }
-                List<Object> stats = new ArrayList<>();
-                for (int i = 0; i < o.stats.size(); i++) {
-                    RootStat rs = o.stats.get(i);
-                    stats.add(Json.map("index", (long) rs.index, "semantic", o.statSemantics.get(i),
-                            "payload", o.statPayloads.get(i), "raw", rs.raw, "adjusted", rs.adjusted,
-                            "alpha_before", rs.alphaBefore == null || rs.alphaBefore == Integer.MIN_VALUE ? null : rs.alphaBefore,
-                            "beta", rs.beta == null || rs.beta == Integer.MAX_VALUE ? null : rs.beta,
-                            "bound", rs.bound, "tie", rs.tie, "reason", rs.reason, "best", rs.best,
-                            "horizon_hits", rs.horizonHits));
-                }
-                res.put("root_stats", stats);
-                res.put("nodes", (long) mage.player.ai.KitNodes.count());
                 break;
             }
             case "attack": {
@@ -390,7 +378,11 @@ public final class Runner {
             }
             case "mulligan_bottom":
             case "dialog": {
-                res.put("picks", Dialogs.answer(w, bot0, decision, index));
+                // a dialog reaches the player only as XMage asks it: the cleanup discard by XMage's cleanup step, a
+                // resolution's dialogs by continuation; none is synthesized, so the front answers others by fallback
+                res.put("picks", cleanupDiscard(decision)
+                        ? bot0.picks(() -> game.getState().getTurn().getStep().beginStep(game, game.getActivePlayerId()))
+                        : null);
                 break;
             }
             case "roundtrip": {
@@ -403,6 +395,14 @@ public final class Runner {
         res.put("search_ms", (System.nanoTime() - built) / 1_000_000);
         res.put("counters", KitContext.counters());
         return res;
+    }
+
+    /** The viewer's discard to hand size: XMage's cleanup step asks it (CR 514.1). */
+    static boolean cleanupDiscard(Map<String, Object> decision) {
+        Map<String, Object> context = Json.obj(decision, "context");
+        Map<String, Object> obs = Json.obj(decision, "observation");
+        return context != null && context.get("source") == null && "discard".equals(Json.str(context, "purpose"))
+                && "cleanup".equals(Json.str(obs, "phase_step")) && Json.str(obs, "viewer").equals(Json.str(obs, "active_seat"));
     }
 
     /** The root filter of a decision: an action is a root alternative only when its v2 semantic is offered. */
@@ -452,10 +452,7 @@ public final class Runner {
             o.semantic = Json.map("kind", "pass");
             return o;
         }
-        o.chosen = a;
-        o.semantic = Mapping.prioritySemantic(w, w.game, a, index);
-        o.optionPayload = Mapping.payload(w, a, w.game);
-        bot.execute(w, a, o);
+        bot.execute(w, a, index, o);
         return o;
     }
 }

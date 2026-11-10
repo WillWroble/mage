@@ -528,6 +528,11 @@ public final class Front {
     // ---------------------------------------------------------------------------------------------
     // logical dialogs (Section 5.1 step 3, Section 6.3)
 
+    static String stackTop(Map<String, Object> d) {
+        List<Object> stack = Json.arr(Json.obj(d, "observation"), "stack");
+        return stack.isEmpty() ? null : Json.str(Json.obj(stack.get(stack.size() - 1)), "object_id");
+    }
+
     static String contextSource(Map<String, Object> d) {
         Map<String, Object> ctx = Json.obj(d, "context");
         Map<String, Object> src = ctx == null ? null : Json.obj(ctx, "source");
@@ -733,6 +738,11 @@ public final class Front {
         // saved-anchor continuation at the first decision of a logical dialog, else the current dialog
         String src = contextSource(d);
         Map<String, Object> contDetail = null;
+        if (!mid && src != null && !anchors.containsKey(src) && src.equals(stackTop(d))) {
+            // MageZero fork: no priority decision of this seat had the source on top, so the dialog's own snapshot
+            // is its anchor; the continuation's projection check refuses it if the resolution already changed it
+            saveAnchor(d);
+        }
         if (!mid && src != null && anchors.containsKey(src)) {
             contDetail = new LinkedHashMap<>();
             Answer cont = continuation(d, clock, src, contDetail);

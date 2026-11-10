@@ -302,4 +302,35 @@ public final class Mapping {
         }
         return null;
     }
+
+    /** The object or player a choice candidate names, as a world UUID. */
+    static UUID uuidOf(World w, Map<String, Object> sem) {
+        Object t = null;
+        switch (Json.str(sem, "kind")) {
+            case "select_object":
+                t = sem.get("choice");
+                break;
+            case "choose_target":
+                t = sem.get("target");
+                break;
+            case "choose_cost_target":
+                return w.idToUuid.get(Json.str(Json.obj(sem, "candidate"), "object_id"));
+            case "order_pick": {
+                Map<String, Object> item = Json.obj(sem, "item");
+                Map<String, Object> o = item == null ? null : Json.obj(item, "object");
+                return o == null ? null : w.idToUuid.get(Json.str(o, "object_id"));
+            }
+            default:
+                return null;
+        }
+        if (t == null) {
+            return null;
+        }
+        Map<String, Object> tm = Json.obj(t);
+        if (tm.get("player") != null) {
+            return w.player((String) tm.get("player"));
+        }
+        Map<String, Object> o = Json.obj(tm, "object");
+        return o == null ? null : w.idToUuid.get(Json.str(o, "object_id"));
+    }
 }

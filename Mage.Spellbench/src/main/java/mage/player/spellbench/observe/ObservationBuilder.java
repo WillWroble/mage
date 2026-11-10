@@ -15,6 +15,7 @@ import mage.constants.PhaseStep;
 import mage.constants.Zone;
 import mage.counters.Counter;
 import mage.counters.CounterType;
+import mage.designations.DesignationType;
 import mage.game.ExileZone;
 import mage.game.Game;
 import mage.game.combat.CombatGroup;
@@ -74,7 +75,7 @@ public final class ObservationBuilder {
 
     /** Flags whose fields this builder can fill; the others are declared false and always null. */
     static final List<String> IMPLEMENTED = Collections.unmodifiableList(Arrays.asList(
-            "poison", "player_progress", "day_night", "passed_seats", "pending_triggers", "keywords", "full_name", "stack_text"));
+            "poison", "designations", "player_progress", "day_night", "passed_seats", "pending_triggers", "keywords", "full_name", "stack_text"));
 
     private static final Field TARGET_ZCC = field(TargetImpl.class, "zoneChangeCounters");
     private static final Field LONDON_STARTING = field(LondonMulligan.class, "startingHandSizes");
@@ -223,7 +224,7 @@ public final class ObservationBuilder {
             m.put("mana_pool", manaPool(p));
             m.put("lands_played_this_turn", Math.max(0, p.getLandsPlayed()));
             m.put("mulligans_taken", mulligansTaken(id));
-            m.put("designations", null);
+            m.put("designations", flag("designations") ? designations(p) : null);
             m.put("progress", flag("player_progress") ? progress(p) : null);
             m.put("hand_count", p.getHand().size());
             m.put("library_count", p.getLibrary().size());
@@ -280,6 +281,21 @@ public final class ObservationBuilder {
                 m.put(symbols[i], Math.max(0, wubrgc[i]));
             }
             return m;
+        }
+
+        /** The designations this player has (Section 6.10), in a fixed order. */
+        List<Object> designations(Player p) {
+            List<Object> out = new ArrayList<>();
+            if (p.getId().equals(game.getMonarchId())) {
+                out.add("monarch");
+            }
+            if (p.getId().equals(game.getInitiativeId())) {
+                out.add("initiative");
+            }
+            if (p.hasDesignation(DesignationType.CITYS_BLESSING)) {
+                out.add("city_blessing");
+            }
+            return out;
         }
 
         Map<String, Object> progress(Player p) {
