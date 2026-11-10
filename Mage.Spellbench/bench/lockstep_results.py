@@ -3,16 +3,22 @@
 a natural end in both engines, MageZero's wins, the Archon's wins and draws there, and the divergences (games stopped
 where the engines disagreed, which have no result).
 
-    python lockstep_results.py <root>
+    python lockstep_results.py <root> [<since>]
+
+With <since> (a file or directory), only games started after it was last modified count: those of one build.
 """
 import collections
 import json
+import os
 import pathlib
 import sys
 
 root = pathlib.Path(sys.argv[1])
+since = os.path.getmtime(sys.argv[2]) if len(sys.argv) > 2 else 0
 rows = collections.defaultdict(collections.Counter)
 for path in sorted(root.glob("*/*/*/*/logs/lockstep-games.jsonl")):
+    if path.parent.parent.stat().st_mtime < since:
+        continue
     archon, deck = path.parts[-6], path.parts[-5]
     record = json.loads(path.read_text().splitlines()[0])
     row = rows[(archon, deck)]
