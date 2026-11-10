@@ -33,6 +33,8 @@ final class MageZeroSeat {
     private Deque<UUID> picks;
     /** The combat declaration being given creature by creature. */
     private Move declaration;
+    /** How the kernel's last unanswered priority differed from MageZero's last pass before it. */
+    String mismatch = "";
 
     MageZeroSeat(Deque<Move> moves, Views views) {
         this.moves = moves;
@@ -64,6 +66,10 @@ final class MageZeroSeat {
             case "declare_attack":
             case "declare_block":
                 return declare(decision, kind.equals("declare_attack"));
+            case "arrange_card":
+                return arrange(decision, game);
+            case "order_pick":
+                return order(decision);
             default:
                 throw new LockstepDivergence("XMage asks MageZero nothing for the kernel's " + kind);
         }
@@ -72,13 +78,12 @@ final class MageZeroSeat {
     // ------------------------------------------------------------------ priority
 
     private Integer priority(JsonObject decision) {
-        List<String> lastDiff = null;
         while (!moves.isEmpty()) {
             Move move = moves.peek();
             if (move.kind != Move.Kind.PASS && move.kind != Move.Kind.ACTION) {
                 throw new LockstepDivergence("the kernel asks MageZero priority; its next move in XMage is " + move);
             }
-            List<String> diff = Views.diff(Lockstep.observation(decision), move.view.json);
+            List<String> diff = views.diff(Lockstep.observation(decision), move.view.json);
             if (diff.isEmpty()) {
                 moves.poll();
                 return move.kind == Move.Kind.PASS
@@ -89,10 +94,7 @@ final class MageZeroSeat {
                 throw new LockstepDivergence("MageZero acted in XMage where the kernel asks nothing: " + diff);
             }
             moves.poll(); // a pass where the kernel did not ask
-            lastDiff = diff;
-        }
-        if (lastDiff != null) {
-            Lockstep.note("kernel priority unmatched by MageZero's passes: " + lastDiff);
+            mismatch = diff.toString();
         }
         return null;
     }
@@ -141,6 +143,51 @@ final class MageZeroSeat {
         return candidate(decision, c -> id != null && id.equals(objectId(c)), what);
     }
 
+    /**
+     * A scry or surveil, which the kernel asks card by card and XMage as one selection of the cards that leave the top:
+     * a card MageZero selected takes the other destination, the rest stay on top. Library cards are shown by name.
+     */
+    private Integer arrange(JsonObject decision, Game game) {
+        if (Lockstep.substep(decision) == 0 || selection == null) {
+            selection = next(Move.Kind.TARGETS);
+            if (selection == null) {
+                return null;
+            }
+            picks = new ArrayDeque<>();
+            @SuppressWarnings("unchecked")
+            List<UUID> chosen = (List<UUID>) selection.value;
+            picks.addAll(chosen);
+        }
+        String purpose = Views.text(Lockstep.semantic(decision, 0), "purpose");
+        if (!"scry".equals(purpose) && !"surveil".equals(purpose)) {
+            throw new LockstepDivergence("no XMage counterpart for the kernel's arrange_card for " + purpose);
+        }
+        String name = Views.text(Lockstep.semantic(decision, 0).getAsJsonObject("card"), "card_name");
+        UUID picked = null;
+        for (UUID pick : picks) {
+            if (game.getCard(pick).getName().equals(name)) {
+                picked = pick;
+                break;
+            }
+        }
+        picks.remove(picked);
+        String destination = picked == null ? "top" : "scry".equals(purpose) ? "bottom" : "graveyard";
+        return candidate(decision, c -> destination.equals(Views.text(c, "destination")), name + " to " + destination);
+    }
+
+    /**
+     * An order the kernel asks and XMage makes itself. Cards put in a library are hidden there: the kernel's library
+     * takes XMage's order at the next checkpoint, so any order stands in until then.
+     */
+    private int order(JsonObject decision) {
+        JsonObject item = Lockstep.semantic(decision, 0).getAsJsonObject("item");
+        JsonObject object = item == null ? null : item.getAsJsonObject("object");
+        if (object == null || !"library".equals(Views.text(object, "zone"))) {
+            throw new LockstepDivergence("no XMage counterpart for the kernel's order of " + item);
+        }
+        return 0;
+    }
+
     private interface Match {
         boolean test(JsonObject semantic, Object value);
     }
@@ -173,8 +220,14 @@ final class MageZeroSeat {
         }, "declaration of " + declaration);
     }
 
-    /** MageZero's next move, which must be a {@code kind} dialog; null when it has not answered yet. */
+    /**
+     * MageZero's next move, which must be a {@code kind} dialog; null when it has not answered yet. Passes before it
+     * were at priority windows the kernel does not open (it is asking a dialog now).
+     */
     private Move next(Move.Kind kind) {
+        while (!moves.isEmpty() && moves.peek().kind == Move.Kind.PASS) {
+            moves.poll();
+        }
         Move move = moves.poll();
         if (move != null && move.kind != kind) {
             throw new LockstepDivergence("the kernel asks MageZero a " + kind + " dialog; its next move is " + move);

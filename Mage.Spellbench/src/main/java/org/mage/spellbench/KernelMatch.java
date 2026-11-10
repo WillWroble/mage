@@ -74,7 +74,7 @@ final class KernelMatch implements AutoCloseable {
         logs.mkdirs();
         engine = new NdjsonProcess(settings.engine, new File(logs, gameId + "-engine.log"));
         JsonObject hello = expect(engine.request(PROTOCOL, "hello", minor()), "hello_ok");
-        observationFlags = hello.getAsJsonObject("profile").getAsJsonObject("observation");
+        observationFlags = hello.getAsJsonObject("observation");
         JsonObject reset = new JsonObject();
         reset.addProperty("game_id", gameId);
         reset.add("format", setup.get("format"));
@@ -102,11 +102,11 @@ final class KernelMatch implements AutoCloseable {
         start.add("opponent_deck", null);
         start.add("rules", rules);
         start.add("engine", hello.get("engine"));
-        start.add("engine_profile", hello.get("profile"));
+        start.add("engine_profile", profile(hello));
         start.add("time_control", setup.get("time_control"));
         start.add("limits", setup.get("limits"));
         start.add("resources", setup.get("resources"));
-        start.addProperty("agent_seed", new SecureRandom().nextLong() & Long.MAX_VALUE);
+        start.addProperty("agent_seed", new SecureRandom().nextLong() & ((1L << 53) - 1)); // a JSON-safe integer
         expect(archon.request(PROTOCOL, "game_start", start), "ack");
     }
 
@@ -132,6 +132,7 @@ final class KernelMatch implements AutoCloseable {
     /** Answers the pending decision with one of its candidates. */
     void step(int candidateId) {
         JsonObject decision = decision();
+        trace(decision, candidateId);
         JsonObject selection = new JsonObject();
         selection.addProperty("candidate_id", candidateId);
         selection.add("semantic_echo",
@@ -159,6 +160,22 @@ final class KernelMatch implements AutoCloseable {
                 .getAsJsonObject("selection").get("candidate_id").getAsInt();
     }
 
+    /** One line per step in {@code <logs>/<game>-trace.jsonl}: who decided what, where. */
+    private void trace(JsonObject decision, int candidateId) {
+        JsonObject observation = decision.getAsJsonObject("observation");
+        JsonObject line = new JsonObject();
+        line.add("seat", decision.get("acting_seat"));
+        line.add("turn", observation.get("turn"));
+        line.add("step", observation.get("phase_step"));
+        line.add("chosen", decision.getAsJsonArray("candidates").get(candidateId).getAsJsonObject().get("semantic"));
+        line.addProperty("of", decision.getAsJsonArray("candidates").size());
+        try (java.io.FileWriter out = new java.io.FileWriter(new File(settings.logs, gameId + "-trace.jsonl"), true)) {
+            out.write(line + "\n");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     /** Puts a seat's library in XMage's order (card names, top first) after XMage shuffled it. */
     void arrangeLibrary(String seat, List<String> library) {
         JsonObject arrange = new JsonObject();
@@ -176,6 +193,16 @@ final class KernelMatch implements AutoCloseable {
         if (engine != null) {
             engine.close();
         }
+    }
+
+    /** The engine profile within hello_ok (spec 9.1), as game_start carries it. */
+    private static JsonObject profile(JsonObject hello) {
+        JsonObject profile = new JsonObject();
+        for (String field : new String[]{"rules_supported", "observation", "decision_kinds", "engine_defaults", "rewind",
+                "fairness", "extensions"}) {
+            profile.add(field, hello.get(field));
+        }
+        return profile;
     }
 
     private static JsonObject minor() {

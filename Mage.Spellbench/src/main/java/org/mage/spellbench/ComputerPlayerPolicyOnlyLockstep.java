@@ -61,6 +61,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     transient Function<Game, Views.View> view;
     /** A dialog's own nested calls (one overload calling another) are part of that dialog. */
     private transient int dialogDepth;
+    /** Activations inside another one (its mana payment) are part of it. */
+    private transient int actionDepth;
 
     public ComputerPlayerPolicyOnlyLockstep(String name, RangeOfInfluence range, int skill) {
         super(name, range, skill);
@@ -105,10 +107,15 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     @Override
     public boolean activateAbility(ActivatedAbility ability, Game game) {
         // recorded before it runs: the dialogs it asks (targets, modes, X, costs) are recorded after it, in order
-        if (live(game) && !(ability instanceof PassAbility)) {
+        if (live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0) {
             moves.add(new Move(Move.Kind.ACTION, view.apply(game), ability));
         }
-        return super.activateAbility(ability, game);
+        actionDepth++;
+        try {
+            return super.activateAbility(ability, game);
+        } finally {
+            actionDepth--;
+        }
     }
 
     @Override

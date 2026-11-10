@@ -1,6 +1,7 @@
 package org.mage.spellbench;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -62,14 +63,40 @@ final class Views {
         }
     }
 
+    /** Keeps null fields: the protocol writes every field, null or not. */
+    private static final Gson JSON = new GsonBuilder().serializeNulls().create();
+
+    private static final List<String> STEPS = List.of("untap", "upkeep", "draw", "precombat_main",
+            "beginning_of_combat", "declare_attackers", "declare_blockers", "combat_damage", "end_of_combat",
+            "postcombat_main", "end_step", "cleanup");
+
     private final Map<String, Object> flags;
     private final UUID p0;
     private final UUID p1;
+    private final String startingSeat;
 
-    Views(Map<String, Object> flags, UUID p0, UUID p1) {
+    Views(Map<String, Object> flags, UUID p0, UUID p1, String startingSeat) {
         this.flags = flags;
         this.p0 = p0;
         this.p1 = p1;
+        this.startingSeat = startingSeat;
+    }
+
+    /**
+     * The game turn of a kernel observation. The spec counts both players' turns; mtg-kernel counts each player's
+     * own, so the second player's first turn is its turn 1, the game's turn 2.
+     */
+    int gameTurn(JsonObject kernel) {
+        int turn = kernel.get("turn").getAsInt();
+        return startingSeat.equals(text(kernel, "active_seat")) ? 2 * turn - 1 : 2 * turn;
+    }
+
+    /** The kernel observation's point in the game is earlier than the XMage one's. */
+    boolean before(JsonObject kernel, JsonObject xmage) {
+        int turn = gameTurn(kernel);
+        int other = xmage.get("turn").getAsInt();
+        return turn != other ? turn < other
+                : STEPS.indexOf(text(kernel, "phase_step")) < STEPS.indexOf(text(xmage, "phase_step"));
     }
 
     String seat(UUID playerId) {
@@ -93,7 +120,7 @@ final class Views {
                     objects.put((String) reference.get("object_id"), id);
                 }
             }
-            return new View(new Gson().toJsonTree(observation.json()).getAsJsonObject(), objects);
+            return new View(JSON.toJsonTree(observation.json()).getAsJsonObject(), objects);
         } catch (Exception e) {
             throw new IllegalStateException("projection failed", e);
         }
@@ -121,15 +148,18 @@ final class Views {
     // ------------------------------------------------------------------ comparison
 
     /**
-     * The differences between two observations as game states. Left out: object ids (opaque per engine and
+     * The differences between a kernel observation and an XMage one as game states (the kernel's turn counted as the
+     * game's). Left out: object ids (opaque per engine and
      * viewer), {@code known} and {@code passed_seats} (bookkeeping), each engine's rendering of card text
      * ({@code full_name}, {@code characteristics}), a spell's name on the stack (mtg-kernel names the card, XMage the
      * cast face). A non-modal object without X is {@code modes [0]}, {@code x_value 0} on mtg-kernel and null in the
      * projection. XMage's exile zones have no order, so exile compares by card.
      */
-    static List<String> diff(JsonObject a, JsonObject b) {
+    List<String> diff(JsonObject kernel, JsonObject xmage) {
+        JsonObject game = kernel.deepCopy();
+        game.addProperty("turn", gameTurn(kernel));
         List<String> out = new ArrayList<>();
-        walk("", state(a), state(b), out);
+        walk("", state(game), state(xmage), out);
         return out;
     }
 

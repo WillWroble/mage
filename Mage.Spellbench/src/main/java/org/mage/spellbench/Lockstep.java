@@ -2,14 +2,12 @@ package org.mage.spellbench;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import org.apache.log4j.Logger;
 
 import java.util.Set;
 
 /** Reading a kernel seat decision (spec 7, 8). */
 final class Lockstep {
 
-    private static final Logger logger = Logger.getLogger(Lockstep.class);
     private static final Set<String> PRIORITY = Set.of("pass", "play_land", "cast_spell", "activate_ability",
             "activate_mana_ability", "special_action");
 
@@ -51,7 +49,4 @@ final class Lockstep {
         return group == null || group.isJsonNull() ? 0 : group.getAsJsonObject().get("substep_index").getAsInt();
     }
 
-    static void note(String message) {
-        logger.info("lockstep: " + message);
-    }
 }

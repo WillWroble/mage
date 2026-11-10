@@ -228,7 +228,9 @@ public final class ObservationBuilder {
             m.put("poison", flag("poison") ? p.getCountersCount(CounterType.POISON) : null);
             m.put("counters", null);
             m.put("mana_pool", manaPool(p));
-            m.put("lands_played_this_turn", Math.max(0, p.getLandsPlayed()));
+            // XMage resets a player's count when that player's turn starts: on the other player's turn it is still the
+            // count from the player's own last turn
+            m.put("lands_played_this_turn", id.equals(game.getActivePlayerId()) ? Math.max(0, p.getLandsPlayed()) : 0);
             m.put("mulligans_taken", mulligansTaken(id));
             m.put("designations", flag("designations") ? designations(p) : null);
             m.put("progress", flag("player_progress") ? progress(p) : null);
