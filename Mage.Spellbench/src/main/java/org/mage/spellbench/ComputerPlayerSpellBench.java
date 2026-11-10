@@ -573,10 +573,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         while (true) {
             Pick pick = picks.poll();
             if (pick == null) {
-                JsonObject decision = advance(game, TARGETS);
-                if (decision == null && !target.getTargets().isEmpty() && target.isChosen(game)) {
+                JsonObject next = next(game, TARGETS);
+                if ((next == null || !wanted(next, TARGETS)) && !target.getTargets().isEmpty() && target.isChosen(game)) {
                     return true; // the kernel ended the selection without asking (nothing more to take)
                 }
+                JsonObject decision = advance(game, TARGETS);
                 if (decision == null) {
                     throw new LockstepDivergence("XMage asks the Archon a selection (" + target.getMessage(game) + ", "
                             + target.getClass().getSimpleName() + "); the kernel waits on MageZero");
@@ -587,7 +588,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             if (Views.text(pick.semantic, "kind").startsWith("finish_")) {
                 return target.isChosen(game);
             }
-            UUID chosen = picked(game, pick.view, pick.decision, pick.semantic);
+            UUID chosen = picked(game, pick.view, pick.decision, pick.semantic, target.getTargets());
             if ("sacrifice".equals(Views.text(pick.semantic, "cost_kind"))) {
                 tapBeforeSacrifice(game, chosen);
             }
@@ -651,12 +652,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /** The XMage object (or player) a selection candidate names. */
-    private UUID picked(Game game, Views.View view, JsonObject decision, JsonObject semantic) {
+    private UUID picked(Game game, Views.View view, JsonObject decision, JsonObject semantic, List<UUID> taken) {
         String player = MageZeroSeat.player(semantic);
         if (player != null) {
             return views.player(player);
         }
-        return xmage(game, view, decision, MageZeroSeat.object(semantic));
+        return xmage(game, view, decision, MageZeroSeat.object(semantic), taken);
     }
 
     /**
@@ -755,7 +756,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (into == null) {
             return false;
         }
-        target.addTarget(into, source, game);
+        target.add(into, game); // a declaration targets nothing (XMage's dialog is a target: a hexproof attacker)
         return true;
     }
 
@@ -1039,6 +1040,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /** The XMage object for a kernel object reference in {@code decision}, as this seat's view shows it. */
     private UUID xmage(Game game, Views.View view, JsonObject decision, JsonObject reference) {
+        return xmage(game, view, decision, reference, List.of());
+    }
+
+    /** The same, where a card known by name only (in a library, a hidden hand) is one not already {@code taken}. */
+    private UUID xmage(Game game, Views.View view, JsonObject decision, JsonObject reference, List<UUID> taken) {
         Views.Locator at = Views.locate(Lockstep.observation(decision), Views.text(reference, "object_id"));
         String zone = Views.text(reference, "zone");
         if ("library".equals(zone) || at == null && "hand".equals(zone)) {
@@ -1046,7 +1052,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             // shown by name only: any card of that name there
             Player owner = game.getPlayer(views.player(Views.text(reference, "owner_seat")));
             for (Card card : "library".equals(zone) ? owner.getLibrary().getCards(game) : owner.getHand().getCards(game)) {
-                if (card.getName().equals(Views.text(reference, "card_name"))) {
+                if (card.getName().equals(Views.text(reference, "card_name")) && !taken.contains(card.getId())) {
                     return card.getId();
                 }
             }
