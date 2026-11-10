@@ -186,6 +186,14 @@ final class Views {
                 in = in.deepCopy();
                 in.getAsJsonObject("permanent").remove("summoning_sick");
             }
+            JsonObject permanent = in.has("permanent") && in.get("permanent").isJsonObject()
+                    ? in.getAsJsonObject("permanent") : null;
+            if (permanent != null && permanent.has("blocked_attackers")
+                    && permanent.getAsJsonArray("blocked_attackers").size() == 0) {
+                // a blocker whose attackers left still blocks (CR 506.4), as XMage has it; mtg-kernel drops the flag
+                in = in.deepCopy();
+                in.getAsJsonObject("permanent").remove("blocking");
+            }
             JsonObject out = new JsonObject(); // keys in one order, as the engines write theirs in different ones
             for (String k : new TreeSet<>(in.keySet())) {
                 JsonElement v = in.get(k);
