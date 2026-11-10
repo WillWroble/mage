@@ -4,7 +4,6 @@ import java.awt.Color;
 import java.io.*;
 import java.util.Collection;
 import java.util.Random;
-import java.util.UUID;
 
 /**
  * A thread-safe utility class for random number generation.
@@ -33,62 +32,12 @@ public final class RandomUtil {
     }
 
     /**
-     * Pluggable randomness for reproducible games (Spellbench, X-P1). An embedding that runs one game per process
-     * installs a source that derives every stream from a per-game secret; with none installed, every method here
-     * behaves exactly as before.
-     */
-    public interface Source {
-
-        /** Generator for a draw that names no owner and no purpose. */
-        Random untagged();
-
-        /** Generator for draws over one player's objects, for example that player's library shuffle. */
-        Random forPlayer(UUID playerId, String purpose);
-
-        /** Generator for draws that belong to no player, for example coin flips. */
-        Random shared(String purpose);
-
-        /** Next object id, so that a rerun reproduces every id. */
-        UUID newId();
-    }
-
-    private static volatile Source source;
-
-    /** Installs a source for every following draw, or restores the thread-local generators with null. */
-    public static void setSource(Source newSource) {
-        source = newSource;
-    }
-
-    public static Source getSource() {
-        return source;
-    }
-
-    /** Generator for draws over one player's objects (library order, random cards from a zone of theirs). */
-    public static Random forPlayer(UUID playerId, String purpose) {
-        Source s = source;
-        return s == null ? getRandom() : s.forPlayer(playerId, purpose);
-    }
-
-    /** Generator for public draws that belong to no player (coin flips, die rolls, the starting player). */
-    public static Random shared(String purpose) {
-        Source s = source;
-        return s == null ? getRandom() : s.shared(purpose);
-    }
-
-    /** New id for a game object: from the installed source, else random. */
-    public static UUID newId() {
-        Source s = source;
-        return s == null ? UUID.randomUUID() : s.newId();
-    }
-
-    /**
      * Returns the Random object for the current thread.
      *
      * @return The thread-specific Random instance.
      */
     public static Random getRandom() {
-        Source s = source;
-        return s == null ? threadLocalRandom.get() : s.untagged();
+        return threadLocalRandom.get();
     }
 
     /**
@@ -98,7 +47,7 @@ public final class RandomUtil {
      * @return The next pseudorandom int.
      */
     public static int nextInt() {
-        return getRandom().nextInt();
+        return threadLocalRandom.get().nextInt();
     }
 
     /**
@@ -110,7 +59,7 @@ public final class RandomUtil {
      * @return The next pseudorandom int within the specified bound.
      */
     public static int nextInt(int max) {
-        return getRandom().nextInt(max);
+        return threadLocalRandom.get().nextInt(max);
     }
 
     /**
@@ -120,7 +69,7 @@ public final class RandomUtil {
      * @return The next pseudorandom boolean.
      */
     public static boolean nextBoolean() {
-        return getRandom().nextBoolean();
+        return threadLocalRandom.get().nextBoolean();
     }
 
     /**
@@ -130,7 +79,7 @@ public final class RandomUtil {
      * @return The next pseudorandom double.
      */
     public static double nextDouble() {
-        return getRandom().nextDouble();
+        return threadLocalRandom.get().nextDouble();
     }
 
     /**
@@ -141,7 +90,7 @@ public final class RandomUtil {
     public static Color nextColor() {
         // Note: No need to call RandomUtil.nextInt() here, as it would be redundant.
         // We can directly access the thread's Random instance.
-        Random r = getRandom();
+        Random r = threadLocalRandom.get();
         return new Color(r.nextInt(256), r.nextInt(256), r.nextInt(256));
     }
 
@@ -164,10 +113,6 @@ public final class RandomUtil {
      * @return A randomly selected element, or null if the collection is empty.
      */
     public static <T> T randomFromCollection(Collection<T> collection) {
-        return randomFromCollection(collection, getRandom());
-    }
-
-    public static <T> T randomFromCollection(Collection<T> collection, Random generator) {
         if (collection == null || collection.isEmpty()) {
             return null;
         }
@@ -175,7 +120,8 @@ public final class RandomUtil {
             return collection.iterator().next();
         }
 
-        int rand = generator.nextInt(collection.size());
+        // Use the thread-local random instance for the selection
+        int rand = nextInt(collection.size());
         int count = 0;
         for (T current : collection) {
             if (count == rand) {
