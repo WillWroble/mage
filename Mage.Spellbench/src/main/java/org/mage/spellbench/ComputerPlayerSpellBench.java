@@ -26,7 +26,9 @@ import mage.target.Target;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +56,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** The Archon's seat in the kernel; MageZero's is p0. */
     private static final String SEAT = "p1";
     private static final String OTHER = "p0";
+    /** The kernel's decisions in casting a spell that XMage asks before the cost. */
+    private static final Set<String> CAST = Set.of("choose_target", "choose_cast_method");
     private static final Set<String> TARGETS = Set.of("choose_target", "select_object", "choose_cost_target",
             "finish_selection");
 
@@ -64,10 +68,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient boolean over;
     /** The current combat declaration: each of the Archon's creatures with what it attacks or blocks (null: none). */
     private transient Map<UUID, UUID> declaration;
-    /** The Archon's cast being done in XMage: its method answers XMage's choice of an alternative cost. */
-    private transient JsonObject casting;
-    /** A selection's first pick, which the Archon made to answer XMage's yes/no before the selection. */
-    private transient Pick pendingPick;
+    /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel. */
+    private transient ActivatedAbility acting;
+    /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
+     * the targets of a cast whose cost XMage asks first. */
+    private final transient Deque<Pick> picks = new ArrayDeque<>();
     private transient String gameId;
     private transient Game game;
 
@@ -150,14 +155,30 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /**
      * Steps the kernel until it asks the Archon a decision of one of {@code kinds} (null: priority), feeding MageZero's
-     * moves to its seat. A decision only the kernel asks goes to the Archon on the way. Null when the kernel waits on
-     * a move MageZero has not made, or, asked for priority, when the kernel is past it at one of the Archon's dialogs.
+     * moves to its seat. Null when the kernel waits on a move MageZero has not made, or, asked for priority, when the
+     * kernel is past it at one of the Archon's dialogs.
      */
     private JsonObject advance(Game game, Set<String> kinds) {
+        JsonObject decision = next(game, kinds);
+        if (decision == null || wanted(decision, kinds)) {
+            return decision;
+        }
+        if (kinds == null && !Lockstep.isPriority(decision)) {
+            return null; // the kernel is past this priority, at a dialog of the Archon's that XMage asks later
+        }
+        throw new LockstepDivergence("XMage asks the Archon " + (kinds == null ? "priority" : kinds)
+                + "; the kernel asks it " + Lockstep.firstKind(decision));
+    }
+
+    /**
+     * Steps the kernel until it asks the Archon a decision XMage asks too, feeding MageZero's moves to its seat; a
+     * decision only the kernel asks goes to the Archon on the way, unless it is one of {@code kinds}. Null when the
+     * kernel waits on a move MageZero has not made.
+     */
+    private JsonObject next(Game game, Set<String> kinds) {
         while (kernel.terminal() == null) {
             JsonObject decision = kernel.decision();
-            boolean wanted = SEAT.equals(kernel.actingSeat()) && (kinds == null ? Lockstep.isPriority(decision)
-                    : kinds.contains(Lockstep.firstKind(decision)));
+            boolean wanted = wanted(decision, kinds);
             if (decision.getAsJsonArray("candidates").size() == 1 && !wanted) {
                 kernel.step(0); // forced: one candidate, whoever is asked (an engine may make it without asking)
                 continue;
@@ -174,15 +195,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 kernel.step(candidate);
                 continue;
             }
-            if (wanted) {
+            if (wanted || !kernelOnly(decision)) {
                 return decision;
-            }
-            if (kinds == null && !kernelOnly(decision)) {
-                return null; // the kernel is past this priority, at a dialog of the Archon's that XMage asks later
-            }
-            if (Lockstep.isPriority(decision) || !kernelOnly(decision)) {
-                throw new LockstepDivergence("XMage asks the Archon " + (kinds == null ? "priority" : kinds)
-                        + "; the kernel asks it " + Lockstep.firstKind(decision));
             }
             kernel.step(kernel.archonChoice());
         }
@@ -190,6 +204,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             throw new LockstepDivergence("the kernel's game ended while XMage's goes on: " + kernel.terminal());
         }
         return null;
+    }
+
+    /** The Archon's decision of one of {@code kinds} (null: priority). */
+    private boolean wanted(JsonObject decision, Set<String> kinds) {
+        return SEAT.equals(kernel.actingSeat()) && (kinds == null ? Lockstep.isPriority(decision)
+                : kinds.contains(Lockstep.firstKind(decision)));
     }
 
     /** A decision XMage makes itself: the order of cards it moves together, an effect's option XMage has no dialog for. */
@@ -244,13 +264,17 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             return false;
         }
         ActivatedAbility ability = playable(game, view, decision, semantic);
-        casting = semantic;
+        acting = ability;
         try {
             if (!activateAbility(ability, game)) {
                 throw new LockstepDivergence("XMage refused the Archon's " + semantic);
             }
+            if (!picks.isEmpty()) {
+                throw new LockstepDivergence("XMage asks no target for the Archon's " + picks.peek().semantic);
+            }
         } finally {
-            casting = null;
+            acting = null;
+            picks.clear();
         }
         return true;
     }
@@ -289,8 +313,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** A selection, pick by pick as the kernel asks it (its finish ends it early). */
     private boolean select(Game game, Target target, Ability source) {
         while (true) {
-            Pick pick = pendingPick;
-            pendingPick = null;
+            Pick pick = picks.poll();
             if (pick == null) {
                 JsonObject decision = advance(game, TARGETS);
                 if (decision == null) {
@@ -415,7 +438,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (kind.startsWith("finish_")) {
             return false;
         }
-        pendingPick = new Pick(decision, semantic, view);
+        picks.add(new Pick(decision, semantic, view));
         return true;
     }
 
@@ -434,9 +457,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     @Override
     public boolean chooseHelper(Outcome outcome, Choice choice, Game game) {
-        if (casting != null && choice.isKeyChoice()) {
+        if (acting instanceof SpellAbility && choice.isKeyChoice()) {
             return guard(game, () -> {
-                choice.setChoiceByKey(cost(choice));
+                choice.setChoiceByKey(cost(game, choice));
                 return true;
             }, false);
         }
@@ -448,16 +471,28 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /**
-     * XMage's key for the cost the Archon casts with: XMage keys a spell's alternative costs from 1, then the cast
-     * without one. A single alternative is all the kernel's cast method can name.
+     * XMage's key for the cost the Archon casts with. XMage asks it first, keying a spell's alternative costs from 1,
+     * then the cast without one; the kernel asks the Archon's targets first, then how it pays, and only when it can pay
+     * both ways. So the kernel's cast is run through here, its targets kept for XMage's target dialogs; when the kernel
+     * does not ask, only one way is payable and XMage's choice is forced: the regular cost if the Archon can pay it.
      */
-    private String cost(Choice choice) {
+    private String cost(Game game, Choice choice) {
         if (choice.getKeyChoices().size() != 2) {
-            throw new LockstepDivergence("XMage offers the Archon's " + casting + " the costs "
-                    + choice.getKeyChoices().values());
+            throw new LockstepDivergence("XMage offers the Archon's cast the costs " + choice.getKeyChoices().values());
         }
-        JsonElement method = casting.get("method");
-        return method == null || method.isJsonNull() ? "2" : "1";
+        while (true) {
+            JsonObject decision = next(game, CAST);
+            String kind = decision == null ? null : Lockstep.firstKind(decision);
+            if ("choose_target".equals(kind)) {
+                Views.View view = views.view(game, SEAT);
+                picks.add(new Pick(decision, archon(), view));
+                continue;
+            }
+            if ("choose_cast_method".equals(kind)) {
+                return "alternative".equals(Views.text(archon(), "method")) ? "1" : "2";
+            }
+            return canPayMinimumManaCost(acting, getManaAvailable(game), game) ? "2" : "1";
+        }
     }
 
     /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */

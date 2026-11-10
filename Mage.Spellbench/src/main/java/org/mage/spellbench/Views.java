@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -184,10 +185,9 @@ final class Views {
                 in = in.deepCopy();
                 in.getAsJsonObject("permanent").remove("summoning_sick");
             }
-            JsonObject out = new JsonObject();
-            for (Map.Entry<String, JsonElement> entry : in.entrySet()) {
-                String k = entry.getKey();
-                JsonElement v = entry.getValue();
+            JsonObject out = new JsonObject(); // keys in one order, as the engines write theirs in different ones
+            for (String k : new TreeSet<>(in.keySet())) {
+                JsonElement v = in.get(k);
                 if (k.equals("object_id") || k.equals("known") || k.equals("passed_seats") || k.equals("full_name")
                         || k.equals("characteristics") || !combat && COMBAT_FIELDS.contains(k)
                         || k.equals("card_name") && in.has("stack_kind") && "spell".equals(text(in, "stack_kind"))) {
