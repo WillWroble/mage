@@ -51,6 +51,27 @@ First cycle (32 games, builds 89c41783 to bae332d2), plus debugging reruns: 38 g
 (Elves' Generous Ent), CawGates' card names, a stack ability's source after it left (Cryogen Relic), MageZero's
 priority round after a resolution, the Archon's mana colors (Spy's Lotus Petal).
 
+### 2026-11-10, one build: 35f36f5b, two schedule cycles (64 games)
+
+    archon  deck      games  full MageZero Archon diverged
+    g115    Affinity      8     3        3      0        5
+    g115    Burn          8     4        1      3        4
+    g115    CawGates      8     1        1      0        7
+    g115    Elves         8     0        0      0        8
+    g115    Faeries       8     2        2      0        6
+    g115    Rally         8     5        2      3        3
+    g115    Spy           8     4        4      0        4
+    g115    Wildfire      8     3        3      0        5
+    g115    all          64    22       16      6       42
+
+Completion 34%. Stops: Of One Mind (kernel bug) 9, XMage past the kernel's priority for the Archon 8, XMage past the
+kernel's decision for MageZero 3, kernel halts 3, others 19. Win rates on finished games are biased by which games
+finish (see the analysis in the session); not a strength estimate yet.
+
+Speed: each game spent ~32 of its ~36 s rebuilding XMage's card database (the per-game copy was built by an older
+jar). A database built once by the current jar and copied per game loads without rebuilding and with every deck card
+(checked); a full game now takes ~20-25 s including the JVM.
+
 Rules disagreements seen in earlier runs (counted as divergences, not worked around):
 - Of One Mind: XMage casts it reduced to {U} with a Human and a non-Human; the kernel does not see Humbling Elder as a
   Human (its card data has `Subtype::HumanAllCaps`; Of One Mind checks `Subtype::Human`), so no reduction.
