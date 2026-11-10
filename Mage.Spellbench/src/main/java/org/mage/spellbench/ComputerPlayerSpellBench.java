@@ -304,8 +304,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         boolean last = group == null || group.isJsonNull() || group.getAsJsonObject().get("substep_index").getAsInt() + 1
                 >= group.getAsJsonObject().get("substep_count").getAsInt();
         String purpose = partition.get(0)[2];
-        // XMage asks a dig only when a card's destination is a choice (Lead the Stampede, not Winding Way)
-        if (!last || !Set.of("scry", "surveil", "dig").contains(purpose) || purpose.equals("dig") && !destinationChosen) {
+        if (!last || !Set.of("scry", "surveil", "dig").contains(purpose)) {
             return;
         }
         // each destination's cards in the kernel's order: its picks, then the implied last card
@@ -321,7 +320,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         List<String> moved = new ArrayList<>();
         partition.stream().filter(c -> purpose.equals("dig") ? c[1].equals("hand") : !c[1].equals("top"))
                 .forEach(c -> moved.add(c[0]));
-        arrangement.add(moved);
+        if (!purpose.equals("dig") || destinationChosen) { // XMage asks a dig's picks only when they are a choice
+            arrangement.add(moved);
+        }
         List<String> bottom = by.getOrDefault("bottom", List.of());
         for (int i = 0; i < bottom.size() - 1; i++) {
             arrangement.add(List.of(bottom.get(i)));
