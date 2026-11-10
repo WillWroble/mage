@@ -66,7 +66,8 @@ final class MageZeroSeat {
                         (c, v) -> Objects.equals(bool(c), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
             case "choose_option":
                 return value(decision, Move.Kind.USE,
-                        (c, v) -> Objects.equals(Lockstep.may(c), ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
+                        (c, v) -> Objects.equals(Lockstep.may(c, ((ComputerPlayerPolicyOnlyLockstep.Use) v).trueText),
+                                ((ComputerPlayerPolicyOnlyLockstep.Use) v).value));
             case "choose_cost_option":
                 return value(decision, Move.Kind.USE,
                         (c, v) -> Lockstep.names(((ComputerPlayerPolicyOnlyLockstep.Use) v).option, Views.text(c, "choice")));

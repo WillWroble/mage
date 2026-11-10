@@ -264,7 +264,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private void step(int candidate) {
         JsonObject decision = kernel.decision();
         if (seat.equals(kernel.actingSeat())) {
-            arranged(decision, Lockstep.semantic(decision, candidate));
+            JsonObject chosen = Lockstep.semantic(decision, candidate);
+            arranged(decision, chosen);
+            if ("choose_option".equals(Views.text(chosen, "kind"))) {
+                later.add(chosen); // an effect's option, which XMage may ask after the kernel ran on (Winding Way)
+            }
         }
         for (JsonElement p : Lockstep.isPriority(decision) ? Lockstep.observation(decision).getAsJsonArray("players")
                 : new JsonArray()) {
@@ -711,6 +715,12 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      * then answers XMage's selection.
      */
     private boolean use(Game game, String trueText) {
+        for (JsonObject option : later) {
+            if ("choose_option".equals(Views.text(option, "kind"))) {
+                later.remove(option);
+                return answerUse(option, trueText);
+            }
+        }
         JsonObject decision = next(game, USE);
         if (decision == null || !wanted(decision, USE)) {
             // the kernel has passed this point (it waits on MageZero, or asks the Archon something later): it offers an
@@ -729,11 +739,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             return bool;
         }
         if (kind.equals("choose_option")) {
-            Boolean may = Lockstep.may(semantic);
-            if (may == null) {
-                throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel asks it " + semantic);
-            }
-            return may;
+            later.remove(semantic); // kept as it was stepped, and answered here
+            return answerUse(semantic, trueText);
         }
         if (kind.equals("choose_cost_option")) { // XMage asks a choice of two costs as yes: the first, no: the second
             return Lockstep.names(trueText, Views.text(semantic, "choice"));
@@ -743,6 +750,15 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
         picks.add(new Pick(decision, semantic, view));
         return true;
+    }
+
+    /** XMage's yes/no as the Archon's effect option answers it. */
+    private static boolean answerUse(JsonObject option, String trueText) {
+        Boolean may = Lockstep.may(option, trueText);
+        if (may == null) {
+            throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel asks it " + option);
+        }
+        return may;
     }
 
     @Override

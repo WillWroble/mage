@@ -61,14 +61,19 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         }
     }
 
-    /** A yes/no answer, with the text of the option it names when the dialog names its options (a choice of costs). */
+    /**
+     * A yes/no answer, with the text of the option it names and of the yes option, when the dialog names its options (a
+     * choice of costs, Winding Way's "Creature" or "Land").
+     */
     static final class Use {
         final boolean value;
         final String option;
+        final String trueText;
 
-        Use(boolean value, String option) {
+        Use(boolean value, String option, String trueText) {
             this.value = value;
             this.option = option;
+            this.trueText = trueText;
         }
 
         @Override
@@ -246,7 +251,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
                              Ability source, Game game) {
         return dialog(game, Move.Kind.USE,
                 () -> super.chooseUse(outcome, message, secondMessage, trueText, falseText, source, game),
-                r -> new Use(r, r ? trueText : falseText));
+                r -> new Use(r, r ? trueText : falseText, trueText));
     }
 
     @Override

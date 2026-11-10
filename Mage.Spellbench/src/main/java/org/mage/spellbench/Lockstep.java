@@ -60,11 +60,15 @@ final class Lockstep {
     }
 
     /**
-     * The yes/no an effect option answers: the kernel programs an optional effect ("you may draw a card") as an
-     * unlabelled option between doing nothing, first, and doing it. Null for any other option.
+     * The yes/no an effect option answers; null for an option not of two. The kernel's options are unlabelled, in the
+     * card's program order: an optional effect ("you may draw a card") is doing nothing, first, then doing it, so yes is
+     * the second; options XMage names (Winding Way's "Creature" or "Land") are the card's printed ones in its printed
+     * order, so yes, the first named, is the first.
      */
-    static Boolean may(JsonObject semantic) {
-        return semantic.get("option_count").getAsInt() == 2 ? semantic.get("option_index").getAsInt() == 1 : null;
+    static Boolean may(JsonObject semantic, String option) {
+        boolean named = option != null && !option.equalsIgnoreCase("yes") && !option.equalsIgnoreCase("no");
+        return semantic.get("option_count").getAsInt() == 2
+                ? semantic.get("option_index").getAsInt() == (named ? 0 : 1) : null;
     }
 
     /** A priority decision: its candidates are actions and pass. */
