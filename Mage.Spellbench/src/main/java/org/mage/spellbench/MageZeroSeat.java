@@ -13,7 +13,6 @@ import mage.game.Game;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -37,14 +36,15 @@ final class MageZeroSeat {
     private int kept;
     /** The combat declaration being given creature by creature. */
     private Move declaration;
-    /** MageZero's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
-    final List<UUID> blockers = new ArrayList<>();
+    /** This combat's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
+    private final List<UUID> blockers;
     /** How the kernel's last unanswered priority differed from MageZero's last pass before it. */
     String mismatch = "";
 
-    MageZeroSeat(Deque<Move> moves, Views views) {
+    MageZeroSeat(Deque<Move> moves, Views views, List<UUID> blockers) {
         this.moves = moves;
         this.views = views;
+        this.blockers = blockers;
     }
 
     /** The candidate MageZero's moves answer {@code decision} with, or null when MageZero has not reached it. */

@@ -63,6 +63,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** The Archon's seat in the kernel; MageZero's is p0. */
     private static final String SEAT = "p1";
     private static final String OTHER = "p0";
+    /** The kernel's decisions that answer an XMage yes/no. */
+    private static final Set<String> USE = Set.of("choose_boolean", "optional_cost", "optional_cast",
+            "choose_cost_option", "choose_option", "select_object", "choose_target");
     /** The kernel's decisions in casting a spell that XMage asks before the cost. */
     private static final Set<String> CAST = Set.of("choose_target", "choose_cast_method");
     private static final Set<String> TARGETS = Set.of("choose_target", "select_object", "choose_cost_target",
@@ -77,6 +80,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient List<String> passedAt = List.of();
     /** The current combat declaration: each of the Archon's creatures with what it attacks or blocks (null: none). */
     private transient Map<UUID, UUID> declaration;
+    /** This combat's blockers, either seat's, in the order the kernel declared them: its order of combat damage. */
+    private final transient List<UUID> blockers = new ArrayList<>();
     /** The Archon's action being done in XMage, whose dialogs are its cast in the kernel. */
     private transient ActivatedAbility acting;
     /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
@@ -141,7 +146,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         flags.put("known_cards", false); // knowledge is not compared, so the projection leaves it out
         views = new Views(flags, other.getId(), playerId, starting);
         policy.view = g -> views.view(g, OTHER);
-        mageZero = new MageZeroSeat(policy.moves, views);
+        policy.blockOrder = blockers;
+        mageZero = new MageZeroSeat(policy.moves, views, blockers);
     }
 
     /** A seat's opening hand then its library, top first: the order the kernel deals from. */
@@ -408,6 +414,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             declaration = new HashMap<>();
             boolean attack = source instanceof ChooseToAttackAbility;
             String kind = attack ? "declare_attack" : "declare_block";
+            if (!attack) {
+                blockers.clear();
+            }
             do {
                 JsonObject decision = next(game, Set.of(kind));
                 if (decision == null || !wanted(decision, Set.of(kind))) {
@@ -424,6 +433,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 JsonObject semantic = archon();
                 UUID creature = xmage(game, view, decision, semantic.getAsJsonObject(attack ? "attacker" : "blocker"));
                 JsonElement into = semantic.get(attack ? "defender" : "attacker");
+                if (!attack && !into.isJsonNull()) {
+                    blockers.add(creature);
+                }
                 declaration.put(creature, into.isJsonNull() ? null
                         : attack ? views.player(Views.text(into.getAsJsonObject(), "player"))
                         : xmage(game, view, decision, into.getAsJsonObject()));
@@ -464,11 +476,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      * then answers XMage's selection.
      */
     private boolean use(Game game, String trueText) {
-        JsonObject decision = advance(game, Set.of("choose_boolean", "optional_cost", "optional_cast",
-                "choose_cost_option", "choose_option", "select_object", "choose_target"));
-        if (decision == null) {
-            // the kernel waits on MageZero, so it has passed this point: it offers an option only when it can be taken
-            // (a payment the Archon can make), and did not offer this one
+        JsonObject decision = next(game, USE);
+        if (decision == null || !wanted(decision, USE)) {
+            // the kernel has passed this point (it waits on MageZero, or asks the Archon something later): it offers an
+            // option only when it can be taken (a payment the Archon can make), and did not offer this one
+            if (decision != null && views.before(Lockstep.observation(decision), views.view(game, SEAT).json)) {
+                throw new LockstepDivergence("XMage asks the Archon yes/no; the kernel asks it "
+                        + Lockstep.firstKind(decision) + " before");
+            }
             return false;
         }
         Views.View view = views.view(game, SEAT);
@@ -549,44 +564,54 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
     }
 
-    /**
-     * The only division XMage asks the Archon is its combat damage among blockers, which the kernel assigns itself
-     * (spec 7.6, {@code engine_order}): lethal damage to each blocker in the order the kernel declared them, the rest
-     * to the last, or with trample to the defender.
-     */
+    /** Combat damage among blockers, which the kernel assigns itself: see {@link #engineOrder}. */
     @Override
     public List<Integer> getMultiAmountWithIndividualConstraints(Outcome outcome, List<MultiAmountMessage> messages,
                                                                  int totalMin, int totalMax, MultiAmountType type,
                                                                  Game game) {
         return guard(game, () -> {
-            List<CombatGroup> groups = new ArrayList<>();
-            for (CombatGroup group : game.getCombat().getGroups()) {
-                if (group.getBlockers().size() == messages.size()
-                        && playerId.equals(game.getControllerId(group.getAttackers().get(0)))) {
-                    groups.add(group);
-                }
-            }
-            if (game.getTurnStepType() != PhaseStep.COMBAT_DAMAGE || groups.size() != 1
-                    || !mageZero.blockers.containsAll(groups.get(0).getBlockers())) {
+            List<Integer> amounts = engineOrder(game, playerId, blockers, messages.size(), totalMax);
+            if (amounts == null) {
                 throw new LockstepDivergence("XMage asks the Archon a division the kernel does not: " + type);
             }
-            List<UUID> blockers = groups.get(0).getBlockers();
-            Permanent attacker = game.getPermanent(groups.get(0).getAttackers().get(0));
-            boolean trample = attacker.getAbilities().containsKey(TrampleAbility.getInstance().getId());
-            List<UUID> order = new ArrayList<>(mageZero.blockers);
-            order.retainAll(blockers);
-            Map<UUID, Integer> damage = new HashMap<>();
-            int remaining = totalMax;
-            for (UUID blocker : order) {
-                int lethal = game.getPermanent(blocker).getLethalDamage(attacker.getId(), game);
-                int assigned = trample || !blocker.equals(order.get(order.size() - 1)) ? Math.min(remaining, lethal) : remaining;
-                damage.put(blocker, assigned);
-                remaining -= assigned;
-            }
-            List<Integer> amounts = new ArrayList<>();
-            blockers.forEach(blocker -> amounts.add(damage.get(blocker)));
             return amounts;
         }, MultiAmountType.prepareDefaultValues(messages, totalMin, totalMax));
+    }
+
+    /**
+     * The only division XMage asks a player of the lockstep game: the combat damage of its attacker among blockers,
+     * which the kernel assigns itself (spec 7.6, {@code engine_order}): lethal damage to each blocker in the order the
+     * blocks were declared there, the rest to the last, or with trample to the defender. In XMage's order of the
+     * blockers; null when XMage's division is not that.
+     */
+    static List<Integer> engineOrder(Game game, UUID attacking, List<UUID> blockOrder, int blockerCount, int damage) {
+        List<CombatGroup> groups = new ArrayList<>();
+        for (CombatGroup group : game.getCombat().getGroups()) {
+            if (group.getBlockers().size() == blockerCount
+                    && attacking.equals(game.getControllerId(group.getAttackers().get(0)))) {
+                groups.add(group);
+            }
+        }
+        if (game.getTurnStepType() != PhaseStep.COMBAT_DAMAGE || groups.size() != 1
+                || !blockOrder.containsAll(groups.get(0).getBlockers())) {
+            return null;
+        }
+        List<UUID> blockers = groups.get(0).getBlockers();
+        Permanent attacker = game.getPermanent(groups.get(0).getAttackers().get(0));
+        boolean trample = attacker.getAbilities().containsKey(TrampleAbility.getInstance().getId());
+        List<UUID> order = new ArrayList<>(blockOrder);
+        order.retainAll(blockers);
+        Map<UUID, Integer> assigned = new HashMap<>();
+        int remaining = damage;
+        for (UUID blocker : order) {
+            int lethal = game.getPermanent(blocker).getLethalDamage(attacker.getId(), game);
+            int amount = trample || !blocker.equals(order.get(order.size() - 1)) ? Math.min(remaining, lethal) : remaining;
+            assigned.put(blocker, amount);
+            remaining -= amount;
+        }
+        List<Integer> amounts = new ArrayList<>();
+        blockers.forEach(blocker -> amounts.add(assigned.get(blocker)));
+        return amounts;
     }
 
     /** The Archon's answer to the kernel's next decision of {@code kind}, for XMage's {@code dialog}. */

@@ -8,6 +8,7 @@ import mage.abilities.TriggeredAbility;
 import mage.abilities.common.PassAbility;
 import mage.cards.Cards;
 import mage.choices.Choice;
+import mage.constants.MultiAmountType;
 import mage.constants.Outcome;
 import mage.constants.PhaseStep;
 import mage.constants.RangeOfInfluence;
@@ -17,6 +18,7 @@ import mage.player.ai.ComputerPlayerPolicyOnly;
 import mage.target.Target;
 import mage.target.TargetAmount;
 import mage.target.TargetCard;
+import mage.util.MultiAmountMessage;
 
 import java.io.Serializable;
 import java.util.ArrayDeque;
@@ -79,6 +81,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     final transient Deque<Move> moves = new ArrayDeque<>();
     /** The game as this seat sees it, written as the kernel's observation; set by the relay when its game starts. */
     transient Function<Game, Views.View> view;
+    /** This combat's blockers in the kernel's order, which divides combat damage; set by the relay. */
+    transient List<UUID> blockOrder;
     /** A dialog's own nested calls (one overload calling another) are part of that dialog. */
     private transient int dialogDepth;
     /** Activations inside another one (its mana payment) are part of it. */
@@ -267,6 +271,17 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     }
 
     // ------------------------------------------------------------------ combat
+
+    /** The lockstep game's rules: combat damage among blockers is divided as the kernel divides it (no decision). */
+    @Override
+    public List<Integer> getMultiAmountWithIndividualConstraints(Outcome outcome, List<MultiAmountMessage> messages,
+                                                                 int totalMin, int totalMax, MultiAmountType type,
+                                                                 Game game) {
+        List<Integer> amounts = live(game) ? ComputerPlayerSpellBench.engineOrder(game, playerId, blockOrder,
+                messages.size(), totalMax) : null;
+        return amounts != null ? amounts : super.getMultiAmountWithIndividualConstraints(outcome, messages, totalMin,
+                totalMax, type, game);
+    }
 
     @Override
     public void selectAttackers(Game game, UUID attackingPlayerId) {
