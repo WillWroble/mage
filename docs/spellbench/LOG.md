@@ -38,6 +38,19 @@ Same setup with the Archon g115 (`archon-3-pauper`, model state 8139016c...) pil
 - Batch of 6 on b030aa3d: 4 full games (MageZero 3, g115 1), 2 divergences, both the Of One Mind kernel bug (once as
   the missing cast, once as the kernel charging full cost and leaving MageZero no mana for its next spell).
 
+### 2026-11-10, benchmark schedule: g115 across the 8 Pauper decks, both seats
+
+MageZero (ver15) pilots Faeries; g115 pilots each of the 8 `pauper-kernel` decks (our deck files match the board's
+lists card for card; CawGates' double-faced card is named by its front face in XMage and the native kernel). Each
+deck is played in both kernel seats and both turn orders (`goes_first`), two games at a time, from a build snapshot
+that is refreshed between games as fixes land, so early games ran on older builds. Results:
+`python Mage.Spellbench/bench/lockstep_results.py <bench root>`.
+
+First cycle (32 games, builds 89c41783 to bae332d2), plus debugging reruns: 38 games, 4 full (MageZero 3, g115 1),
+34 divergences. Fixed from them: the Archon's mana payment (Affinity's bridges), library order after a shuffle
+(Elves' Generous Ent), CawGates' card names, a stack ability's source after it left (Cryogen Relic), MageZero's
+priority round after a resolution, the Archon's mana colors (Spy's Lotus Petal).
+
 Rules disagreements seen in earlier runs (counted as divergences, not worked around):
 - Of One Mind: XMage casts it reduced to {U} with a Human and a non-Human; the kernel does not see Humbling Elder as a
   Human (its card data has `Subtype::HumanAllCaps`; Of One Mind checks `Subtype::Human`), so no reduction.
