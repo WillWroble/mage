@@ -702,7 +702,11 @@ public final class ObservationBuilder {
                 // the card in its new zone, which is no longer the object the ability works from
                 MageObject source = sa.getSourceObjectIfItStillExists(game);
                 Zone from = sa.getStackAbility().getZone();
-                if (source != null && (from == null || from == Zone.ALL || from == game.getState().getZone(source.getId()))) {
+                boolean left = sa.getStackAbility() instanceof TriggeredAbility // a dies trigger's source left
+                        && ((TriggeredAbility) sa.getStackAbility()).isLeavesTheBattlefieldTrigger()
+                        && source != null && game.getState().getZone(source.getId()) != Zone.BATTLEFIELD;
+                if (source != null && !left
+                        && (from == null || from == Zone.ALL || from == game.getState().getZone(source.getId()))) {
                     Map<String, Object> ref = held.get(source.getId());
                     e.put("source", ref == null ? null : new LinkedHashMap<>(ref));
                 }
