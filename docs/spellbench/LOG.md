@@ -29,6 +29,15 @@ Guttersnipe/end-step mismatch, a draw-step mismatch). Earlier batch on 8c4866bb:
 three times successfully. Full games so far: 10 (41, 45, 53, 62-64, 67-69, 71): one Archon win (53), nine MageZero
 wins; the winner was the same in both engines every time.
 
+### 2026-11-10, against g115 (Archon 3), commits ed292649 and b030aa3d
+
+Same setup with the Archon g115 (`archon-3-pauper`, model state 8139016c...) piloting Burn.
+- First batch of 6 (ed292649's predecessor aa8957a5): 3 full games (g115 2, MageZero 1), 3 divergences: two Ninjas
+  of the Deep Hours swapped when matched across engines (the kernel keeps combat flags past combat), XMage asking a
+  trigger order while the kernel first asked the discard order, Of One Mind (kernel bug).
+- Batch of 6 on b030aa3d: 4 full games (MageZero 3, g115 1), 2 divergences, both the Of One Mind kernel bug (once as
+  the missing cast, once as the kernel charging full cost and leaving MageZero no mana for its next spell).
+
 Rules disagreements seen in earlier runs (counted as divergences, not worked around):
 - Of One Mind: XMage casts it reduced to {U} with a Human and a non-Human; the kernel does not see Humbling Elder as a
   Human (its card data has `Subtype::HumanAllCaps`; Of One Mind checks `Subtype::Human`), so no reduction.
