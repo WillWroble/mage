@@ -1,0 +1,84 @@
+diff --git a/integrations/mtg_kernel/kernel_engine_v2.py b/integrations/mtg_kernel/kernel_engine_v2.py
+index 0aed6c8..59687a4 100644
+--- a/integrations/mtg_kernel/kernel_engine_v2.py
++++ b/integrations/mtg_kernel/kernel_engine_v2.py
+@@ -38,6 +38,11 @@ PROPOSAL_ENCODING = "integer-rle-table/v1"
+ PREVIEW_CACHE_BYTES = 16 * 1024 * 1024  # response lines; parsed views take several times that
+ 
+ 
++def _library_orders(value):
++    return isinstance(value, list) and len(value) == 2 and all(
++        isinstance(order, list) and all(isinstance(name, str) for name in order) for order in value)
++
++
+ def _plain_ints(values):
+     """True for a list of canonical JSON integers (no bools), whose canonical text is plain ``str(value)``."""
+     return type(values) is list and all(type(value) is int and -wire.MAX_JSON_INT <= value <= wire.MAX_JSON_INT
+@@ -225,7 +230,16 @@ class KernelEngine:
+             return wire.canonical_json_line(error(request_id, "protocol_mismatch", "requires spellbench/v2"))
+         kind = request.get("request_type")
+         types = {"hello": HelloRequest, "reset": ResetRequest, "step": StepRequest, "validate_deck": ValidateDeckRequest}
++        lockstep_orders = None
++        if kind == "x_lockstep_reset":
++            # Spellbench lockstep (private, never an agent or board method): a standard reset whose seats'
++            # library orders come from the host's other engine
++            request = dict(request)
++            lockstep_orders = request.pop("library_orders", None)
++            request["request_type"] = kind = "reset"
+         try:
++            if kind == "reset" and lockstep_orders is not None and not _library_orders(lockstep_orders):
++                raise ValidationError("library_orders must be two lists of card names")
+             if kind in types:
+                 types[kind].from_json(request)
+             elif not request_id or not isinstance(kind, str):
+@@ -240,7 +254,9 @@ class KernelEngine:
+         if kind == "hello":
+             result = {**deepcopy(self.hello), "request_id": request_id}
+         elif kind == "reset":
+-            result = self.reset(request)
++            result = self.reset(request, lockstep_orders)
++        elif kind == "x_lockstep_arrange_library":
++            result = self.arrange_library(request)
+         elif kind == "step":
+             result = self.step(request)
+         elif kind == "validate_deck":
+@@ -256,7 +272,21 @@ class KernelEngine:
+         self.cache = request_id, payload, answer
+         return answer
+ 
+-    def reset(self, request):
++    def arrange_library(self, request):
++        """Spellbench lockstep: a seat's library in the host's order (card names, top first) after the host's
++        other engine shuffled it."""
++        rid = request["request_id"]
++        if not self.game or request.get("game_id") != self.game or request.get("seat") not in ("p0", "p1") \
++                or not _library_orders([request.get("library"), []]):
++            return error(rid, "malformed_request", "requires the active game, a seat and a library order")
++        seat = "p0" if request["seat"] == self.rules["starting_seat"] else "p1"
++        answer = self.peer.request({"request_type": "arrange_library", "game_id": self.game, "seat": seat,
++                                    "library": request["library"]})
++        if answer["response_type"] != "library_arranged":
++            return error(rid, "malformed_request", answer["error"]["message"])
++        return {"protocol": "spellbench/v2", "response_type": "library_arranged", "request_id": rid}
++
++    def reset(self, request, library_orders=None):
+         rid = request["request_id"]
+         if request["game_id"] in self.used:
+             return error(rid, "malformed_request", "game id was already used")
+@@ -295,10 +325,14 @@ class KernelEngine:
+         self.native_group = None
+         self.history = PublicHistory()
+         seats = request["seats"] if first == "p0" else list(reversed(request["seats"]))
+-        self.current = self.peer.request({"request_type": "reset", "game_id": self.game, "format": "pauper-bo1",
++        native = {"request_type": "reset", "game_id": self.game, "format": "pauper-bo1",
+             "seats": [{"seat": f"p{i}", "deck": {"catalog_id": entry["deck"]["catalog_id"]}} for i, entry in enumerate(seats)],
+             "game_seed": int.from_bytes(hmac.new(secret, b"spellbench-kernel-v2/rng", hashlib.sha256).digest()[:8], "little"),
+-            "max_decisions": (1 << 53) - 1, "max_steps": (1 << 53) - 1})
++            "max_decisions": (1 << 53) - 1, "max_steps": (1 << 53) - 1}
++        if library_orders is not None:
++            by_seat = {entry["seat"]: order for entry, order in zip(request["seats"], library_orders)}
++            native["library_orders"] = [by_seat[entry["seat"]] for entry in seats]
++        self.current = self.peer.request(native)
+         self.absorb_history()
+         return self.respond(rid)
+ 

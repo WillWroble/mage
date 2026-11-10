@@ -1,0 +1,478 @@
+diff --git a/mtg-kernel/src/agent_bridge_flat_v4.rs b/mtg-kernel/src/agent_bridge_flat_v4.rs
+index 84c73a50..b76940b7 100644
+--- a/mtg-kernel/src/agent_bridge_flat_v4.rs
++++ b/mtg-kernel/src/agent_bridge_flat_v4.rs
+@@ -132,18 +132,38 @@ impl FlatV4LockstepV1 {
+         max_physical_decisions: u64,
+         max_policy_steps: u64,
+         deck_ids: SessionDeckIdsV1,
++        library_orders: Option<[Vec<String>; 2]>,
+     ) -> Result<Self, FlatV4LockstepErrorV1> {
+-        let fast = FastActorSessionV1::reset_with_decks_and_limits_flat_action_v3(
+-            episode_id,
+-            env_seed,
+-            max_physical_decisions,
+-            max_policy_steps,
+-            deck_ids,
+-        )
++        let fast = match library_orders {
++            Some(library_orders) => FastActorSessionV1::reset_with_decks_limits_and_library_orders_flat_action_v3(
++                episode_id,
++                env_seed,
++                max_physical_decisions,
++                max_policy_steps,
++                deck_ids,
++                library_orders,
++            ),
++            None => FastActorSessionV1::reset_with_decks_and_limits_flat_action_v3(
++                episode_id,
++                env_seed,
++                max_physical_decisions,
++                max_policy_steps,
++                deck_ids,
++            ),
++        }
+         .map_err(|error| FlatV4LockstepErrorV1::Reset(error.message))?;
+         Ok(Self { episode_id, fast })
+     }
+ 
++    /// Spellbench lockstep: the same library order as the bridge's session.
++    pub(crate) fn arrange_library_v1(
++        &mut self,
++        player: crate::ids::PlayerId,
++        order: &[String],
++    ) -> Result<(), crate::rl_session::RlSessionError> {
++        self.fast.arrange_library_v1(player, order)
++    }
++
+     pub(crate) fn fast_session(&self) -> &FastActorSessionV1 {
+         &self.fast
+     }
+@@ -321,7 +341,7 @@ mod tests {
+                 )
+                 .unwrap();
+                 let mut lockstep =
+-                    FlatV4LockstepV1::reset(episode_id, seed, 2_000, 200_000, decks).unwrap();
++                    FlatV4LockstepV1::reset(episode_id, seed, 2_000, 200_000, decks, None).unwrap();
+                 let mut rng = SplitMix64::seed(seed ^ 0x5EED);
+                 let mut steps = 0_u64;
+                 loop {
+@@ -346,7 +366,7 @@ mod tests {
+     #[test]
+     fn mirror_step_refuses_a_selection_the_training_list_dropped() {
+         let decks: SessionDeckIdsV1 = ["Burn".to_string(), "Burn".to_string()];
+-        let mut lockstep = FlatV4LockstepV1::reset(5, 5, 400, 4_000, decks).unwrap();
++        let mut lockstep = FlatV4LockstepV1::reset(5, 5, 400, 4_000, decks, None).unwrap();
+         let before = lockstep.fast_session().policy_step_count();
+         assert_eq!(
+             lockstep.mirror_step(&[1, 0], 0, 2),
+@@ -364,7 +384,7 @@ mod tests {
+         let decks: SessionDeckIdsV1 = ["Rally".to_string(), "Rally".to_string()];
+         let raw = RlEpisodeSessionV1::reset_with_decks_and_limits(9, 11, 400, 4_000, decks.clone())
+             .unwrap();
+-        let other = FlatV4LockstepV1::reset(9, 12, 400, 4_000, decks).unwrap();
++        let other = FlatV4LockstepV1::reset(9, 12, 400, 4_000, decks, None).unwrap();
+         let error = other.verify(&raw, &raw.current_response()).unwrap_err();
+         assert!(
+             matches!(error, FlatV4LockstepErrorV1::Diverged(_)),
+diff --git a/mtg-kernel/src/agent_bridge_v1.rs b/mtg-kernel/src/agent_bridge_v1.rs
+index 65aa217f..0c092302 100644
+--- a/mtg-kernel/src/agent_bridge_v1.rs
++++ b/mtg-kernel/src/agent_bridge_v1.rs
+@@ -176,6 +176,20 @@ enum SpellbenchRequestV1 {
+         game_seed: u64,
+         max_decisions: u64,
+         max_steps: u64,
++        /// Spellbench lockstep: each seat's library order (card names, top
++        /// first) from the host, instead of a shuffle of `game_seed`.
++        #[serde(default)]
++        library_orders: Option<[Vec<String>; 2]>,
++    },
++    /// Spellbench lockstep: a seat's library put in the host's order after
++    /// the host's engine shuffled it. Never an agent wire method.
++    ArrangeLibrary {
++        #[serde(rename = "protocol")]
++        _protocol: String,
++        request_id: String,
++        game_id: String,
++        seat: String,
++        library: Vec<String>,
+     },
+     Step {
+         #[serde(rename = "protocol")]
+@@ -201,6 +215,7 @@ impl SpellbenchRequestV1 {
+         match self {
+             SpellbenchRequestV1::Hello { request_id, .. }
+             | SpellbenchRequestV1::Reset { request_id, .. }
++            | SpellbenchRequestV1::ArrangeLibrary { request_id, .. }
+             | SpellbenchRequestV1::Step { request_id, .. }
+             | SpellbenchRequestV1::PreviewSteps { request_id, .. } => request_id,
+         }
+@@ -236,6 +251,7 @@ struct SpellbenchResetFieldsV1<'a> {
+     game_seed: u64,
+     max_decisions: u64,
+     max_steps: u64,
++    library_orders: Option<&'a [Vec<String>; 2]>,
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq)]
+@@ -477,6 +493,7 @@ impl SpellbenchBridgeServerV1 {
+                 game_seed,
+                 max_decisions,
+                 max_steps,
++                library_orders,
+                 ..
+             } => self.handle_reset(
+                 request_id,
+@@ -487,8 +504,11 @@ impl SpellbenchBridgeServerV1 {
+                     game_seed: *game_seed,
+                     max_decisions: *max_decisions,
+                     max_steps: *max_steps,
++                    library_orders: library_orders.as_ref(),
+                 },
+             ),
++            SpellbenchRequestV1::ArrangeLibrary { request_id, game_id, seat, library, .. } =>
++                self.handle_arrange_library(request_id, game_id, seat, library),
+             SpellbenchRequestV1::Step {
+                 request_id,
+                 game_id,
+@@ -501,6 +521,28 @@ impl SpellbenchBridgeServerV1 {
+         }
+     }
+ 
++    /// Spellbench lockstep: both copies of the game take the host's order.
++    fn handle_arrange_library(&mut self, request_id: &str, game_id: &str, seat: &str, library: &[String]) -> Value {
++        let reject = |message: &str| error_response_value_v1(Some(request_id), "malformed_request", message);
++        let player = match seat {
++            "p0" => crate::ids::PlayerId::P0,
++            "p1" => crate::ids::PlayerId::P1,
++            _ => return reject("seat must be p0 or p1"),
++        };
++        let Some(game) = self.game.as_mut().filter(|game| game.game_id == game_id && !game.terminal_sent) else {
++            return reject("library order requires the active game");
++        };
++        if let Err(error) = game.session.arrange_library_v1(player, library) {
++            return reject(&error.message);
++        }
++        if let Some(copy) = game.flat_v4.as_mut() {
++            if let Err(error) = copy.arrange_library_v1(player, library) {
++                return reject(&error.message);
++            }
++        }
++        json!({"response_type": "library_arranged", "protocol": SPELLBENCH_PROTOCOL_V1, "request_id": request_id})
++    }
++
+     fn handle_preview_steps(&mut self, request_id: &str, game_id: &str, expected_step: u64, ids: &[u32]) -> Value {
+         let reject = |message| error_response_value_v1(Some(request_id), "malformed_request", message);
+         if !self.options.private_v2_support || !self.options.x_kernel_flat_v4 {
+@@ -603,6 +645,7 @@ impl SpellbenchBridgeServerV1 {
+             game_seed,
+             max_decisions,
+             max_steps,
++            library_orders,
+         } = reset;
+         // Spec Section 2: at most one active game per process, and game ids
+         // are unique per process; a finished game frees the process.
+@@ -672,17 +715,29 @@ impl SpellbenchBridgeServerV1 {
+                 max_decisions,
+                 max_steps,
+                 deck_ids.clone(),
++                library_orders.cloned(),
+             ))
+         } else {
+             None
+         };
+-        let mut session = match RlEpisodeSessionV1::reset_with_decks_and_limits(
+-            episode_id,
+-            game_seed,
+-            max_decisions,
+-            max_steps,
+-            deck_ids,
+-        ) {
++        let reset = match library_orders {
++            Some(orders) => RlEpisodeSessionV1::reset_with_decks_limits_and_library_orders_v1(
++                episode_id,
++                game_seed,
++                max_decisions,
++                max_steps,
++                deck_ids,
++                orders.clone(),
++            ),
++            None => RlEpisodeSessionV1::reset_with_decks_and_limits(
++                episode_id,
++                game_seed,
++                max_decisions,
++                max_steps,
++                deck_ids,
++            ),
++        };
++        let mut session = match reset {
+             Ok(session) => session,
+             Err(error) => {
+                 return error_response_value_v1(
+@@ -3105,7 +3160,7 @@ mod tests {
+             decks.clone(),
+         )
+         .unwrap();
+-        let lockstep = FlatV4LockstepV1::reset(episode_id, seed, 3000, 30000, decks).unwrap();
++        let lockstep = FlatV4LockstepV1::reset(episode_id, seed, 3000, 30000, decks, None).unwrap();
+         let mut game = SpellbenchBridgeGameV1 {
+             game_id: game_id.to_string(),
+             episode_id,
+diff --git a/mtg-kernel/src/rl.rs b/mtg-kernel/src/rl.rs
+index db6d4a21..46aeb8ec 100644
+--- a/mtg-kernel/src/rl.rs
++++ b/mtg-kernel/src/rl.rs
+@@ -1379,9 +1379,28 @@ pub fn build_deck_pair_state_with_starting_player_v1(
+     let mut shuffle_rng = SplitMix64::seed(seed);
+     let lib0 = shuffled(p0_deck, &mut shuffle_rng);
+     let lib1 = shuffled(p1_deck, &mut shuffle_rng);
++    Ok(deal_from_libraries_v1(&lib0, &lib1, seed, starting_player))
++}
++
++/// Sibling of [`build_deck_pair_state_with_starting_player_v1`] for a host
++/// that seeds the hidden zones itself (a lockstep match with another engine):
++/// each seat's library is given in order, top first, and is not shuffled. The
++/// opening deal is the same seven cards each from the top.
++pub fn build_deck_pair_state_from_library_orders_v1(
++    seed: u64,
++    p0_library: &[u16],
++    p1_library: &[u16],
++    starting_player: PlayerId,
++) -> std::result::Result<GameState, DeckPreflightError> {
++    preflight_fully_supported_deck(p0_library)?;
++    preflight_fully_supported_deck(p1_library)?;
++    Ok(deal_from_libraries_v1(p0_library, p1_library, seed, starting_player))
++}
++
++fn deal_from_libraries_v1(lib0: &[u16], lib1: &[u16], seed: u64, starting_player: PlayerId) -> GameState {
+     let mut state = GameState::new_from_libraries_with_starting_player_v1(
+-        &lib0,
+-        &lib1,
++        lib0,
++        lib1,
+         card_name,
+         seed,
+         starting_player,
+@@ -1390,7 +1409,7 @@ pub fn build_deck_pair_state_with_starting_player_v1(
+         event::propose_and_commit(&mut state, ProposedEvent::draw(PlayerId::P0));
+         event::propose_and_commit(&mut state, ProposedEvent::draw(PlayerId::P1));
+     }
+-    Ok(state)
++    state
+ }
+ 
+ pub fn build_burn_mirror_state(seed: u64) -> GameState {
+diff --git a/mtg-kernel/src/rl_session.rs b/mtg-kernel/src/rl_session.rs
+index 46d63ea4..01707eb6 100644
+--- a/mtg-kernel/src/rl_session.rs
++++ b/mtg-kernel/src/rl_session.rs
+@@ -4359,6 +4359,35 @@ impl RlEpisodeSessionV1 {
+         )
+     }
+ 
++    /// Spellbench lockstep: see [`arrange_library_v1`].
++    pub fn arrange_library_v1(&mut self, player: PlayerId, order: &[String]) -> Result<(), RlSessionError> {
++        arrange_library_v1(&mut self.state, player, order)
++    }
++
++    /// Spellbench lockstep: the legacy reset with each seat's library order
++    /// (card names, top first) given by the host instead of shuffled.
++    pub fn reset_with_decks_limits_and_library_orders_v1(
++        episode_id: u64,
++        env_seed: u64,
++        max_physical_decisions: u64,
++        max_policy_steps: u64,
++        deck_ids: SessionDeckIdsV1,
++        library_orders: [Vec<String>; 2],
++    ) -> Result<Self, RlSessionError> {
++        Self::reset_with_decks_and_limits_profiled_in_audit_mode_with_randomization(
++            episode_id,
++            ResetRandomization::LibraryOrders {
++                env_seed,
++                library_orders: std::sync::Arc::new(library_orders),
++            },
++            max_physical_decisions,
++            max_policy_steps,
++            deck_ids,
++            None,
++            SuppressionAuditMode::Off,
++        )
++    }
++
+     fn reset_with_decks_and_limits_profiled_in_audit_mode(
+         episode_id: u64,
+         env_seed: u64,
+@@ -5109,6 +5138,35 @@ impl FastActorSessionV1 {
+     /// Constructs a session whose one eager action cache is the explicit V2
+     /// contract.  V1 APIs fail closed on this session, so the hot path never
+     /// constructs, copies, or hashes V1 rows.
++    /// Spellbench lockstep: see [`arrange_library_v1`].
++    pub fn arrange_library_v1(&mut self, player: PlayerId, order: &[String]) -> Result<(), RlSessionError> {
++        arrange_library_v1(&mut self.state, player, order)
++    }
++
++    /// Spellbench lockstep: [`Self::reset_with_decks_and_limits_flat_action_v2`]
++    /// with each seat's library order (card names, top first) given by the host.
++    pub fn reset_with_decks_limits_and_library_orders_flat_action_v2(
++        episode_id: u64,
++        env_seed: u64,
++        max_physical_decisions: u64,
++        max_policy_steps: u64,
++        deck_ids: SessionDeckIdsV1,
++        library_orders: [Vec<String>; 2],
++    ) -> Result<Self, RlSessionError> {
++        Self::reset_with_decks_and_limits_in_flat_action_mode_with_randomization(
++            episode_id,
++            ResetRandomization::LibraryOrders {
++                env_seed,
++                library_orders: std::sync::Arc::new(library_orders),
++            },
++            max_physical_decisions,
++            max_policy_steps,
++            deck_ids,
++            FlatActionContractModeV1::V2,
++            None,
++        )
++    }
++
+     pub fn reset_with_decks_and_limits_flat_action_v2(
+         episode_id: u64,
+         env_seed: u64,
+@@ -7455,10 +7513,16 @@ fn canonical_burn_mirror_deck_ids() -> SessionDeckIdsV1 {
+ /// Private randomness selector for session reset. Deliberately no serde and
+ /// no Default: the caller always chooses explicitly, and `GameState` remains
+ /// the sole persisted randomness and diagnostic identity.
+-#[derive(Clone, Copy)]
++#[derive(Clone)]
+ enum ResetRandomization {
+     Legacy { env_seed: u64 },
+     EnvironmentV2 { pair_environment_seed: u64 },
++    /// Spellbench lockstep: each seat's library order (card names, top
++    /// first) comes from the host instead of a shuffle of `env_seed`.
++    LibraryOrders {
++        env_seed: u64,
++        library_orders: std::sync::Arc<[Vec<String>; 2]>,
++    },
+ }
+ 
+ /// Shared state construction for both session types: resolves both runtime
+@@ -7479,6 +7543,24 @@ fn build_session_deck_pair_state(
+     let resolved_decks = resolve_runtime_decks(deck_ids)?;
+     let deck_hashes = resolved_decks.map(|deck| deck.runtime_deck_hash);
+     let state = match (randomization, starting_player) {
++        (
++            ResetRandomization::LibraryOrders {
++                env_seed,
++                library_orders,
++            },
++            starting_player,
++        ) => crate::rl::build_deck_pair_state_from_library_orders_v1(
++            env_seed,
++            &library_card_ids_v1(resolved_decks[0].card_ids, &library_orders[0])?,
++            &library_card_ids_v1(resolved_decks[1].card_ids, &library_orders[1])?,
++            starting_player.unwrap_or(PlayerId::P0),
++        )
++        .map_err(|_| {
++            session_error(
++                RlSessionErrorCode::UnsupportedDeck,
++                "runtime deck catalog failed full-support preflight",
++            )
++        })?,
+         (ResetRandomization::Legacy { env_seed }, None) => build_deck_pair_state(
+             env_seed,
+             resolved_decks[0].card_ids,
+@@ -7549,6 +7631,61 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
+     }
+ }
+ 
++/// Spellbench lockstep: puts a seat's library in the host's order (card
++/// names, top first) after the host's own engine shuffled it. The order must
++/// be a permutation of the library; nothing else changes.
++fn arrange_library_v1(
++    state: &mut crate::state::GameState,
++    player: PlayerId,
++    order: &[String],
++) -> Result<(), RlSessionError> {
++    let mut left = state.players[player.index()].library.clone();
++    let mut arranged = Vec::with_capacity(order.len());
++    for name in order {
++        let Some(index) = left
++            .iter()
++            .position(|&id| crate::rl::card_name(state.objects[id].card_def) == *name)
++        else {
++            return Err(session_error(
++                RlSessionErrorCode::UnsupportedDeck,
++                &format!("library order names {name:?}, which the library does not have left"),
++            ));
++        };
++        arranged.push(left.remove(index));
++    }
++    if !left.is_empty() {
++        return Err(session_error(
++            RlSessionErrorCode::UnsupportedDeck,
++            "library order leaves library cards out",
++        ));
++    }
++    state.players[player.index()].library = arranged;
++    Ok(())
++}
++
++/// A seat's library order by card name (top first) as card ids: one card of
++/// that name from the deck per entry, so the order is a permutation of the deck.
++fn library_card_ids_v1(deck: &[u16], order: &[String]) -> Result<Vec<u16>, RlSessionError> {
++    let mut left = deck.to_vec();
++    let mut ids = Vec::with_capacity(order.len());
++    for name in order {
++        let Some(index) = left.iter().position(|&id| crate::rl::card_name(id) == *name) else {
++            return Err(session_error(
++                RlSessionErrorCode::UnsupportedDeck,
++                &format!("library order names {name:?}, which the deck does not have left"),
++            ));
++        };
++        ids.push(left.swap_remove(index));
++    }
++    if !left.is_empty() {
++        return Err(session_error(
++            RlSessionErrorCode::UnsupportedDeck,
++            "library order leaves deck cards out",
++        ));
++    }
++    Ok(ids)
++}
++
+ fn resolve_runtime_decks(
+     deck_ids: &SessionDeckIdsV1,
+ ) -> Result<[&'static RuntimeDeckDefinition; 2], RlSessionError> {
+diff --git a/mtg-kernel/src/rl_session/flat_action_v3.rs b/mtg-kernel/src/rl_session/flat_action_v3.rs
+index 57aa2842..8e9c0be8 100644
+--- a/mtg-kernel/src/rl_session/flat_action_v3.rs
++++ b/mtg-kernel/src/rl_session/flat_action_v3.rs
+@@ -720,6 +720,27 @@ impl FastActorSessionV1 {
+         )?.into_flat_action_v3())
+     }
+ 
++    /// Spellbench lockstep: [`Self::reset_with_decks_and_limits_flat_action_v3`]
++    /// with each seat's library order (card names, top first) given by the host.
++    pub fn reset_with_decks_limits_and_library_orders_flat_action_v3(
++        episode_id: u64,
++        seed: u64,
++        max_physical_decisions: u64,
++        max_policy_steps: u64,
++        deck_ids: SessionDeckIdsV1,
++        library_orders: [Vec<String>; 2],
++    ) -> Result<Self, RlSessionError> {
++        Ok(Self::reset_with_decks_limits_and_library_orders_flat_action_v2(
++            episode_id,
++            seed,
++            max_physical_decisions,
++            max_policy_steps,
++            deck_ids,
++            library_orders,
++        )?
++        .into_flat_action_v3())
++    }
++
+     pub fn reset_with_decks_and_limits_flat_action_v3(
+         episode_id: u64,
+         seed: u64,
