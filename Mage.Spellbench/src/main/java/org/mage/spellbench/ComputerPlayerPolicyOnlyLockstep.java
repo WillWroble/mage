@@ -1,6 +1,7 @@
 package org.mage.spellbench;
 
 import mage.abilities.Ability;
+import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.Mode;
 import mage.abilities.Modes;
@@ -297,6 +298,18 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
                 messages, totalMax) : null;
         return amounts != null ? amounts : super.getMultiAmountWithIndividualConstraints(outcome, messages, totalMin,
                 totalMax, type, game);
+    }
+
+    /**
+     * A payment MageZero cannot complete taps nothing (an unless-payment it agreed to: Spell Pierce's {2} with one
+     * Island): XMage's AI taps what it has and fails; the kernel offers a payment only when it can be made.
+     */
+    @Override
+    public boolean playMana(Ability ability, ManaCost unpaid, String promptText, Game game) {
+        if (live(game) && !getManaAvailable(game).enough(unpaid.getMana())) {
+            return false;
+        }
+        return super.playMana(ability, unpaid, promptText, game);
     }
 
     @Override
