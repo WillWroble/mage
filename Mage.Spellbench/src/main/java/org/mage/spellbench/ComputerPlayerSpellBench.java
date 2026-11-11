@@ -506,6 +506,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
         passedAt = List.of();
         Views.View view = views.view(game, seat);
+        picks.clear(); // one left from a dialog XMage resolved itself (an optional search it auto-chose); compared
         JsonObject semantic = archon();
         String kind = Views.text(semantic, "kind");
         if (kind.equals("pass")) {
