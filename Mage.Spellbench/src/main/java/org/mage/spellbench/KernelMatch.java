@@ -175,6 +175,17 @@ final class KernelMatch implements AutoCloseable {
         line.addProperty("stack", observation.getAsJsonArray("stack").size());
         line.add("chosen", decision.getAsJsonArray("candidates").get(candidateId).getAsJsonObject().get("semantic"));
         line.addProperty("of", decision.getAsJsonArray("candidates").size());
+        JsonArray offered = new JsonArray();
+        decision.getAsJsonArray("candidates").forEach(c -> {
+            JsonElement kind = c.getAsJsonObject().getAsJsonObject("semantic").get("kind");
+            if (!offered.contains(kind)) offered.add(kind);
+        });
+        line.add("offered", offered);
+        JsonArray hand = new JsonArray();
+        JsonElement cards = observation.getAsJsonArray("players")
+                .get(decision.get("acting_seat").getAsString().equals("p0") ? 0 : 1).getAsJsonObject().get("hand");
+        if (cards.isJsonArray()) cards.getAsJsonArray().forEach(c -> hand.add(c.getAsJsonObject().get("card_name")));
+        line.add("hand", hand);
         try (java.io.FileWriter out = new java.io.FileWriter(new File(settings.logs, gameId + "-trace.jsonl"), true)) {
             out.write(line + "\n");
         } catch (IOException e) {
