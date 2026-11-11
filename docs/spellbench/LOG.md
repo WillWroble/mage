@@ -117,3 +117,38 @@ Fixed from the schedule on 674141cb:
 - `exiled_by` for Mesmeric Fiend (its leaving returns the card);
 - the Archon's X (Nyxborn Hydra): XMage's AI capped it by the mana in its pool, which is still empty when X is
   announced.
+
+### 2026-11-11, one build: 0c6c10b2, two schedule cycles (64 games)
+
+Fixed since fd157773 (commits aacfe940 to 0c6c10b2, and the kernel patch b046d93b):
+- a search XMage resolves without asking (one Forest for Land Grant): at the Archon's next priority at the same point,
+  with less on XMage's stack, the kernel's pending dialog is the Archon's to answer;
+- the Archon's choice of a card in MageZero's revealed hand (Mesmeric Fiend), hand cards by name (Brainstorm's two
+  Lorien Revealed), a search's same-named picks (three Squadron Hawks were one), a selection the kernel ends;
+- blocking a hexproof attacker (XMage's block dialog is a target), an activated ability's index over all of its
+  object's abilities (Twisted Landscape's cycling from the hand), a forced X (Nyxborn Hydra with no mana for more);
+- every mana payment of the Archon's from the permanents the kernel tapped (Nihil Spellbomb's {B});
+- a dig's optional pick, which XMage asks first as a yes/no (Lead the Stampede);
+- MageZero's orders: Balustrade Spy's mill is not an arrangement; the initiative's taking on combat damage, which
+  the kernel puts in MageZero's trigger order and XMage gives the initiative holder, goes last;
+- mtg-kernel (local patch): protection from monocolored only on the battlefield (Guardian of the Guildpact on the
+  stack could not be countered).
+
+    archon  deck      games  full MageZero Archon draws diverged
+    g115    Affinity      7     7        5      2     0        0
+    g115    Burn          8     6        3      3     0        2
+    g115    CawGates      7     1        1      0     0        6
+    g115    Elves         8     3        2      1     0        5
+    g115    Faeries       8     6        4      2     0        2
+    g115    Rally         8     8        3      5     0        0
+    g115    Spy           8     8        8      0     0        0
+    g115    Wildfire      7     4        4      0     0        3
+    g115    all          61    43       30     13     0       18
+
+Completion 70% (34% on 35f36f5b). Three more games did not start (XMage's HDF5 native library failed to load, with
+three JVMs starting at once; no game state). A first run of this schedule is discarded: the ver15 model server had
+stopped with a worker restart, so MageZero played without its model (every game stopped at its first discard);
+`bench.sh` now refuses to start without the server. Win rates on finished games are biased by which games finish.
+
+Open: CawGates (Archon's casts refused: Sacred Cat; Heap Gate/Gates payment; priority skipped), Wildfire (Fanatical
+Offering refused), blockers XMage did not declare (Nyxborn Hydra, Humbling Elder), MageZero's Of One Mind.
