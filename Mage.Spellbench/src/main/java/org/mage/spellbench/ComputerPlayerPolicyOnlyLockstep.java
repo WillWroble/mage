@@ -2,6 +2,7 @@ package org.mage.spellbench;
 
 import mage.abilities.Ability;
 import mage.abilities.costs.mana.ManaCost;
+import mage.abilities.mana.ManaAbility;
 import mage.abilities.ActivatedAbility;
 import mage.abilities.Mode;
 import mage.abilities.Modes;
@@ -50,6 +51,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         final Kind kind;
         final Views.View view;
         final Object value;
+        /** An action's: the permanents whose mana XMage paid it with. */
+        final List<UUID> paid = new ArrayList<>();
 
         Move(Kind kind, Views.View view, Object value) {
             this.kind = kind;
@@ -182,12 +185,18 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         // mana made while paying a cost (an unless-payment) is the payment's, which the kernel makes itself
         boolean action = live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0
                 && !payManaMode && !isPayingMana;
+        int before = moves.size();
         if (action) {
             moves.add(new Move(Move.Kind.ACTION, view.apply(game), ability));
+        } else if (actionDepth > 0 && ability instanceof ManaAbility && !moves.isEmpty()) {
+            moves.peekLast().paid.add(ability.getSourceId()); // the mana its action is paid with
         }
         actionDepth++;
         try {
             boolean done = super.activateAbility(ability, game);
+            while (action && !done && moves.size() > before) {
+                moves.pollLast(); // a failed action (XMage's AI could not pay) is rolled back, its dialogs with it
+            }
             if (action && done) {
                 actedTurn = game.getTurnNum();
                 actedStep = game.getTurnStepType();

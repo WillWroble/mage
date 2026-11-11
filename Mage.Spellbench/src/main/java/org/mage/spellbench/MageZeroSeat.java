@@ -40,6 +40,8 @@ final class MageZeroSeat {
     private Move declaration;
     /** This combat's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
     private final List<UUID> blockers;
+    /** MageZero's action whose mana the kernel is making first (see action). */
+    private Move floating;
     /** MageZero's cost of its cast, passed over for the targets the kernel asks first. */
     private Move cost;
     /** How the kernel's priority differed from MageZero's first pass dropped since the last match. */
@@ -113,7 +115,8 @@ final class MageZeroSeat {
             if (move.kind != Move.Kind.PASS && move.kind != Move.Kind.ACTION) {
                 throw new LockstepDivergence("the kernel asks MageZero priority; its next move in XMage is " + move);
             }
-            List<String> diff = views.diff(Lockstep.observation(decision), move.view.json);
+            // while the kernel makes the mana of MageZero's next action, the games differ by that mana only
+            List<String> diff = move == floating ? List.of() : views.diff(Lockstep.observation(decision), move.view.json);
             if (diff.isEmpty()) {
                 moves.poll();
                 mismatch = "";
@@ -140,9 +143,26 @@ final class MageZeroSeat {
                 : ability instanceof SpellAbility ? "cast_spell"
                 : ability instanceof ManaAbility ? "activate_mana_ability" : "activate_ability";
         // a cast with an alternative cost is a candidate of its own, which MageZero's moves do not answer yet
-        return candidate(decision, c -> kind.equals(Views.text(c, "kind")) && source != null
+        Predicate<JsonObject> same = c -> kind.equals(Views.text(c, "kind")) && source != null
                 && source.equals(Views.text(c.getAsJsonObject("source"), "object_id"))
-                && (!c.has("method") || c.get("method").isJsonNull()), move + " as " + kind);
+                && (!c.has("method") || c.get("method").isJsonNull());
+        if (index(decision, same) < 0) {
+            // the kernel does not count every source of mana as castable (Elves of Deep Shadow's, which costs life):
+            // the mana XMage paid the cast with is made first, the cast kept for when the kernel offers it
+            for (UUID paid : move.paid) {
+                String id = kernelId(decision, move.view, paid);
+                int mana = index(decision, c -> "activate_mana_ability".equals(Views.text(c, "kind")) && id != null
+                        && id.equals(Views.text(c.getAsJsonObject("source"), "object_id")));
+                if (mana >= 0) {
+                    move.paid.remove(paid);
+                    floating = move;
+                    moves.addFirst(move);
+                    return mana;
+                }
+            }
+        }
+        floating = null;
+        return candidate(decision, same, move + " as " + kind);
     }
 
     // ------------------------------------------------------------------ dialogs
@@ -361,7 +381,8 @@ final class MageZeroSeat {
         boolean declaration = kind == Move.Kind.ATTACKERS || kind == Move.Kind.BLOCKERS;
         while (!moves.isEmpty() && (moves.peek().kind == Move.Kind.PASS
                 || declaration && moves.peek().kind == Move.Kind.USE || !declaration && emptyDeclaration(moves.peek())
-                || kind != Move.Kind.COST && moves.peek().kind == Move.Kind.COST)) {
+                || kind != Move.Kind.COST && moves.peek().kind == Move.Kind.COST
+                || kind != Move.Kind.NUMBER && moves.peek().kind == Move.Kind.NUMBER)) {
             // passes where the kernel opens no priority; at combat, yes/no's before it the kernel did not offer; out of
             // combat, declarations of nothing the kernel did not ask; a cast's cost, which the kernel asks after the
             // targets (kept for it) or not at all
@@ -409,13 +430,21 @@ final class MageZeroSeat {
     }
 
     private static int candidate(JsonObject decision, Predicate<JsonObject> semantic, String what) {
+        int i = index(decision, semantic);
+        if (i < 0) {
+            throw new LockstepDivergence("the kernel offers no candidate for MageZero's " + what);
+        }
+        return i;
+    }
+
+    private static int index(JsonObject decision, Predicate<JsonObject> semantic) {
         JsonArray candidates = decision.getAsJsonArray("candidates");
         for (int i = 0; i < candidates.size(); i++) {
             if (semantic.test(candidates.get(i).getAsJsonObject().getAsJsonObject("semantic"))) {
                 return i;
             }
         }
-        throw new LockstepDivergence("the kernel offers no candidate for MageZero's " + what);
+        return -1;
     }
 
     /** The object a selection candidate names (a target, a choice or a cost candidate), or null. */
