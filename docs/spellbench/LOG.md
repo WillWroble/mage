@@ -173,3 +173,34 @@ attacker (XMage's AI asks a block as a target); embalmed names in blocks; a targ
 Completion 81% (70% on 0c6c10b2). Open: library order after a shuffle the kernel resolves with a draw in one step
 (Lembas, then Fanatical Offering's draw), the most common remaining stop; Affinity games where the kernel's game ended
 first (2); an Undercity room pick the kernel took before XMage asked.
+
+### 2026-11-11, one build: 22e58d19, two schedule cycles (64 games)
+
+Fixed since 17efbe9d:
+- shuffle rendezvous (kernel patch + wrapper + XMage hooks): each engine counts a seat's library shuffles, and the
+  shuffle of a given count gives one order in both, whichever made it first. The kernel resolves a shuffle and a draw
+  in one step (Lembas shuffled in, then Fanatical Offering's draw); the kernel shuffled first in most games;
+- Brainstorm: XMage asks each card to put back alone (the last one chosen is topmost), the kernel selects them and
+  then orders them; XMage's picks follow the Archon's order, deepest first;
+- Land Grant: the kernel casts it for its alternative cost without asking; the cost is read from what it tapped;
+- object matches kept between engines (two Quirion Rangers, one already used); MageZero's picks among look-alikes the
+  kernel offers (a blocked attacker shows no mark: ninjutsu's return of the unblocked Humbling Elder);
+- mana abilities by the chosen color (Sea Gate), stale picks and empty declarations dropped, declarations and spell
+  forms after the kernel's natural end;
+- bench: the model server restarts when down, a JVM temp directory per game (HDF5's native library), turn cap 100
+  (XMage's turn cap ends a game as a draw without telling the players, so it left no record).
+
+    archon  deck      games  full MageZero Archon draws diverged
+    g115    Affinity      8     8        3      5     0        0
+    g115    Burn          8     7        3      4     0        1
+    g115    CawGates      8     7        7      0     0        1
+    g115    Elves         8     8        5      3     0        0
+    g115    Faeries       8     8        4      4     0        0
+    g115    Rally         8     8        3      5     0        0
+    g115    Spy           8     8        8      0     0        0
+    g115    Wildfire      8     7        7      0     0        1
+    g115    all          64    61       40     21     0        3
+
+Completion 95% (81% on 17efbe9d). Stops: Fanatical Offering refused (Wildfire), a discard XMage asks before the
+kernel (CawGates), a priority XMage went past (Burn). MageZero won 40 of 61 finished games (66%), still biased by which
+games finish.
