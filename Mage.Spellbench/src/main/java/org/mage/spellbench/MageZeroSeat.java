@@ -227,6 +227,13 @@ final class MageZeroSeat {
             List<UUID> chosen = (List<UUID>) selection.value;
             picks = new ArrayDeque<>(chosen);
         }
+        if (picks.isEmpty() && !offersFinish(decision) && upcoming() == Move.Kind.TARGETS) {
+            // XMage asks the selection's cards one at a time (Brainstorm's two back on the library): its next pick
+            selection = next(Move.Kind.TARGETS);
+            @SuppressWarnings("unchecked")
+            List<UUID> chosen = (List<UUID>) selection.value;
+            picks = new ArrayDeque<>(chosen);
+        }
         if (picks.isEmpty()) {
             return candidate(decision, c -> Views.text(c, "kind").startsWith("finish_"), "finish of " + selection);
         }

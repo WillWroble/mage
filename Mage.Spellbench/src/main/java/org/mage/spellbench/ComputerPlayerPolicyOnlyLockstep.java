@@ -2,6 +2,9 @@ package org.mage.spellbench;
 
 import mage.Mana;
 import mage.abilities.Ability;
+import mage.constants.Zone;
+import mage.game.permanent.Permanent;
+import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.mana.ManaAbility;
 import mage.abilities.ActivatedAbility;
@@ -101,6 +104,10 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     /** The decisions not yet given to the kernel, oldest first. */
     final transient Deque<Move> moves = new ArrayDeque<>();
+    /** MageZero's action XMage is carrying out (its mana is recorded with it). */
+    private transient Move acting;
+    /** The mana left to pay while XMage pays for MageZero. */
+    private transient ManaCost paying;
     /** Told when XMage shuffles this player's library (the lockstep meets the kernel's shuffle). */
     transient Consumer<Game> shuffled;
     /** The game as this seat sees it, written as the kernel's observation; set by the relay when its game starts. */
@@ -179,7 +186,17 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
             pass(game);
             return false;
         }
-        return super.priority(game);
+        try {
+            return super.priority(game);
+        } catch (IllegalStateException e) {
+            if (!live(game)) {
+                throw e;
+            }
+            // an action XMage's AI could not complete (its payer could not make mana it counted on): XMage rolled it
+            // back and its move is dropped; MageZero passes instead of ending the game, as the generator would
+            pass(game);
+            return false;
+        }
     }
 
     private boolean passes(Game game) {
@@ -197,16 +214,21 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         // mana made while paying a cost (an unless-payment) is the payment's, which the kernel makes itself
         boolean action = live(game) && !(ability instanceof PassAbility) && actionDepth == 0 && dialogDepth == 0
                 && !payManaMode && !isPayingMana;
+        if (paying != null && ability instanceof ManaAbility && !ability.getManaCosts().isEmpty() && !filterNeeded(game)) {
+            return false;
+        }
         int before = moves.size();
+        Move outer = acting;
         if (action) {
-            moves.add(new Move(Move.Kind.ACTION, view.apply(game), ability));
-        } else if (actionDepth > 0 && ability instanceof ManaAbility && !moves.isEmpty()) {
+            acting = new Move(Move.Kind.ACTION, view.apply(game), ability);
+            moves.add(acting);
+        } else if (acting != null && ability instanceof ManaAbility) {
             // the mana its action is paid with, by color when the ability makes one (a Bridge has one per color)
             List<Mana> made = ((ManaAbility) ability).getNetMana(game);
             Mana mana = made.size() == 1 ? made.get(0) : new Mana();
             String color = mana.getWhite() > 0 ? "W" : mana.getBlue() > 0 ? "U" : mana.getBlack() > 0 ? "B"
                     : mana.getRed() > 0 ? "R" : mana.getGreen() > 0 ? "G" : mana.getColorless() > 0 ? "C" : null;
-            moves.peekLast().paid.add(new Paid(ability.getSourceId(), color));
+            acting.paid.add(new Paid(ability.getSourceId(), color));
         }
         actionDepth++;
         try {
@@ -224,6 +246,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
             return done;
         } finally {
             actionDepth--;
+            acting = outer;
         }
     }
 
@@ -342,7 +365,31 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         if (live(game) && actionDepth == 0 && !getManaAvailable(game).enough(unpaid.getMana())) {
             return false;
         }
-        return super.playMana(ability, unpaid, promptText, game);
+        paying = unpaid;
+        try {
+            return super.playMana(ability, unpaid, promptText, game);
+        } finally {
+            paying = null;
+        }
+    }
+
+    /**
+     * While paying, a mana ability that costs mana itself (Heap Gate's filter) only for a color the free sources cannot
+     * make: XMage's AI pays generic mana with it, spends a second Gate on its cost and comes up short.
+     */
+    private boolean filterNeeded(Game game) {
+        Mana need = paying.getMana();
+        Mana free = new Mana();
+        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(playerId)) {
+            for (ActivatedManaAbilityImpl a : permanent.getAbilities().getAvailableActivatedManaAbilities(Zone.BATTLEFIELD, playerId, game)) {
+                if (a.getManaCosts().isEmpty()) {
+                    a.getNetMana(game).forEach(free::add);
+                }
+            }
+        }
+        return need.getWhite() > 0 && free.getWhite() == 0 || need.getBlue() > 0 && free.getBlue() == 0
+                || need.getBlack() > 0 && free.getBlack() == 0 || need.getRed() > 0 && free.getRed() == 0
+                || need.getGreen() > 0 && free.getGreen() == 0;
     }
 
     @Override
