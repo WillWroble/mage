@@ -637,7 +637,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                     || group.getAsJsonObject().get("substep_index").getAsInt() + 1
                     >= group.getAsJsonObject().get("substep_count").getAsInt();
             boolean complete = target.isChoiceCompleted(target.getAffectedAbilityControllerId(playerId), source, game, null);
-            if (lastSubstep && !"select_object".equals(Views.text(pick.semantic, "kind")) || complete) {
+            // the kernel asks a target's picks one at a time (up to two: Blood Fountain): more may follow this one
+            boolean more = pick.semantic.has("maximum")
+                    && pick.semantic.get("selected_count").getAsInt() + 1 < pick.semantic.get("maximum").getAsInt();
+            if (lastSubstep && !more && !"select_object".equals(Views.text(pick.semantic, "kind")) || complete) {
                 return target.isChosen(game);
             }
         }
@@ -662,6 +665,20 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
         }
         return more;
+    }
+
+    /** The Archon's permanents, by name, that the kernel no longer has (it sacrificed them already). */
+    private Map<String, Integer> gone(Game game) {
+        Map<String, Integer> gone = new HashMap<>();
+        game.getBattlefield().getAllActivePermanents(playerId).forEach(p -> gone.merge(p.getName(), 1, Integer::sum));
+        for (JsonElement p : Lockstep.observation(kernel.decision()).getAsJsonArray("players")) {
+            if (seat.equals(Views.text(p.getAsJsonObject(), "seat"))) {
+                for (JsonElement b : p.getAsJsonObject().getAsJsonArray("battlefield")) {
+                    gone.computeIfPresent(Views.text(b.getAsJsonObject(), "card_name"), (name, n) -> n > 1 ? n - 1 : null);
+                }
+            }
+        }
+        return gone;
     }
 
     /**
@@ -735,6 +752,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     private ActivatedManaAbilityImpl kernelMana(Game game, Mana need) {
         Map<String, Integer> beyond = tappedBeyond(game);
+        gone(game).forEach((name, n) -> beyond.merge(name, n, Integer::sum)); // tapped, then sacrificed by the cast
         boolean specific = colors(need, need) > 0;
         ActivatedManaAbilityImpl best = null;
         int scarcest = Integer.MAX_VALUE;

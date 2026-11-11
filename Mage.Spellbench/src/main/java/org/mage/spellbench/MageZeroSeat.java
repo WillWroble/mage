@@ -145,7 +145,8 @@ final class MageZeroSeat {
             if (upcoming != null && upcoming != Move.Kind.TARGETS) {
                 // XMage asked MageZero nothing here (it offers fewer choices, Snap only tapped lands): nothing chosen
                 selection = null;
-                return candidate(decision, c -> Views.text(c, "kind").startsWith("finish_"), "XMage's choice of nothing");
+                return candidate(decision, c -> Views.text(c, "kind").startsWith("finish_"),
+                        "XMage's choice of nothing (its next move is " + upcoming + ")");
             }
             selection = next(Move.Kind.TARGETS);
             if (selection == null) {
