@@ -378,6 +378,9 @@ final class MageZeroSeat {
         if (own.size() < 2 && own.size() < candidates.size()) {
             return own.isEmpty() ? 0 : own.get(0);
         }
+        if (upcoming() != null && upcoming() != Move.Kind.TRIGGER) {
+            return 0; // XMage put them on the stack without asking (alike triggers): any order
+        }
         Move move = next(Move.Kind.TRIGGER);
         if (move == null) {
             return null;

@@ -132,7 +132,7 @@ cell() {
   python -c "import json;s=json.load(open('$R/settings.json'));s.update(logs='$d/logs',seat='$seat',setup='$setup');json.dump(s,open('settings.json','w'))"
   sed -e "s#FIRST#$first#; s#MZDECK#$mz#; s#Pauper-DECK#Pauper-$deck#; s#GAMES#$GAMES#; s#THREADS#$THREADS#" \
     $R/config.yml > config.yml
-  java -Xmx8g -Djava.io.tmpdir=$d/tmp -Dspellbench.lockstep=settings.json -cp "$G/mage-spellbench.jar:$G/lib/*" \
+  timeout 3600 java -Xmx8g -Djava.io.tmpdir=$d/tmp -Dspellbench.lockstep=settings.json -cp "$G/mage-spellbench.jar:$G/lib/*" \
     org.mage.spellbench.SpellbenchMain config.yml > java.log 2>&1 || echo "$deck $seat $first exit $?" >> $R/failed.txt
   rm -rf db data tmp
 }
