@@ -236,8 +236,8 @@ final class MageZeroSeat {
             return trigger(decision);
         }
         JsonObject object = first.getAsJsonObject("item").getAsJsonObject("object");
-        if (!"library".equals(Views.text(object, "zone"))) {
-            return 0;
+        if (!"library".equals(Views.text(object, "zone")) || !"arrangement".equals(Views.text(first, "purpose"))) {
+            return 0; // not an arrangement: cards moved together elsewhere (Balustrade Spy's mill, to a graveyard)
         }
         List<mage.cards.Card> library = game.getPlayer(views.player(Views.text(object, "owner_seat")))
                 .getLibrary().getCards(game);

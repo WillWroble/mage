@@ -231,6 +231,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             JsonObject decision = kernel.decision();
             boolean wanted = wanted(decision, kinds);
             if (decision.getAsJsonArray("candidates").size() == 1 && !wanted || Lockstep.takesAll(decision)) {
+                if (seat.equals(kernel.actingSeat()) && "choose_number".equals(Lockstep.firstKind(decision))) {
+                    later.add(Lockstep.semantic(decision, 0).deepCopy()); // a forced X, which XMage asks still
+                }
                 step(0); // forced: one candidate, or all to take, whoever is asked (XMage makes it unasked)
                 continue;
             }
