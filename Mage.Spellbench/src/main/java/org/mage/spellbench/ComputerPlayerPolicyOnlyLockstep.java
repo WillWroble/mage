@@ -1,5 +1,6 @@
 package org.mage.spellbench;
 
+import mage.Mana;
 import mage.abilities.Ability;
 import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.mana.ManaAbility;
@@ -51,8 +52,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         final Kind kind;
         final Views.View view;
         final Object value;
-        /** An action's: the permanents whose mana XMage paid it with. */
-        final List<UUID> paid = new ArrayList<>();
+        /** An action's: the mana XMage paid it with, each a permanent and its color (W, U, B, R, G, C; null: any). */
+        final List<Paid> paid = new ArrayList<>();
 
         Move(Kind kind, Views.View view, Object value) {
             this.kind = kind;
@@ -63,6 +64,17 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         @Override
         public String toString() {
             return kind + " " + value;
+        }
+    }
+
+    /** A permanent's mana paid toward MageZero's action. */
+    static final class Paid {
+        final UUID source;
+        final String color;
+
+        Paid(UUID source, String color) {
+            this.source = source;
+            this.color = color;
         }
     }
 
@@ -189,7 +201,12 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
         if (action) {
             moves.add(new Move(Move.Kind.ACTION, view.apply(game), ability));
         } else if (actionDepth > 0 && ability instanceof ManaAbility && !moves.isEmpty()) {
-            moves.peekLast().paid.add(ability.getSourceId()); // the mana its action is paid with
+            // the mana its action is paid with, by color when the ability makes one (a Bridge has one per color)
+            List<Mana> made = ((ManaAbility) ability).getNetMana(game);
+            Mana mana = made.size() == 1 ? made.get(0) : new Mana();
+            String color = mana.getWhite() > 0 ? "W" : mana.getBlue() > 0 ? "U" : mana.getBlack() > 0 ? "B"
+                    : mana.getRed() > 0 ? "R" : mana.getGreen() > 0 ? "G" : mana.getColorless() > 0 ? "C" : null;
+            moves.peekLast().paid.add(new Paid(ability.getSourceId(), color));
         }
         actionDepth++;
         try {
@@ -287,6 +304,9 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
+        if (payManaMode || isPayingMana) {
+            return super.choose(outcome, choice, game); // a color while paying (Lotus Petal's): the kernel pays itself
+        }
         // a key choice while casting is the cost (an alternative cost keyed from 1): XMage asks it before the targets,
         // the kernel after them, or not at all
         Move.Kind kind = actionDepth > 0 && choice.isKeyChoice() ? Move.Kind.COST : Move.Kind.CHOICE;
@@ -313,12 +333,13 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
     }
 
     /**
-     * A payment MageZero cannot complete taps nothing (an unless-payment it agreed to: Spell Pierce's {2} with one
-     * Island): XMage's AI taps what it has and fails; the kernel offers a payment only when it can be made.
+     * An unless-payment MageZero agreed to but cannot complete taps nothing (Spell Pierce's {2} with one Island): XMage's
+     * AI taps what it has and fails; the kernel offers a payment only when it can be made. Not MageZero's own actions,
+     * which XMage found playable (its estimate of the mana available misses filters and chosen colors).
      */
     @Override
     public boolean playMana(Ability ability, ManaCost unpaid, String promptText, Game game) {
-        if (live(game) && !getManaAvailable(game).enough(unpaid.getMana())) {
+        if (live(game) && actionDepth == 0 && !getManaAvailable(game).enough(unpaid.getMana())) {
             return false;
         }
         return super.playMana(ability, unpaid, promptText, game);

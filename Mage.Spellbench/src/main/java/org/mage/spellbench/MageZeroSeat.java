@@ -9,6 +9,7 @@ import mage.abilities.PlayLandAbility;
 import mage.abilities.SpellAbility;
 import mage.abilities.mana.ManaAbility;
 import mage.game.Game;
+import mage.cards.SpellOptionCard;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
 import java.util.ArrayDeque;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -40,6 +42,10 @@ final class MageZeroSeat {
     private Move declaration;
     /** This combat's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
     private final List<UUID> blockers;
+    /** The source of MageZero's last action (the half of a card with a spell option it cast). */
+    private UUID cast;
+    /** The places in XMage's library of the cards an order has taken so far. */
+    private final Set<Integer> ordered = new HashSet<>();
     /** MageZero's action whose mana the kernel is making first (see action). */
     private Move floating;
     /** MageZero's cost of its cast, passed over for the targets the kernel asks first. */
@@ -53,11 +59,30 @@ final class MageZeroSeat {
         this.blockers = blockers;
     }
 
+    /** MageZero's move kinds for the kernel's decision kinds that XMage may ask too. */
+    private static final Map<String, Move.Kind> DIALOGS = Map.of("choose_target", Move.Kind.TARGETS,
+            "select_object", Move.Kind.TARGETS, "choose_cost_target", Move.Kind.TARGETS, "choose_number", Move.Kind.NUMBER,
+            "choose_spell_mode", Move.Kind.MODE, "choose_color", Move.Kind.CHOICE, "choose_boolean", Move.Kind.USE,
+            "optional_cost", Move.Kind.USE, "choose_option", Move.Kind.USE);
+
+    /**
+     * A decision of MageZero's the kernel made itself (one candidate): XMage's answer to the same dialog, if it asked
+     * one there (the same game), is consumed.
+     */
+    void forced(JsonObject decision) {
+        Move.Kind kind = DIALOGS.get(Lockstep.firstKind(decision));
+        Move move = moves.stream().filter(m -> m.kind != Move.Kind.PASS).findFirst().orElse(null);
+        if (kind != null && move != null && move.kind == kind
+                && views.diff(Lockstep.observation(decision), move.view.json).isEmpty()) {
+            moves.remove(move);
+        }
+    }
+
     /** The candidate MageZero's moves answer {@code decision} with, or null when MageZero has not reached it. */
     Integer answer(JsonObject decision, Game game) {
         String kind = Lockstep.firstKind(decision);
         if (Lockstep.isPriority(decision)) {
-            return priority(decision);
+            return priority(decision, game);
         }
         switch (kind) {
             case "choose_target":
@@ -78,6 +103,11 @@ final class MageZeroSeat {
                 return value(decision, Move.Kind.USE,
                         (c, v) -> Lockstep.names(((ComputerPlayerPolicyOnlyLockstep.Use) v).option, Views.text(c, "choice")));
             case "choose_spell_mode":
+                if (upcoming() != Move.Kind.MODE && cast != null) {
+                    // the spell's form, which XMage takes as which half MageZero cast (an omen's, an adventure's)
+                    int form = game.getCard(cast) instanceof SpellOptionCard ? 1 : 0;
+                    return candidate(decision, c -> Objects.equals(number(c, "mode_index"), form), "form " + form);
+                }
                 return value(decision, Move.Kind.MODE, (c, v) -> Objects.equals(number(c, "mode_index"), v));
             case "choose_number":
                 return value(decision, Move.Kind.NUMBER, (c, v) -> Objects.equals(number(c, "value"), v));
@@ -101,7 +131,7 @@ final class MageZeroSeat {
 
     // ------------------------------------------------------------------ priority
 
-    private Integer priority(JsonObject decision) {
+    private Integer priority(JsonObject decision, Game game) {
         while (!moves.isEmpty()) {
             Move move = moves.peek();
             if (emptyDeclaration(move) || move.kind == Move.Kind.USE || move.kind == Move.Kind.COST
@@ -122,7 +152,7 @@ final class MageZeroSeat {
                 mismatch = "";
                 return move.kind == Move.Kind.PASS
                         ? candidate(decision, c -> "pass".equals(Views.text(c, "kind")), "pass")
-                        : action(decision, move);
+                        : action(decision, move, game);
             }
             if (move.kind == Move.Kind.ACTION) {
                 throw new LockstepDivergence("MageZero's " + move + " in XMage is where the kernel asks nothing: " + diff
@@ -136,9 +166,13 @@ final class MageZeroSeat {
         return null;
     }
 
-    private int action(JsonObject decision, Move move) {
+    private int action(JsonObject decision, Move move, Game game) {
         ActivatedAbility ability = (ActivatedAbility) move.value;
-        String source = kernelId(decision, move.view, ability.getSourceId());
+        cast = ability.getSourceId();
+        // the half of a card with a spell option (an omen's, Roost Seek) is cast from the card the observation shows
+        UUID card = game.getCard(cast) instanceof SpellOptionCard
+                ? ((SpellOptionCard) game.getCard(cast)).getParentCard().getId() : cast;
+        String source = kernelId(decision, move.view, card);
         String kind = ability instanceof PlayLandAbility ? "play_land"
                 : ability instanceof SpellAbility ? "cast_spell"
                 : ability instanceof ManaAbility ? "activate_mana_ability" : "activate_ability";
@@ -146,13 +180,15 @@ final class MageZeroSeat {
         Predicate<JsonObject> same = c -> kind.equals(Views.text(c, "kind")) && source != null
                 && source.equals(Views.text(c.getAsJsonObject("source"), "object_id"))
                 && (!c.has("method") || c.get("method").isJsonNull());
-        if (index(decision, same) < 0) {
-            // the kernel does not count every source of mana as castable (Elves of Deep Shadow's, which costs life):
-            // the mana XMage paid the cast with is made first, the cast kept for when the kernel offers it
-            for (UUID paid : move.paid) {
-                String id = kernelId(decision, move.view, paid);
-                int mana = index(decision, c -> "activate_mana_ability".equals(Views.text(c, "kind")) && id != null
-                        && id.equals(Views.text(c.getAsJsonObject("source"), "object_id")));
+        if (!move.paid.isEmpty()) {
+            // the mana XMage paid the action with is made first, the action kept for after it: the kernel's own payment
+            // may tap other permanents, and does not count every source as castable (Elves of Deep Shadow's)
+            for (ComputerPlayerPolicyOnlyLockstep.Paid paid : move.paid) {
+                List<String> alike = kernelIds(decision, move.view, paid.source); // identical lands: any untapped
+                int mana = index(decision, c -> "activate_mana_ability".equals(Views.text(c, "kind"))
+                        && alike.contains(Views.text(c.getAsJsonObject("source"), "object_id"))
+                        && (paid.color == null || c.get("mana_choice") == null || c.get("mana_choice").isJsonNull()
+                            || paid.color.equals(Views.text(c, "mana_choice"))));
                 if (mana >= 0) {
                     move.paid.remove(paid);
                     floating = move;
@@ -169,6 +205,13 @@ final class MageZeroSeat {
 
     private Integer pick(JsonObject decision, Game game) {
         if (Lockstep.selected(decision) == 0 || selection == null) {
+            if (upcoming() == Move.Kind.USE && offersFinish(decision)) {
+                // an optional selection XMage asks first as a yes/no (you may search): no is the kernel's finish
+                Move may = next(Move.Kind.USE);
+                if (!((ComputerPlayerPolicyOnlyLockstep.Use) may.value).value) {
+                    return candidate(decision, c -> Views.text(c, "kind").startsWith("finish_"), "no to " + may);
+                }
+            }
             Move.Kind upcoming = upcoming();
             if (upcoming != null && upcoming != Move.Kind.TARGETS) {
                 // XMage asked MageZero nothing here (it offers fewer choices, Snap only tapped lands): nothing chosen
@@ -261,9 +304,10 @@ final class MageZeroSeat {
 
     /**
      * The order of an arrangement's destinations, which XMage has already made: the kernel orders the cards kept on
-     * top, then the ones put on the bottom, each top to bottom, so each position takes the card XMage has there. The
-     * kernel's library then needs no reordering, which would move cards it knows. A graveyard's order is not compared
-     * (XMage keeps the order cards arrive in), so any order stands there.
+     * top, then the ones put on the bottom, each top to bottom, so each pick takes the card of those left that is
+     * highest in XMage's library. The kernel's library then needs no reordering, which would move cards it knows.
+     * A card XMage moved out of the library already (a dig's, to the hand or graveyard) is in any order, as is a
+     * graveyard's (XMage keeps the order cards arrive in).
      */
     private Integer order(JsonObject decision, Game game) {
         JsonObject first = Lockstep.semantic(decision, 0);
@@ -276,19 +320,34 @@ final class MageZeroSeat {
         }
         List<mage.cards.Card> library = game.getPlayer(views.player(Views.text(object, "owner_seat")))
                 .getLibrary().getCards(game);
-        int position = first.get("position").getAsInt();
         int count = first.get("count").getAsInt();
-        Set<String> names = new HashSet<>();
-        decision.getAsJsonArray("candidates").forEach(c -> names.add(Views.text(c.getAsJsonObject()
-                .getAsJsonObject("semantic").getAsJsonObject("item").getAsJsonObject("object"), "card_name")));
-        List<mage.cards.Card> ends = new ArrayList<>(library.subList(0, Math.min(count, library.size())));
-        ends.addAll(library.subList(Math.max(0, library.size() - count), library.size()));
-        if (ends.stream().noneMatch(card -> names.contains(card.getName()))) {
-            return 0; // XMage moved the cards out of the library already (a dig's, to the hand and graveyard): any order
+        if (first.get("position").getAsInt() == 0) {
+            ordered.clear();
         }
-        String name = library.get(position < kept ? position : library.size() - count + position).getName();
-        return candidate(decision, c -> name.equals(Views.text(
-                c.getAsJsonObject("item").getAsJsonObject("object"), "card_name")), "XMage's order, " + name);
+        // where the arrangement's cards are in XMage: its library's top and bottom (count cards each)
+        Set<Integer> window = new TreeSet<>();
+        for (int i = 0; i < Math.min(count, library.size()); i++) {
+            window.add(i);
+            window.add(library.size() - 1 - i);
+        }
+        window.removeAll(ordered);
+        JsonArray candidates = decision.getAsJsonArray("candidates");
+        int best = -1;
+        int highest = Integer.MAX_VALUE;
+        for (int c = 0; c < candidates.size(); c++) {
+            String name = Views.text(candidates.get(c).getAsJsonObject().getAsJsonObject("semantic")
+                    .getAsJsonObject("item").getAsJsonObject("object"), "card_name");
+            int at = window.stream().filter(i -> library.get(i).getName().equals(name)).findFirst().orElse(-1);
+            if (at < 0) {
+                return c; // moved out already: any order
+            }
+            if (at < highest) {
+                best = c;
+                highest = at;
+            }
+        }
+        ordered.add(highest);
+        return best;
     }
 
     /**
@@ -435,6 +494,10 @@ final class MageZeroSeat {
             throw new LockstepDivergence("the kernel offers no candidate for MageZero's " + what);
         }
         return i;
+    }
+
+    private static boolean offersFinish(JsonObject decision) {
+        return index(decision, c -> Views.text(c, "kind").startsWith("finish_")) >= 0;
     }
 
     private static int index(JsonObject decision, Predicate<JsonObject> semantic) {

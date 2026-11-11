@@ -286,6 +286,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             if (decision.getAsJsonArray("candidates").size() == 1 && !wanted || Lockstep.takesAll(decision)) {
                 if (seat.equals(kernel.actingSeat()) && "choose_number".equals(Lockstep.firstKind(decision))) {
                     later.add(Lockstep.semantic(decision, 0).deepCopy()); // a forced X, which XMage asks still
+                } else if (other.equals(kernel.actingSeat())) {
+                    mageZero.forced(decision);
                 }
                 step(0); // forced: one candidate, or all to take, whoever is asked (XMage makes it unasked)
                 continue;
