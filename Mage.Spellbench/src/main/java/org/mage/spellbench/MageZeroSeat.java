@@ -45,6 +45,8 @@ final class MageZeroSeat {
     private final List<UUID> blockers;
     /** MageZero's last action (the half of a card with a spell option it cast, or how it cast it). */
     private ActivatedAbility cast;
+    /** The cards MageZero took from a dig, not yet answered. */
+    private List<UUID> digPicks;
     /** The places in XMage's library of the cards an order has taken so far. */
     private final Set<Integer> ordered = new HashSet<>();
     /** MageZero's action whose mana the kernel is making first (see action). */
@@ -281,6 +283,9 @@ final class MageZeroSeat {
      * are consumed with the last card, since the kernel's order picks are answered from where XMage put the cards.
      */
     private Integer arrange(JsonObject decision, Game game) {
+        if ("dig".equals(Views.text(Lockstep.semantic(decision, 0), "purpose"))) {
+            return dig(decision, game);
+        }
         if (Lockstep.substep(decision) == 0 || selection == null) {
             selection = next(Move.Kind.TARGETS);
             if (selection == null) {
@@ -319,6 +324,33 @@ final class MageZeroSeat {
             }
         }
         return candidate(decision, c -> destination.equals(Views.text(c, "destination")), name + " to " + destination);
+    }
+
+    /**
+     * A dig (Lead the Stampede): the kernel asks each card's destination, XMage which cards go to the hand (first, as a
+     * yes/no, whether any do): a card MageZero took goes to the hand, the others where the rest go.
+     */
+    private Integer dig(JsonObject decision, Game game) {
+        JsonObject card = Lockstep.semantic(decision, 0);
+        if (card.get("card_index").getAsInt() == 0 || digPicks == null) {
+            if (upcoming() == Move.Kind.USE && !((ComputerPlayerPolicyOnlyLockstep.Use) next(Move.Kind.USE).value).value) {
+                digPicks = new ArrayList<>(); // it took none
+            } else {
+                Move taken = next(Move.Kind.TARGETS);
+                if (taken == null) {
+                    return null;
+                }
+                @SuppressWarnings("unchecked")
+                List<UUID> chosen = (List<UUID>) taken.value;
+                digPicks = new ArrayList<>(chosen);
+            }
+        }
+        String name = Views.text(card.getAsJsonObject("card"), "card_name");
+        UUID picked = digPicks.stream().filter(p -> game.getCard(p).getName().equals(name)).findFirst().orElse(null);
+        digPicks.remove(picked);
+        boolean hand = picked != null;
+        return candidate(decision, c -> hand == "hand".equals(Views.text(c, "destination")),
+                name + (hand ? " to the hand" : " not to the hand"));
     }
 
     /**

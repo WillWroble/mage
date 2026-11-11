@@ -152,8 +152,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     /** A dialog, recorded once answered with the view from before it; its nested calls are not recorded again. */
     private <T> T dialog(Game game, Move.Kind kind, Decision<T> decision, Function<T, Object> value) {
-        if (!live(game) || dialogDepth > 0) {
-            return decision.decide();
+        if (!live(game) || dialogDepth > 0 || payManaMode || isPayingMana) {
+            return decision.decide(); // inside another dialog, or while paying mana (the kernel pays itself)
         }
         Views.View before = view.apply(game);
         dialogDepth++;
@@ -327,9 +327,6 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        if (payManaMode || isPayingMana) {
-            return super.choose(outcome, choice, game); // a color while paying (Lotus Petal's): the kernel pays itself
-        }
         // a key choice while casting is the cost (an alternative cost keyed from 1): XMage asks it before the targets,
         // the kernel after them, or not at all
         Move.Kind kind = actionDepth > 0 && choice.isKeyChoice() ? Move.Kind.COST : Move.Kind.CHOICE;
