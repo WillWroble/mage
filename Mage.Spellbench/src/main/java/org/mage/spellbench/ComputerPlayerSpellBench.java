@@ -76,6 +76,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             "choose_cost_option", "choose_option", "select_object", "choose_target");
     /** The kernel's decisions in casting a spell that it asks before paying and XMage only on resolution. */
     private static final Set<String> LATER = Set.of("choose_color");
+    /** XMage's dialogs for the Archon that stand without the kernel once its game ended naturally. */
+    private static final Set<String> AFTER_END = Set.of("declare_attack", "declare_block", "choose_spell_mode");
     /** The kernel's decisions in casting a spell that XMage asks before the cost. */
     private static final Set<String> CAST = Set.of("choose_target", "choose_cast_method");
     private static final Set<String> TARGETS = Set.of("choose_target", "select_object", "choose_cost_target",
@@ -302,9 +304,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             step(kernel.archonChoice());
         }
         // a natural end may come before XMage's (the damage of a combat both seats passed through): until XMage gets
-        // there the Archon only passes, and the results are compared at XMage's end
+        // there the Archon only passes, declares nothing and casts with no form asked, and the results are compared
+        // at XMage's end
         boolean natural = "natural".equals(kernel.terminal().get("classification").getAsString());
-        if (!game.getState().isGameOver() && (!natural || kinds != null)) {
+        if (!game.getState().isGameOver() && (!natural || kinds != null && !AFTER_END.containsAll(kinds))) {
             throw new LockstepDivergence("the kernel's game ended " + kernel.terminal().get("outcome").getAsString()
                     + " (" + kernel.terminal().get("reason").getAsString() + ") while XMage's goes on"
                     + (kinds == null ? "" : " and asks the Archon " + kinds));
