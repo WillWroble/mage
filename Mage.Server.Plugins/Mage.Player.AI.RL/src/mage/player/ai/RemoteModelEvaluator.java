@@ -34,12 +34,8 @@ public class RemoteModelEvaluator implements AutoCloseable {
         }
     }
 
-    /** How many concurrent HTTP calls are allowed. Keep small when batching is enabled. */
-    public int max_concurrent_calls = 8;
-
 
     // ---------- batching controls ----------
-    public int batchInterval = 32000;//micro seconds
     public int maxBatchSize = 32;
 
     private final OkHttpClient http;
@@ -63,9 +59,9 @@ public class RemoteModelEvaluator implements AutoCloseable {
             this.promise = new CompletableFuture<>();
         }
     }
-
-    public RemoteModelEvaluator(String baseUrl) throws IOException {
-        this.permits = new Semaphore(Math.max(1, max_concurrent_calls), true);
+    public RemoteModelEvaluator(String baseUrl, int maxConcurrentCalls, int maxBatchSize, int batchInterval) throws IOException {
+        this.maxBatchSize = maxBatchSize;
+        this.permits = new Semaphore(Math.max(1, maxConcurrentCalls), true);
         this.http = new OkHttpClient.Builder()
                 .retryOnConnectionFailure(true)
                 .connectionPool(new ConnectionPool(8, 120, TimeUnit.SECONDS))
@@ -97,7 +93,6 @@ public class RemoteModelEvaluator implements AutoCloseable {
         this.scheduler.scheduleAtFixedRate(this::flushIfAny, batchInterval, batchInterval, TimeUnit.MICROSECONDS);
     }
 
-    public RemoteModelEvaluator() throws IOException { this("http://127.0.0.1:50052"); }
 
     // ----------------- Public API -----------------
 

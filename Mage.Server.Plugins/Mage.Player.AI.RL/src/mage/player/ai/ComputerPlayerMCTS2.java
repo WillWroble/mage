@@ -98,7 +98,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         stateEncoder.setOpponent(opponent.getId());
         //find model endpoint
         try {
-            nn = new RemoteModelEvaluator(defaultURL);
+            nn = new RemoteModelEvaluator(defaultURL, 8, 32, 32000);
         } catch (Exception e) {
             logger.warn("Failed to establish connection to network model; falling back to offline mode");
             offlineMode = true;

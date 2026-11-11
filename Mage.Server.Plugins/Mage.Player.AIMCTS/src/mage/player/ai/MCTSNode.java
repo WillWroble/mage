@@ -426,7 +426,7 @@ public class MCTSNode {
 
         for (MCTSNode child : children) {
             // value term: 0 if unvisited, else average reward
-            double q = (child.getVisits() > 0)
+            double q = (child.visits+child.virtualVisits > 0)
                     ? (child.getPerspectiveScore(sign))
                     : 0.0;
             // exploration term

@@ -90,10 +90,8 @@ public class ParallelDataGenerator {
 
         String modelUrlA = "http://" + Config.INSTANCE.server.host + ":" + Config.INSTANCE.server.port;
         try {
-            remoteModelEvaluatorA = new RemoteModelEvaluator(modelUrlA);
-            remoteModelEvaluatorA.max_concurrent_calls = Config.INSTANCE.server.max_requests;
-            remoteModelEvaluatorA.maxBatchSize = Config.INSTANCE.server.max_batch;
-            remoteModelEvaluatorA.batchInterval = Config.INSTANCE.server.batch_timeout_us;
+            remoteModelEvaluatorA = new RemoteModelEvaluator(modelUrlA, Config.INSTANCE.server.max_requests,
+                    Config.INSTANCE.server.max_batch, Config.INSTANCE.server.batch_timeout_us);
         } catch (Exception e) {
             logger.warn("Failed to establish connection to network model A; falling back to offline mode");
             remoteModelEvaluatorA = null;
@@ -101,10 +99,8 @@ public class ParallelDataGenerator {
 
         String modelUrlB = "http://" + Config.INSTANCE.server.host + ":" + Config.INSTANCE.server.opponentPort;
         try {
-            remoteModelEvaluatorB = new RemoteModelEvaluator(modelUrlB);
-            remoteModelEvaluatorB.max_concurrent_calls = Config.INSTANCE.server.max_requests;
-            remoteModelEvaluatorB.maxBatchSize = Config.INSTANCE.server.max_batch;
-            remoteModelEvaluatorB.batchInterval = Config.INSTANCE.server.batch_timeout_us;
+            remoteModelEvaluatorB = new RemoteModelEvaluator(modelUrlB, Config.INSTANCE.server.max_requests,
+                    Config.INSTANCE.server.max_batch, Config.INSTANCE.server.batch_timeout_us);
         } catch (Exception e) {
             logger.warn("Failed to establish connection to network model B; falling back to offline mode");
             remoteModelEvaluatorB = null;
