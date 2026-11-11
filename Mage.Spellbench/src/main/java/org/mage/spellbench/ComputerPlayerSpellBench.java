@@ -84,7 +84,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient String seat;
     private transient String other;
     private transient KernelMatch kernel;
-    /** The mana XMage has left to pay for the Archon's action, while it pays it. */
+    /** The mana XMage has left to pay for the Archon, while it pays it. */
     private transient ManaCost paying;
     private transient Views views;
     private transient MageZeroSeat mageZero;
@@ -688,8 +688,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /**
-     * The Archon's mana payment is the kernel's (engine autopay, no decision): while XMage pays for the Archon's action,
-     * its producers are the permanents the kernel tapped and XMage has not, by name (permanents of a name are alike).
+     * The Archon's mana payment is the kernel's (engine autopay, no decision): while XMage pays for the Archon (its
+     * action, or a cost on resolution: Nihil Spellbomb's {B}), its producers are the permanents the kernel tapped and
+     * XMage has not, by name (permanents of a name are alike).
      * XMage's own payment picks the mana from them; with none, it pays as it would, and the next comparison checks it.
      */
     @Override
@@ -704,7 +705,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 return null;
             }, null);
         }
-        paying = acting != null && !over && kernel.terminal() == null ? unpaid : null;
+        paying = !over && kernel.terminal() == null ? unpaid : null;
         try {
             return super.playMana(ability, unpaid, promptText, game);
         } finally {
