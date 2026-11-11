@@ -44,7 +44,8 @@ public class MCTSNode2 extends MCTSNode {
                     networkScore = 0;
                 }
             }
-            backpropagate(1 + networkScore, 0);
+            backpropagate(networkScore, 1);
+            backpropagateVirtualVisit(-1);
             evaluationPending = false;
             ((ComputerPlayerMCTS2)basePlayer).pendingNodes.decrementAndGet();
             return;
@@ -80,7 +81,9 @@ public class MCTSNode2 extends MCTSNode {
                         }
                         int perspective = playerId.equals(targetPlayer) ? 1 : -1;
                         networkScore = perspective * out.value;
-                        backpropagate(1 + networkScore, 0);
+                        backpropagate(networkScore, 1);
+                        backpropagateVirtualVisit(-1);
+
                         setPriors();
                         ((ComputerPlayerMCTS2) basePlayer).pendingNodes.decrementAndGet();
                         evaluationPending = false;

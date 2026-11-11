@@ -55,7 +55,6 @@ public class ComputerPlayerMCTS extends ComputerPlayer {
     public boolean pimc = MCTSDefaults.CURRENT.pimc;
     //exploration constant
     public double c_puct = MCTSDefaults.CURRENT.c_puct;
-    public double c_perspective = 1;
     //adjust based on available RAM and threads running
     public static int MAX_TREE_NODES = 10000;
     public static int MAX_TREE_DEPTH = 1000;

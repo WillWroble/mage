@@ -160,7 +160,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         int illegalPurged = 0;
         int validDuplicatesPurged = 0;
         int invalidDuplicatesPurged = 0;
-        c_perspective = 1;
 
 
         while (true) {
@@ -232,21 +231,21 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
                     }
                 }
             }
-            double result;
             if (!current.isTerminal()) {
                 // eval
                 current.evaluate();
                 //expand
                 current.expand();
                 //temporary result (virtual loss)
-                result = -1;
 
             } else {
-                result = current.isWinner() ? 1.0 : -1.0;
+                double result = current.isWinner() ? 1.0 : -1.0;
+                current.backpropagate(result);
                 logger.debug("found terminal node in tree");
+                simCount++;
+                continue;
             }
-            // backprop
-            current.backpropagate(result);
+            current.backpropagateVirtualVisit(1);
             simCount++;
         }
         totalSimulations += simCount;
@@ -313,7 +312,7 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         if (root != null) {
             root = (MCTSNode2) root.getMatchingState(newRoot.featureGraph);
         }
-        if (root == null || c_perspective==-1) {
+        if (root == null) {
             root = newRoot;
         }
         root.emancipate();

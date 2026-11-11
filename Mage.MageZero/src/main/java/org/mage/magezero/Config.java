@@ -169,11 +169,17 @@ public class Config {
         public final String host;
         public final int port;
         public final int opponentPort;
+        public final int max_requests;
+        public final int max_batch;
+        public final int batch_timeout_us;
 
         public ServerConfig(Map<String, Object> raw) {
             this.host = (String) raw.getOrDefault("host", "localhost");
             this.port = ((Number) raw.getOrDefault("port", 8080)).intValue();
             this.opponentPort = ((Number) raw.getOrDefault("opponent_port", 8081)).intValue();
+            this.max_requests = ((Number) raw.getOrDefault("max_requests", 8)).intValue();
+            this.max_batch = ((Number) raw.getOrDefault("max_batch", 32)).intValue();
+            this.batch_timeout_us = ((Number) raw.getOrDefault("batch_timeout_us", 32000)).intValue();
         }
     }
 

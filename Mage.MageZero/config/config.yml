@@ -4,13 +4,13 @@ goes_first: random  # player_a, player_b, random
 
 player_a:
   deckPath: decks/Pauper-Faeries.txt
-  type: on_policy
+  type: mcts
   #output_file: data/playerA/AvsB.hdf5
 
   priors:
-    priority: true
-    target: true
-    binary: true
+    priority: false
+    target: false
+    binary: false
     opponent: false
     prior_temperature: 1.5
 
@@ -38,7 +38,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Standard-MonoU.dck
+  deckPath: decks/Pauper-Faeries.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -82,6 +82,9 @@ server:
   host: localhost
   port: 50052 #50052
   opponent_port: 50053 #50053
+  max_requests: 8
+  max_batch: 32
+  batch_timeout_us: 32000
 
 logging:
   sparse: false #does nothing

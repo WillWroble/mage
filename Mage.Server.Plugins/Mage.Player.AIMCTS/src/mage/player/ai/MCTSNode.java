@@ -45,6 +45,7 @@ public class MCTSNode {
 
     //node statistics
     private int visits = 0;
+    private volatile int virtualVisits = 0;
     private int depth = 1;
     private long dirichletSeed = 0;
     private double prior = 1;
@@ -195,6 +196,11 @@ public class MCTSNode {
     public double getMeanScore() {
         if (getVisits() > 0)
             return (score)/((visits)* 1.0);
+        return -1;
+    }
+    public double getPerspectiveScore(int perspective) {
+        if (getVisits() > 0)
+            return (score*perspective - virtualVisits)/((visits + virtualVisits)* 1.0);
         return -1;
     }
     public int getVisits() {
@@ -411,7 +417,7 @@ public class MCTSNode {
         }
 
         boolean isTarget = playerId.equals(targetPlayerId);
-        double sign = isTarget ? +1.0 : -1.0;
+        int sign = isTarget ? 1 : -1;
 
         MCTSNode best    = null;
         double bestVal = Double.NEGATIVE_INFINITY;
@@ -421,13 +427,13 @@ public class MCTSNode {
         for (MCTSNode child : children) {
             // value term: 0 if unvisited, else average reward
             double q = (child.getVisits() > 0)
-                    ? (child.getMeanScore())
+                    ? (child.getPerspectiveScore(sign))
                     : 0.0;
             // exploration term
-            double u = basePlayer.c_perspective * basePlayer.c_puct * (child.prior) * (sqrtN / (1 + child.getVisits()));
+            double u = basePlayer.c_puct * (child.prior) * (sqrtN / (1 + child.getVisits()));
 
             // combined PUCT
-            double val = sign * q + u;
+            double val = q + u;
 
             if (val > bestVal) {
                 bestVal = val;
@@ -577,6 +583,12 @@ public class MCTSNode {
             parent.backpropagate(result * basePlayer.backpropDiscount, n);
         }
 
+    }
+    public synchronized void backpropagateVirtualVisit(int n) {
+        virtualVisits+=n;
+        if(parent != null) {
+            parent.backpropagateVirtualVisit(n);
+        }
     }
     public MCTSNode bestChild(Game baseGame) {
         ComputerPlayerMCTS myPlayer = basePlayer;

@@ -35,12 +35,12 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     /** How many concurrent HTTP calls are allowed. Keep small when batching is enabled. */
-    public static int MAX_CONCURRENT_CALLS = 8;
+    public int max_concurrent_calls = 8;
 
 
     // ---------- batching controls ----------
-    public static final int batchInterval = 32000;//micro seconds
-    public static final int maxBatchSize = 32;
+    public int batchInterval = 32000;//micro seconds
+    public int maxBatchSize = 32;
 
     private final OkHttpClient http;
     private final HttpUrl evalUrl;
@@ -65,7 +65,7 @@ public class RemoteModelEvaluator implements AutoCloseable {
     }
 
     public RemoteModelEvaluator(String baseUrl) throws IOException {
-        this.permits = new Semaphore(Math.max(1, MAX_CONCURRENT_CALLS), true);
+        this.permits = new Semaphore(Math.max(1, max_concurrent_calls), true);
         this.http = new OkHttpClient.Builder()
                 .retryOnConnectionFailure(true)
                 .connectionPool(new ConnectionPool(8, 120, TimeUnit.SECONDS))
