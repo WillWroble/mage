@@ -183,9 +183,12 @@ final class MageZeroSeat {
         Predicate<JsonObject> same = c -> kind.equals(Views.text(c, "kind")) && source != null
                 && source.equals(Views.text(c.getAsJsonObject("source"), "object_id"))
                 && (!c.has("method") || c.get("method").isJsonNull());
-        if (!move.paid.isEmpty()) {
+        String step = Views.text(Lockstep.observation(decision), "phase_step");
+        boolean oneAction = "declare_attackers".equals(step) || "declare_blockers".equals(step);
+        if (!move.paid.isEmpty() && (!oneAction || index(decision, same) < 0)) {
             // the mana XMage paid the action with is made first, the action kept for after it: the kernel's own payment
-            // may tap other permanents, and does not count every source as castable (Elves of Deep Shadow's)
+            // may tap other permanents, and does not count every source as castable (Elves of Deep Shadow's). Not in
+            // a declare step unless it must: the kernel gives one action a round there (ninjutsu's)
             for (ComputerPlayerPolicyOnlyLockstep.Paid paid : move.paid) {
                 List<String> alike = kernelIds(decision, move.view, paid.source); // identical lands: any untapped
                 int mana = index(decision, c -> "activate_mana_ability".equals(Views.text(c, "kind"))
