@@ -3,7 +3,9 @@ package org.mage.spellbench;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 
+import java.util.Map;
 import java.util.Set;
 
 /** Reading a kernel seat decision (spec 7, 8). */
@@ -29,24 +31,25 @@ final class Lockstep {
             stack.add(topFirst.get(i));
         }
         copy.add("stack", stack);
-        // an embalmed token is named as its card (CR 702.128a); mtg-kernel names it by its catalog entry
-        JsonArray players = new JsonArray();
-        for (JsonElement p : observation.getAsJsonArray("players")) {
-            JsonObject player = p.getAsJsonObject();
-            JsonArray battlefield = player.getAsJsonArray("battlefield");
-            if (battlefield.toString().contains(EMBALMED)) {
-                player = player.deepCopy();
-                for (JsonElement b : player.getAsJsonArray("battlefield")) {
-                    String name = Views.text(b.getAsJsonObject(), "card_name");
-                    if (name != null && name.endsWith(EMBALMED)) {
-                        b.getAsJsonObject().addProperty("card_name", name.substring(0, name.length() - EMBALMED.length()));
-                    }
+        // an embalmed token is named as its card (CR 702.128a), wherever it is named; mtg-kernel names it by its
+        // catalog entry
+        return copy.toString().contains(EMBALMED) ? (JsonObject) unembalmed(copy.deepCopy()) : copy;
+    }
+
+    private static JsonElement unembalmed(JsonElement e) {
+        if (e.isJsonObject()) {
+            for (Map.Entry<String, JsonElement> entry : e.getAsJsonObject().entrySet()) {
+                JsonElement v = entry.getValue();
+                if (entry.getKey().equals("card_name") && v.isJsonPrimitive() && v.getAsString().endsWith(EMBALMED)) {
+                    entry.setValue(new JsonPrimitive(v.getAsString().substring(0, v.getAsString().length() - EMBALMED.length())));
+                } else {
+                    unembalmed(v);
                 }
             }
-            players.add(player);
+        } else if (e.isJsonArray()) {
+            e.getAsJsonArray().forEach(Lockstep::unembalmed);
         }
-        copy.add("players", players);
-        return copy;
+        return e;
     }
 
     private static final String EMBALMED = " Embalmed Token";

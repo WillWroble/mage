@@ -22,6 +22,7 @@ import mage.game.combat.CombatGroup;
 import mage.game.permanent.Permanent;
 import mage.util.CardUtil;
 import mage.util.MultiAmountMessage;
+import mage.Mana;
 import mage.MageObject;
 import mage.cards.Card;
 import mage.cards.CardWithSpellOption;
@@ -90,7 +91,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient MageZeroSeat mageZero;
     private transient String logs;
     private transient boolean over;
-    /** How the kernel's priority for the Archon differed from XMage's at the Archon's last priority it passed. */
+    /** How the kernel's priority for the Archon differed from XMage's at the first priority it passed since a match. */
     private transient List<String> passedAt = List.of();
     /** The current combat declaration: each of the Archon's creatures with what it attacks or blocks (null: none). */
     private transient Map<UUID, UUID> declaration;
@@ -220,7 +221,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         }
         throw new LockstepDivergence("XMage asks the Archon " + (kinds == null ? "priority" : kinds)
                 + "; the kernel asks it " + Lockstep.firstKind(decision)
-                + "; at the Archon's last priority it differed by " + passedAt);
+                + "; at the Archon's first priority since the last match it differed by " + passedAt);
     }
 
     /**
@@ -456,11 +457,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (!diff.isEmpty()) {
             if (views.before(Lockstep.observation(decision), now)) {
                 throw new LockstepDivergence("XMage went past the kernel's priority for the Archon: " + diff
-                        + "; at the Archon's last priority it differed by " + passedAt);
+                        + "; at the Archon's first priority since the last match it differed by " + passedAt);
             }
-            passedAt = diff;
+            if (passedAt.isEmpty()) {
+                passedAt = diff;
+            }
             return false; // the kernel asks the Archon at a later point
         }
+        passedAt = List.of();
         Views.View view = views.view(game, seat);
         JsonObject semantic = archon();
         String kind = Views.text(semantic, "kind");
@@ -718,6 +722,61 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     }
 
     /**
+     * While paying for the Archon, the mana of the permanents the kernel tapped: each colored (or {C}) symbol first,
+     * from the permanent that makes the fewest of the colors still needed, then the generic rest. XMage's AI pays the
+     * generic first from what it sorts first (a Guildgate the color needs), and is left only the kernel's colorless
+     * source for the color. With none of these fitting (a filter's mana), XMage pays as it would.
+     */
+    @Override
+    protected boolean playManaHandling(Ability ability, ManaCost unpaid, Game game) {
+        ActivatedManaAbilityImpl kernels = paying == null ? null : kernelMana(game, unpaid.getMana());
+        return kernels != null ? activateAbility(kernels, game) : super.playManaHandling(ability, unpaid, game);
+    }
+
+    private ActivatedManaAbilityImpl kernelMana(Game game, Mana need) {
+        Map<String, Integer> beyond = tappedBeyond(game);
+        boolean specific = colors(need, need) > 0;
+        ActivatedManaAbilityImpl best = null;
+        int scarcest = Integer.MAX_VALUE;
+        for (Permanent permanent : game.getBattlefield().getAllActivePermanents(playerId)) {
+            if (!beyond.containsKey(permanent.getName())) {
+                continue;
+            }
+            List<ActivatedManaAbilityImpl> free = new ArrayList<>();
+            Mana makes = new Mana();
+            for (ActivatedManaAbilityImpl ability : permanent.getAbilities()
+                    .getAvailableActivatedManaAbilities(Zone.BATTLEFIELD, playerId, game)) {
+                if (ability.getManaCosts().isEmpty()) {
+                    free.add(ability);
+                    ability.getNetMana(game).forEach(makes::add);
+                }
+            }
+            int options = colors(need, makes);
+            for (ActivatedManaAbilityImpl ability : free) {
+                boolean fits = ability.getNetMana(game).stream()
+                        .anyMatch(mana -> specific ? colors(need, mana) > 0 : mana.count() > 0);
+                if (fits && options < scarcest) {
+                    best = ability;
+                    scarcest = options;
+                }
+            }
+        }
+        return best;
+    }
+
+    /** How many of the colors (and {C}) {@code need} asks for {@code mana} has. */
+    private static int colors(Mana need, Mana mana) {
+        int n = 0;
+        n += need.getWhite() > 0 && mana.getWhite() > 0 ? 1 : 0;
+        n += need.getBlue() > 0 && mana.getBlue() > 0 ? 1 : 0;
+        n += need.getBlack() > 0 && mana.getBlack() > 0 ? 1 : 0;
+        n += need.getRed() > 0 && mana.getRed() > 0 ? 1 : 0;
+        n += need.getGreen() > 0 && mana.getGreen() > 0 ? 1 : 0;
+        n += need.getColorless() > 0 && mana.getColorless() > 0 ? 1 : 0;
+        return n;
+    }
+
+    /**
      * While paying for the Archon, a mana ability that costs mana itself (Heap Gate's filter) only when the kernel
      * filtered too: when it tapped more permanents than the mana left to pay. XMage's payer may pick it otherwise.
      */
@@ -788,7 +847,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (into == null) {
             return false;
         }
-        target.add(into, game); // a declaration targets nothing (XMage's dialog is a target: a hexproof attacker)
+        target.add(into, game); // a declaration targets nothing, though XMage asks it as a target
         return true;
     }
 
@@ -837,6 +896,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         xmage.run();
         guard(game, () -> {
             for (Map.Entry<UUID, UUID> e : declaration.entrySet()) {
+                if (!attack && e.getValue() != null && !game.getCombat().getBlockers().contains(e.getKey())) {
+                    // XMage's AI offers a block only as a target: never a hexproof attacker (Saiba Cryptomancer),
+                    // which a block does not target; declared as XMage's loop declares its choices
+                    declareBlocker(playerId, e.getKey(), e.getValue(), game);
+                }
                 boolean declared = attack ? game.getCombat().getAttackers().contains(e.getKey())
                         : game.getCombat().getBlockers().contains(e.getKey());
                 if (e.getValue() != null && !declared) {
