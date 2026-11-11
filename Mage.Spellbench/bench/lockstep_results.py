@@ -1,5 +1,5 @@
 """Results of lockstep benchmark games, from each game's record (lockstep-games.jsonl) under a results root laid out
-<root>/<archon>/<deck>/<archon seat>-<first>/<game>/logs/: per Archon and opponent deck, the games, how many played to
+<root>/<archon>/<deck>/<archon seat>-<first>/<run>/logs/ (a run's JVM may play several games): per Archon and opponent deck, the games, how many played to
 a natural end in both engines, MageZero's wins, the Archon's wins and draws there, and the divergences (games stopped
 where the engines disagreed, which have no result).
 
@@ -20,15 +20,15 @@ for path in sorted(root.glob("*/*/*/*/logs/lockstep-games.jsonl")):
     if path.parent.parent.stat().st_mtime < since:
         continue
     archon, deck = path.parts[-6], path.parts[-5]
-    record = json.loads(path.read_text().splitlines()[0])
     row = rows[(archon, deck)]
-    row["games"] += 1
-    if record["divergence"] is not None:
-        row["divergences"] += 1
-        continue
-    row["full"] += 1
-    winner = record["xmage_winner"]
-    row["draws" if winner is None else "archon" if winner == record["archon_seat"] else "magezero"] += 1
+    for record in map(json.loads, path.read_text().splitlines()):  # a game each (a JVM may play several)
+        row["games"] += 1
+        if record["divergence"] is not None:
+            row["divergences"] += 1
+            continue
+        row["full"] += 1
+        winner = record["xmage_winner"]
+        row["draws" if winner is None else "archon" if winner == record["archon_seat"] else "magezero"] += 1
 
 print(f"{'archon':7} {'deck':9} {'games':>5} {'full':>5} {'MageZero':>8} {'Archon':>6} {'draws':>5} {'diverged':>8} "
       f"{'MZ win %':>8}")
