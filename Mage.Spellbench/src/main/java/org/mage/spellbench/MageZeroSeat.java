@@ -16,6 +16,7 @@ import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +52,8 @@ final class MageZeroSeat {
     private final Set<Integer> ordered = new HashSet<>();
     /** MageZero's action whose mana the kernel is making first (see action). */
     private Move floating;
-    /** MageZero's cost of its cast, passed over for the targets the kernel asks first. */
-    private Move cost;
+    /** MageZero's cost and X of its cast, passed over for the targets the kernel asks first. */
+    private final Map<Move.Kind, Move> passedOver = new EnumMap<>(Move.Kind.class);
     /** How the kernel's priority differed from MageZero's first pass dropped since the last match. */
     String mismatch = "";
 
@@ -174,6 +175,7 @@ final class MageZeroSeat {
     private int action(JsonObject decision, Move move, Game game) {
         ActivatedAbility ability = (ActivatedAbility) move.value;
         cast = ability;
+        passedOver.clear(); // a new action: what an earlier one left is over
         // the half of a card with a spell option (an omen's, Roost Seek) is cast from the card the observation shows
         UUID card = game.getCard(ability.getSourceId()) instanceof SpellOptionCard
                 ? ((SpellOptionCard) game.getCard(ability.getSourceId())).getParentCard().getId() : ability.getSourceId();
@@ -221,6 +223,10 @@ final class MageZeroSeat {
                 }
             }
             Move.Kind upcoming = upcoming();
+            Integer took = upcoming == Move.Kind.TARGETS ? null : tookUnasked(decision, game);
+            if (took != null) {
+                return took;
+            }
             if (upcoming != null && upcoming != Move.Kind.TARGETS) {
                 // XMage asked MageZero nothing here (it offers fewer choices, Snap only tapped lands): nothing chosen
                 selection = null;
@@ -476,7 +482,8 @@ final class MageZeroSeat {
 
     /** The kind of MageZero's next move after its passes and empty declarations, or null when it has made none. */
     private Move.Kind upcoming() {
-        return moves.stream().filter(m -> m.kind != Move.Kind.PASS && m.kind != Move.Kind.COST && !emptyDeclaration(m))
+        return moves.stream().filter(m -> m.kind != Move.Kind.PASS && m.kind != Move.Kind.COST
+                        && m.kind != Move.Kind.NUMBER && !emptyDeclaration(m))
                 .findFirst()
                 .map(m -> m.kind).orElse(null);
     }
@@ -497,17 +504,15 @@ final class MageZeroSeat {
                 || kind != Move.Kind.COST && moves.peek().kind == Move.Kind.COST
                 || kind != Move.Kind.NUMBER && moves.peek().kind == Move.Kind.NUMBER)) {
             // passes where the kernel opens no priority; at combat, yes/no's before it the kernel did not offer; out of
-            // combat, declarations of nothing the kernel did not ask; a cast's cost, which the kernel asks after the
-            // targets (kept for it) or not at all
+            // combat, declarations of nothing the kernel did not ask; a cast's cost or X, which the kernel asks after
+            // the targets (kept for it: a bestowed Nyxborn Hydra) or not at all
             Move skipped = moves.poll();
-            if (skipped.kind == Move.Kind.COST) {
-                cost = skipped;
+            if (skipped.kind == Move.Kind.COST || skipped.kind == Move.Kind.NUMBER) {
+                passedOver.put(skipped.kind, skipped);
             }
         }
-        if (kind == Move.Kind.COST && cost != null) {
-            Move kept = cost;
-            cost = null;
-            return kept;
+        if (passedOver.containsKey(kind)) {
+            return passedOver.remove(kind);
         }
         Move move = moves.poll();
         if (move != null && move.kind != kind) {
@@ -548,6 +553,41 @@ final class MageZeroSeat {
             throw new LockstepDivergence("the kernel offers no candidate for MageZero's " + what);
         }
         return i;
+    }
+
+    /**
+     * The one library card a search offers when XMage took it for MageZero without asking (the one card there is to
+     * find: Gatecreeper Vine's): MageZero's hand in XMage has more of it than the kernel's; else null.
+     */
+    private Integer tookUnasked(JsonObject decision, Game game) {
+        JsonArray candidates = decision.getAsJsonArray("candidates");
+        Integer only = null;
+        for (int i = 0; i < candidates.size(); i++) {
+            JsonObject object = object(candidates.get(i).getAsJsonObject().getAsJsonObject("semantic"));
+            if (object != null) {
+                if (only != null || !"library".equals(Views.text(object, "zone"))) {
+                    return null;
+                }
+                only = i;
+            }
+        }
+        if (only == null) {
+            return null;
+        }
+        JsonObject card = object(candidates.get(only).getAsJsonObject().getAsJsonObject("semantic"));
+        String name = Views.text(card, "card_name");
+        String seat = Views.text(card, "owner_seat");
+        long inXMage = game.getPlayer(views.player(seat)).getHand().getCards(game).stream()
+                .filter(c -> c.getName().equals(name)).count();
+        long inKernel = 0;
+        for (JsonElement p : Lockstep.observation(decision).getAsJsonArray("players")) {
+            JsonElement hand = p.getAsJsonObject().get("hand");
+            if (seat.equals(Views.text(p.getAsJsonObject(), "seat")) && hand != null && hand.isJsonArray()) {
+                inKernel = hand.getAsJsonArray().asList().stream()
+                        .filter(c -> name.equals(Views.text(c.getAsJsonObject(), "card_name"))).count();
+            }
+        }
+        return inXMage > inKernel ? only : null;
     }
 
     private static boolean offersFinish(JsonObject decision) {
