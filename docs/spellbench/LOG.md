@@ -152,3 +152,24 @@ stopped with a worker restart, so MageZero played without its model (every game 
 
 Open: CawGates (Archon's casts refused: Sacred Cat; Heap Gate/Gates payment; priority skipped), Wildfire (Fanatical
 Offering refused), blockers XMage did not declare (Nyxborn Hydra, Humbling Elder), MageZero's Of One Mind.
+
+### 2026-11-11, one build: 17efbe9d, two schedule cycles (64 games)
+
+Fixed since 0c6c10b2: the Archon's mana from the kernel's lands, colored symbols first (XMage's AI paid generic from
+the Guildgate the color needed; Sea Gates of other chosen colors; a land tapped then sacrificed); blocks of a hexproof
+attacker (XMage's AI asks a block as a target); embalmed names in blocks; a target's further picks (Blood Fountain).
+
+    archon  deck      games  full MageZero Archon draws diverged
+    g115    Affinity      8     6        3      3     0        2
+    g115    Burn          8     8        6      2     0        0
+    g115    CawGates      8     5        5      0     0        3
+    g115    Elves         8     6        2      4     0        2
+    g115    Faeries       8     8        7      1     0        0
+    g115    Rally         8     8        1      7     0        0
+    g115    Spy           8     7        7      0     0        1
+    g115    Wildfire      8     4        3      1     0        4
+    g115    all          64    52       34     18     0       12
+
+Completion 81% (70% on 0c6c10b2). Open: library order after a shuffle the kernel resolves with a draw in one step
+(Lembas, then Fanatical Offering's draw), the most common remaining stop; Affinity games where the kernel's game ended
+first (2); an Undercity room pick the kernel took before XMage asked.
