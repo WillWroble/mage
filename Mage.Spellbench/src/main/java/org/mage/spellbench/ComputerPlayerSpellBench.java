@@ -92,6 +92,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient String seat;
     private transient String other;
     private transient KernelMatch kernel;
+    /** The Archon's action is cast for its alternative cost (see cost). */
+    private transient boolean alternative;
     /** The mana XMage has left to pay for the Archon, while it pays it. */
     private transient ManaCost paying;
     private transient Views views;
@@ -543,6 +545,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
         } finally {
             acting = null;
+            alternative = false;
             picks.clear();
         }
         return true;
@@ -814,15 +817,21 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
      */
     private void tapBeforeSacrifice(Game game, UUID sacrificed) {
         Permanent permanent = game.getPermanent(sacrificed);
-        if (acting == null || permanent == null || permanent.isTapped()) {
-            return;
+        if (acting == null || alternative || permanent == null || permanent.isTapped()) {
+            return; // an alternative cost pays no mana (Fireblast's sacrifice is all of it)
         }
         int needed = acting.getManaCostsToPay().getMana().count() - getManaPool().getMana().count();
         int tapped = tappedBeyond(game).values().stream().mapToInt(Integer::intValue).sum();
         if (needed <= tapped) {
             return;
         }
-        for (ActivatedManaAbilityImpl ability : permanent.getAbilities().getActivatedManaAbilities(Zone.BATTLEFIELD)) {
+        // the mana of a color the cost needs first (Drossforge Bridge's {B} for Fanatical Offering, not its {R})
+        Mana cost = acting.getManaCostsToPay().getMana();
+        List<ActivatedManaAbilityImpl> abilities = new ArrayList<>(
+                permanent.getAbilities().getActivatedManaAbilities(Zone.BATTLEFIELD));
+        abilities.sort(Comparator.comparingInt(ability -> ability.getNetMana(game).stream()
+                .anyMatch(mana -> colors(cost, mana) > 0) ? 0 : 1));
+        for (ActivatedManaAbilityImpl ability : abilities) {
             if (ability.canActivate(playerId, game).canActivate() && activateAbility(ability, game)) {
                 return;
             }
@@ -1196,9 +1205,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 continue;
             }
             if ("choose_cast_method".equals(kind)) {
-                return "alternative".equals(Views.text(archon(), "method")) ? "1" : "2";
+                alternative = "alternative".equals(Views.text(archon(), "method"));
+                return alternative ? "1" : "2";
             }
-            return tappedBeyond(game).isEmpty() ? "1" : "2";
+            alternative = tappedBeyond(game).isEmpty();
+            return alternative ? "1" : "2";
         }
     }
 
