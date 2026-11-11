@@ -110,6 +110,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private final transient List<String> ordered = new ArrayList<>();
     private transient boolean destinationChosen;
     private final transient Deque<List<String>> arrangement = new ArrayDeque<>();
+    /** The arrangement's first answer is a dig's picks, which XMage may ask first as a yes/no (an optional pick). */
+    private transient boolean digPicks;
     /** The Archon's order of cards it puts on its library, and the picks it answers XMage's placing dialogs with. */
     private final transient List<String> placing = new ArrayList<>();
     private final transient Deque<String> placeOrder = new ArrayDeque<>();
@@ -340,6 +342,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 .forEach(c -> moved.add(c[0]));
         if (!purpose.equals("dig") || destinationChosen) { // XMage asks a dig's picks only when they are a choice
             arrangement.add(moved);
+            digPicks = purpose.equals("dig");
         }
         List<String> bottom = by.getOrDefault("bottom", List.of());
         for (int i = 0; i < bottom.size() - 1; i++) {
@@ -394,6 +397,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         if (arrangement.isEmpty()) {
             return null;
         }
+        digPicks = false;
         for (String name : arrangement.poll()) {
             fromCards.getCards(game).stream()
                     .filter(card -> card.getName().equals(name) && !target.contains(card.getId()))
@@ -875,6 +879,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             }
         }
         JsonObject decision = next(game, USE);
+        if (digPicks) { // XMage asks first whether the Archon takes any of a dig's cards (Lead the Stampede)
+            digPicks = false;
+            if (arrangement.peek().isEmpty()) {
+                arrangement.poll(); // none: XMage asks no picks
+                return false;
+            }
+            return true;
+        }
         if (decision == null || !wanted(decision, USE)) {
             // the kernel has passed this point (it waits on MageZero, or asks the Archon something later): it offers an
             // option only when it can be taken (a payment the Archon can make), and did not offer this one
@@ -1071,13 +1083,14 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         return xmage(game, view, decision, reference, List.of());
     }
 
-    /** The same, where a card known by name only (in a library, a hidden hand) is one not already {@code taken}. */
+    /** The same, where a card known by name only (in a library or a hand) is one not already {@code taken}. */
     private UUID xmage(Game game, Views.View view, JsonObject decision, JsonObject reference, List<UUID> taken) {
         Views.Locator at = Views.locate(Lockstep.observation(decision), Views.text(reference, "object_id"));
         String zone = Views.text(reference, "zone");
-        if ("library".equals(zone) || at == null && "hand".equals(zone)) {
-            // a card in a library or in a hand the Archon cannot see (revealed to it: Mesmeric Fiend's choice) is
-            // shown by name only: any card of that name there
+        if ("library".equals(zone) || "hand".equals(zone)) {
+            // a card in a library, or in a hand (unordered: cards of a name are alike there, and XMage may have moved
+            // an earlier pick of the same choice already, as Brainstorm's put-backs; one the Archon cannot see is
+            // revealed to it, as Mesmeric Fiend's choice), is any card of that name there
             Player owner = game.getPlayer(views.player(Views.text(reference, "owner_seat")));
             for (Card card : "library".equals(zone) ? owner.getLibrary().getCards(game) : owner.getHand().getCards(game)) {
                 if (card.getName().equals(Views.text(reference, "card_name")) && !taken.contains(card.getId())) {

@@ -12,6 +12,7 @@ import mage.game.Game;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
@@ -248,8 +249,27 @@ final class MageZeroSeat {
                 c.getAsJsonObject("item").getAsJsonObject("object"), "card_name")), "XMage's order, " + name);
     }
 
-    /** A trigger put on the stack: the one MageZero's XMage put there next (position 0 is put there first). */
+    /**
+     * A trigger put on the stack: the one MageZero's XMage put there next (position 0 is put there first). The
+     * initiative's taking on combat damage (no source, or the kernel's stand-in: the Archon's Avenging Hunter) XMage
+     * gives the player who had the initiative, so it asks MageZero no order with it: it goes last, after the non-active player's in XMage (APNAP), and MageZero's own
+     * last trigger, which XMage puts without asking, before it.
+     */
     private Integer trigger(JsonObject decision) {
+        JsonArray candidates = decision.getAsJsonArray("candidates");
+        List<Integer> own = new ArrayList<>();
+        for (int i = 0; i < candidates.size(); i++) {
+            JsonObject trigger = candidates.get(i).getAsJsonObject().getAsJsonObject("semantic")
+                    .getAsJsonObject("item").getAsJsonObject("trigger");
+            JsonElement source = trigger.get("source");
+            if (!trigger.get("source_name").isJsonNull() && (!source.isJsonObject()
+                    || decision.get("acting_seat").getAsString().equals(Views.text(source.getAsJsonObject(), "controller_seat")))) {
+                own.add(i);
+            }
+        }
+        if (own.size() < 2 && own.size() < candidates.size()) {
+            return own.isEmpty() ? 0 : own.get(0);
+        }
         Move move = next(Move.Kind.TRIGGER);
         if (move == null) {
             return null;
