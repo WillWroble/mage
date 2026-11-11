@@ -220,10 +220,26 @@ index 65aa217f..0c092302 100644
              game_id: game_id.to_string(),
              episode_id,
 diff --git a/mtg-kernel/src/engine.rs b/mtg-kernel/src/engine.rs
-index 8ab4196f..dc0a53c6 100644
+index 8ab4196f..d6982ae4 100644
 --- a/mtg-kernel/src/engine.rs
 +++ b/mtg-kernel/src/engine.rs
-@@ -4628,7 +4628,15 @@ fn effective_normal_cast_cost(
+@@ -2701,11 +2701,13 @@ fn legal_targets_for_controller_from_source(
+             || !has_effective_keyword(state, object, Keywords::HEXPROOF)
+     });
+     if source.is_some_and(targeting_source_is_monocolored) {
++        // protection is a permanent's static ability: a spell on the stack has none (CR 113.6)
+         targets.retain(|target| {
+-            let Target::Object(object) = target else {
++            let Target::Object(object) = *target else {
+                 return true;
+             };
+-            !has_effective_keyword(state, *object, Keywords::PROTECTION_FROM_MONOCOLORED)
++            state.objects.get(object).zone != Zone::Battlefield
++                || !has_effective_keyword(state, object, Keywords::PROTECTION_FROM_MONOCOLORED)
+         });
+     }
+     targets
+@@ -4628,7 +4630,15 @@ fn effective_normal_cast_cost(
                  {
                      continue;
                  }
