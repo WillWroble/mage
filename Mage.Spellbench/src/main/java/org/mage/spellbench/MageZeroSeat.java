@@ -14,9 +14,11 @@ import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 
@@ -38,6 +40,8 @@ final class MageZeroSeat {
     private Move declaration;
     /** This combat's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
     private final List<UUID> blockers;
+    /** MageZero's cost of its cast, passed over for the targets the kernel asks first. */
+    private Move cost;
     /** How the kernel's priority differed from MageZero's first pass dropped since the last match. */
     String mismatch = "";
 
@@ -75,6 +79,9 @@ final class MageZeroSeat {
                 return value(decision, Move.Kind.MODE, (c, v) -> Objects.equals(number(c, "mode_index"), v));
             case "choose_number":
                 return value(decision, Move.Kind.NUMBER, (c, v) -> Objects.equals(number(c, "value"), v));
+            case "choose_cast_method":
+                return value(decision, Move.Kind.COST,
+                        (c, v) -> "alternative".equals(Views.text(c, "method")) == "1".equals(v));
             case "choose_color":
                 return value(decision, Move.Kind.CHOICE,
                         (c, v) -> String.valueOf(v).equalsIgnoreCase(Views.text(c, "color")));
@@ -95,9 +102,11 @@ final class MageZeroSeat {
     private Integer priority(JsonObject decision) {
         while (!moves.isEmpty()) {
             Move move = moves.peek();
-            if (emptyDeclaration(move) || move.kind == Move.Kind.USE) {
+            if (emptyDeclaration(move) || move.kind == Move.Kind.USE || move.kind == Move.Kind.COST
+                    || move.kind == Move.Kind.NUMBER) {
                 // nothing declared where the kernel asks nothing (no creature of MageZero's could), or a yes/no it did
-                // not offer: it offers an option only when it can be taken (a payment MageZero cannot make)
+                // not offer: it offers an option only when it can be taken (a payment MageZero cannot make); a cast's
+                // cost or X the kernel set itself (one way to pay, an X of 0)
                 moves.poll();
                 continue;
             }
@@ -249,6 +258,14 @@ final class MageZeroSeat {
                 .getLibrary().getCards(game);
         int position = first.get("position").getAsInt();
         int count = first.get("count").getAsInt();
+        Set<String> names = new HashSet<>();
+        decision.getAsJsonArray("candidates").forEach(c -> names.add(Views.text(c.getAsJsonObject()
+                .getAsJsonObject("semantic").getAsJsonObject("item").getAsJsonObject("object"), "card_name")));
+        List<mage.cards.Card> ends = new ArrayList<>(library.subList(0, Math.min(count, library.size())));
+        ends.addAll(library.subList(Math.max(0, library.size() - count), library.size()));
+        if (ends.stream().noneMatch(card -> names.contains(card.getName()))) {
+            return 0; // XMage moved the cards out of the library already (a dig's, to the hand and graveyard): any order
+        }
         String name = library.get(position < kept ? position : library.size() - count + position).getName();
         return candidate(decision, c -> name.equals(Views.text(
                 c.getAsJsonObject("item").getAsJsonObject("object"), "card_name")), "XMage's order, " + name);
@@ -326,7 +343,8 @@ final class MageZeroSeat {
 
     /** The kind of MageZero's next move after its passes and empty declarations, or null when it has made none. */
     private Move.Kind upcoming() {
-        return moves.stream().filter(m -> m.kind != Move.Kind.PASS && !emptyDeclaration(m)).findFirst()
+        return moves.stream().filter(m -> m.kind != Move.Kind.PASS && m.kind != Move.Kind.COST && !emptyDeclaration(m))
+                .findFirst()
                 .map(m -> m.kind).orElse(null);
     }
 
@@ -342,10 +360,20 @@ final class MageZeroSeat {
     private Move next(Move.Kind kind) {
         boolean declaration = kind == Move.Kind.ATTACKERS || kind == Move.Kind.BLOCKERS;
         while (!moves.isEmpty() && (moves.peek().kind == Move.Kind.PASS
-                || declaration && moves.peek().kind == Move.Kind.USE || !declaration && emptyDeclaration(moves.peek()))) {
+                || declaration && moves.peek().kind == Move.Kind.USE || !declaration && emptyDeclaration(moves.peek())
+                || kind != Move.Kind.COST && moves.peek().kind == Move.Kind.COST)) {
             // passes where the kernel opens no priority; at combat, yes/no's before it the kernel did not offer; out of
-            // combat, declarations of nothing the kernel did not ask
-            moves.poll();
+            // combat, declarations of nothing the kernel did not ask; a cast's cost, which the kernel asks after the
+            // targets (kept for it) or not at all
+            Move skipped = moves.poll();
+            if (skipped.kind == Move.Kind.COST) {
+                cost = skipped;
+            }
+        }
+        if (kind == Move.Kind.COST && cost != null) {
+            Move kept = cost;
+            cost = null;
+            return kept;
         }
         Move move = moves.poll();
         if (move != null && move.kind != kind) {

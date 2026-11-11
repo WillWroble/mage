@@ -45,7 +45,7 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     /** One finished decision: what it was, and the game as this seat saw it then. */
     static final class Move {
-        enum Kind { ACTION, PASS, TARGETS, USE, MODE, NUMBER, CHOICE, ATTACKERS, BLOCKERS, TRIGGER }
+        enum Kind { ACTION, PASS, TARGETS, USE, MODE, NUMBER, CHOICE, COST, ATTACKERS, BLOCKERS, TRIGGER }
 
         final Kind kind;
         final Views.View view;
@@ -278,7 +278,10 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     @Override
     public boolean choose(Outcome outcome, Choice choice, Game game) {
-        return dialog(game, Move.Kind.CHOICE, () -> super.choose(outcome, choice, game),
+        // a key choice while casting is the cost (an alternative cost keyed from 1): XMage asks it before the targets,
+        // the kernel after them, or not at all
+        Move.Kind kind = actionDepth > 0 && choice.isKeyChoice() ? Move.Kind.COST : Move.Kind.CHOICE;
+        return dialog(game, kind, () -> super.choose(outcome, choice, game),
                 r -> choice.isKeyChoice() ? choice.getChoiceKey() : choice.getChoice());
     }
 
