@@ -95,8 +95,7 @@ final class MageZeroSeat {
     private Integer priority(JsonObject decision) {
         while (!moves.isEmpty()) {
             Move move = moves.peek();
-            if ((move.kind == Move.Kind.ATTACKERS || move.kind == Move.Kind.BLOCKERS) && ((Map<?, ?>) move.value).isEmpty()
-                    || move.kind == Move.Kind.USE) {
+            if (emptyDeclaration(move) || move.kind == Move.Kind.USE) {
                 // nothing declared where the kernel asks nothing (no creature of MageZero's could), or a yes/no it did
                 // not offer: it offers an option only when it can be taken (a payment MageZero cannot make)
                 moves.poll();
@@ -320,9 +319,15 @@ final class MageZeroSeat {
         }, "declaration of " + declaration);
     }
 
-    /** The kind of MageZero's next move after its passes, or null when it has made none. */
+    /** The kind of MageZero's next move after its passes and empty declarations, or null when it has made none. */
     private Move.Kind upcoming() {
-        return moves.stream().filter(m -> m.kind != Move.Kind.PASS).findFirst().map(m -> m.kind).orElse(null);
+        return moves.stream().filter(m -> m.kind != Move.Kind.PASS && !emptyDeclaration(m)).findFirst()
+                .map(m -> m.kind).orElse(null);
+    }
+
+    /** Nothing declared: where the kernel asks nothing, as no creature of MageZero's could attack or block. */
+    private static boolean emptyDeclaration(Move move) {
+        return (move.kind == Move.Kind.ATTACKERS || move.kind == Move.Kind.BLOCKERS) && ((Map<?, ?>) move.value).isEmpty();
     }
 
     /**
@@ -332,8 +337,10 @@ final class MageZeroSeat {
     private Move next(Move.Kind kind) {
         boolean declaration = kind == Move.Kind.ATTACKERS || kind == Move.Kind.BLOCKERS;
         while (!moves.isEmpty() && (moves.peek().kind == Move.Kind.PASS
-                || declaration && moves.peek().kind == Move.Kind.USE)) {
-            moves.poll(); // passes where the kernel opens no priority; at combat, yes/no's before it the kernel did not offer
+                || declaration && moves.peek().kind == Move.Kind.USE || !declaration && emptyDeclaration(moves.peek()))) {
+            // passes where the kernel opens no priority; at combat, yes/no's before it the kernel did not offer; out of
+            // combat, declarations of nothing the kernel did not ask
+            moves.poll();
         }
         Move move = moves.poll();
         if (move != null && move.kind != kind) {

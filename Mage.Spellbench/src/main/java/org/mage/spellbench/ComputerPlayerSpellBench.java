@@ -43,8 +43,10 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -93,6 +95,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient MageZeroSeat mageZero;
     private transient String logs;
     private transient boolean over;
+    /** XMage's object for each kernel object (the Archon's view's id) the Archon acted with or named. */
+    private final transient Map<String, UUID> matched = new HashMap<>();
     /** Each seat's library shuffles in XMage since the kernel's game started. */
     private final transient int[] shuffles = new int[2];
     /** How the kernel's priority for the Archon differed from XMage's at the first priority it passed since a match. */
@@ -572,7 +576,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 instanceof CardWithSpellOption) {
             later.remove(form);
         }
-        for (String id : at == null ? List.<String>of() : Views.twins(view.json, at)) {
+        String kernelId = Views.text(semantic.getAsJsonObject("source"), "object_id");
+        for (String id : at == null ? List.<String>of() : candidates(view, decision, at, kernelId)) {
             List<UUID> sources = halves(game, view.objects.get(id), form);
             List<Ability> matches = new ArrayList<>();
             for (ActivatedAbility ability : playable) {
@@ -591,12 +596,32 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 UUID wanted = indexed.get(index).getOriginalId();
                 for (Ability match : matches) {
                     if (match.getOriginalId().equals(wanted)) {
+                        matched.put(kernelId, view.objects.get(id));
                         return (ActivatedAbility) match;
                     }
                 }
             }
         }
         throw new LockstepDivergence("XMage has no playable counterpart for the Archon's " + semantic);
+    }
+
+    /**
+     * The objects of XMage's {@code view} that look like the kernel's {@code kernelId} at {@code at}: the one it was
+     * matched to first, those matched to other objects of the kernel's still there last. Objects that look the same
+     * differ in what was done with them (two Quirion Rangers, one already used this turn).
+     */
+    private List<String> candidates(Views.View view, JsonObject decision, Views.Locator at, String kernelId) {
+        JsonObject observation = Lockstep.observation(decision);
+        Set<UUID> others = new HashSet<>();
+        matched.forEach((id, object) -> {
+            if (!id.equals(kernelId) && Views.locate(observation, id) != null) {
+                others.add(object);
+            }
+        });
+        List<String> twins = new ArrayList<>(Views.twins(view.json, at));
+        twins.sort(Comparator.comparingInt(id -> view.objects.get(id).equals(matched.get(kernelId)) ? 0
+                : others.contains(view.objects.get(id)) ? 2 : 1));
+        return twins;
     }
 
     /** Whether {@code ability} is of the Archon's action {@code kind}. */
@@ -1093,10 +1118,10 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     /**
      * XMage's key for the cost the Archon casts with. XMage asks it first, keying a spell's alternative costs from 1,
-     * then the cast without one; the kernel asks the Archon's targets first, then how it pays, and only when it can pay
-     * both ways. So the kernel's cast is run through here, its targets kept for XMage's target dialogs; when the kernel
-     * does not ask, only one way is payable and XMage's choice is forced: the regular mana cost if the Archon has the
-     * mana for it.
+     * then the cast without one; the kernel asks the Archon's targets first, then how it pays, and only when it does not
+     * choose itself. So the kernel's cast is run through here, its targets kept for XMage's target dialogs; when the
+     * kernel does not ask, its payment tells: the alternative cost when it tapped nothing (Land Grant's revealed hand,
+     * Fireblast's sacrifice), else the mana cost.
      */
     private String cost(Game game, Choice choice) {
         if (choice.getKeyChoices().size() != 2) {
@@ -1113,7 +1138,7 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             if ("choose_cast_method".equals(kind)) {
                 return "alternative".equals(Views.text(archon(), "method")) ? "1" : "2";
             }
-            return getManaAvailable(game).enough(acting.getManaCosts().getMana()) ? "2" : "1";
+            return tappedBeyond(game).isEmpty() ? "1" : "2";
         }
     }
 
@@ -1221,11 +1246,13 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 }
             }
         }
-        String id = at == null ? null : Views.find(view.json, at);
-        UUID object = id == null ? null : view.objects.get(id);
+        String kernelId = Views.text(reference, "object_id");
+        List<String> ids = at == null ? List.of() : candidates(view, decision, at, kernelId);
+        UUID object = ids.isEmpty() ? null : view.objects.get(ids.get(0));
         if (object == null) {
             throw new LockstepDivergence("XMage shows no " + (at == null ? reference : at));
         }
+        matched.put(kernelId, object);
         return object;
     }
 
