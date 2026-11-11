@@ -11,7 +11,6 @@ import mage.abilities.mana.ManaAbility;
 import mage.game.Game;
 import mage.cards.SpellOptionCard;
 import mage.constants.SpellAbilityCastMode;
-import mage.constants.Zone;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
 import java.util.ArrayDeque;
@@ -247,8 +246,11 @@ final class MageZeroSeat {
             String seat = views.seat(pick);
             return candidate(decision, c -> seat.equals(player(c)), what);
         }
-        Zone zone = game.getState().getZone(pick);
-        if (game.getCard(pick) != null && (Lockstep.offersLibraryCards(decision) || zone == Zone.HAND)) {
+        boolean handCards = decision.getAsJsonArray("candidates").asList().stream().anyMatch(c -> {
+            JsonObject object = object(c.getAsJsonObject().getAsJsonObject("semantic"));
+            return object != null && "hand".equals(Views.text(object, "zone"));
+        });
+        if (game.getCard(pick) != null && (Lockstep.offersLibraryCards(decision) || handCards)) {
             // a library or hand card is matched by name: in a library it is shown by name only (and XMage may have
             // moved MageZero's pick already, a searched land onto the battlefield), a hand of the Archon's MageZero
             // does not see (Mesmeric Fiend's choice), and cards of a name are alike in a hand
