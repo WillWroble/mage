@@ -10,6 +10,8 @@ import mage.abilities.SpellAbility;
 import mage.abilities.mana.ManaAbility;
 import mage.game.Game;
 import mage.cards.SpellOptionCard;
+import mage.constants.SpellAbilityCastMode;
+import mage.constants.Zone;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
 import java.util.ArrayDeque;
@@ -42,8 +44,8 @@ final class MageZeroSeat {
     private Move declaration;
     /** This combat's blockers in the order the kernel declared them: its order of combat damage (spec 7.6). */
     private final List<UUID> blockers;
-    /** The source of MageZero's last action (the half of a card with a spell option it cast). */
-    private UUID cast;
+    /** MageZero's last action (the half of a card with a spell option it cast, or how it cast it). */
+    private ActivatedAbility cast;
     /** The places in XMage's library of the cards an order has taken so far. */
     private final Set<Integer> ordered = new HashSet<>();
     /** MageZero's action whose mana the kernel is making first (see action). */
@@ -104,8 +106,10 @@ final class MageZeroSeat {
                         (c, v) -> Lockstep.names(((ComputerPlayerPolicyOnlyLockstep.Use) v).option, Views.text(c, "choice")));
             case "choose_spell_mode":
                 if (upcoming() != Move.Kind.MODE && cast != null) {
-                    // the spell's form, which XMage takes as which half MageZero cast (an omen's, an adventure's)
-                    int form = game.getCard(cast) instanceof SpellOptionCard ? 1 : 0;
+                    // the spell's form, which XMage takes as which half MageZero cast (an omen's, an adventure's) or
+                    // how (bestowed)
+                    int form = game.getCard(cast.getSourceId()) instanceof SpellOptionCard || cast instanceof SpellAbility
+                            && ((SpellAbility) cast).getSpellAbilityCastMode() == SpellAbilityCastMode.BESTOW ? 1 : 0;
                     return candidate(decision, c -> Objects.equals(number(c, "mode_index"), form), "form " + form);
                 }
                 return value(decision, Move.Kind.MODE, (c, v) -> Objects.equals(number(c, "mode_index"), v));
@@ -168,10 +172,10 @@ final class MageZeroSeat {
 
     private int action(JsonObject decision, Move move, Game game) {
         ActivatedAbility ability = (ActivatedAbility) move.value;
-        cast = ability.getSourceId();
+        cast = ability;
         // the half of a card with a spell option (an omen's, Roost Seek) is cast from the card the observation shows
-        UUID card = game.getCard(cast) instanceof SpellOptionCard
-                ? ((SpellOptionCard) game.getCard(cast)).getParentCard().getId() : cast;
+        UUID card = game.getCard(ability.getSourceId()) instanceof SpellOptionCard
+                ? ((SpellOptionCard) game.getCard(ability.getSourceId())).getParentCard().getId() : ability.getSourceId();
         String source = kernelId(decision, move.view, card);
         String kind = ability instanceof PlayLandAbility ? "play_land"
                 : ability instanceof SpellAbility ? "cast_spell"
@@ -243,13 +247,16 @@ final class MageZeroSeat {
             String seat = views.seat(pick);
             return candidate(decision, c -> seat.equals(player(c)), what);
         }
-        if (Lockstep.offersLibraryCards(decision) && game.getCard(pick) != null) {
-            // a library card is shown by name only: any card of that name in that library is the same pick (XMage
-            // may have moved MageZero's pick already, a searched land onto the battlefield)
+        Zone zone = game.getState().getZone(pick);
+        if (game.getCard(pick) != null && (Lockstep.offersLibraryCards(decision) || zone == Zone.HAND)) {
+            // a library or hand card is matched by name: in a library it is shown by name only (and XMage may have
+            // moved MageZero's pick already, a searched land onto the battlefield), a hand of the Archon's MageZero
+            // does not see (Mesmeric Fiend's choice), and cards of a name are alike in a hand
             String name = game.getCard(pick).getName();
+            String in = Lockstep.offersLibraryCards(decision) ? "library" : "hand";
             return candidate(decision, c -> {
                 JsonObject object = object(c);
-                return object != null && "library".equals(Views.text(object, "zone"))
+                return object != null && in.equals(Views.text(object, "zone"))
                         && name.equals(Views.text(object, "card_name"));
             }, what);
         }

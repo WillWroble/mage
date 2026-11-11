@@ -16,6 +16,8 @@ import mage.abilities.costs.mana.ManaCost;
 import mage.abilities.mana.ActivatedManaAbilityImpl;
 import mage.abilities.mana.ManaAbility;
 import mage.abilities.keyword.TrampleAbility;
+import mage.constants.SpellAbilityCastMode;
+import mage.abilities.keyword.BestowAbility;
 import mage.constants.MultiAmountType;
 import mage.constants.PhaseStep;
 import mage.game.combat.CombatGroup;
@@ -582,8 +584,11 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         // the spell's form, if the Archon chose it: XMage takes it as which half of a card with a spell option is cast
         JsonObject form = later.stream().filter(l -> "choose_spell_mode".equals(Views.text(l, "kind")))
                 .findFirst().orElse(null);
-        if (form != null && at != null && game.getCard(view.objects.get(Views.find(view.json, at)))
-                instanceof CardWithSpellOption) {
+        Card card = at == null ? null : game.getCard(view.objects.get(Views.find(view.json, at)));
+        // a card with bestow: the kernel's second form is the bestowed cast
+        boolean bestows = card != null && card.getAbilities(game).stream().anyMatch(a -> a instanceof BestowAbility);
+        Boolean bestow = form != null && bestows ? form.get("mode_index").getAsInt() == 1 : null;
+        if (form != null && (card instanceof CardWithSpellOption || bestows)) {
             later.remove(form);
         }
         String kernelId = Views.text(semantic.getAsJsonObject("source"), "object_id");
@@ -591,7 +596,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
             List<UUID> sources = halves(game, view.objects.get(id), form);
             List<Ability> matches = new ArrayList<>();
             for (ActivatedAbility ability : playable) {
-                if (ofKind(kind, ability) && sources.contains(ability.getSourceId())) {
+                if (ofKind(kind, ability) && sources.contains(ability.getSourceId()) && (bestow == null || !(ability instanceof SpellAbility)
+                        || bestow == (((SpellAbility) ability).getSpellAbilityCastMode() == SpellAbilityCastMode.BESTOW))) {
                     matches.add(ability);
                 }
             }
