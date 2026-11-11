@@ -174,7 +174,12 @@ final class MageZeroSeat {
                         && name.equals(Views.text(object, "card_name"));
             }, what);
         }
-        String id = kernelId(decision, selection.view, pick);
+        // of the kernel's objects that look like MageZero's pick, the first offered (two attacking Humbling Elders:
+        // a blocked attacker shows no mark of it, and only the unblocked one can return for ninjutsu)
+        String id = kernelIds(decision, selection.view, pick).stream()
+                .filter(k -> decision.getAsJsonArray("candidates").asList().stream()
+                        .anyMatch(c -> k.equals(objectId(c.getAsJsonObject().getAsJsonObject("semantic")))))
+                .findFirst().orElse(null);
         return candidate(decision, c -> id != null && id.equals(objectId(c)), what);
     }
 
@@ -353,13 +358,26 @@ final class MageZeroSeat {
 
     /** The kernel's id, in {@code decision}, for the XMage object {@code id} as MageZero's view showed it. */
     private static String kernelId(JsonObject decision, Views.View view, UUID id) {
+        List<String> ids = kernelIds(decision, view, id);
+        return ids.isEmpty() ? null : ids.get(0);
+    }
+
+    /** The kernel's objects in {@code decision} that look like XMage's object {@code id}: its own place first. */
+    private static List<String> kernelIds(JsonObject decision, Views.View view, UUID id) {
         for (Map.Entry<String, UUID> e : view.objects.entrySet()) {
             if (e.getValue().equals(id)) {
                 Views.Locator at = Views.locate(view.json, e.getKey());
-                return at == null ? null : Views.find(Lockstep.observation(decision), at);
+                JsonObject observation = Lockstep.observation(decision);
+                String own = at == null ? null : Views.find(observation, at);
+                if (own == null) {
+                    return List.of();
+                }
+                List<String> ids = new ArrayList<>(List.of(own));
+                Views.twins(observation, at).stream().filter(t -> !t.equals(own)).forEach(ids::add);
+                return ids;
             }
         }
-        return null;
+        return List.of();
     }
 
     private static int candidate(JsonObject decision, Predicate<JsonObject> semantic, String what) {
