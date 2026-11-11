@@ -10,6 +10,7 @@ import mage.abilities.SpellAbility;
 import mage.abilities.mana.ManaAbility;
 import mage.game.Game;
 import mage.cards.SpellOptionCard;
+import mage.game.permanent.Permanent;
 import mage.constants.SpellAbilityCastMode;
 import org.mage.spellbench.ComputerPlayerPolicyOnlyLockstep.Move;
 
@@ -17,6 +18,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -193,17 +195,22 @@ final class MageZeroSeat {
             // the mana XMage paid the action with is made first, the action kept for after it: the kernel's own payment
             // may tap other permanents, and does not count every source as castable (Elves of Deep Shadow's). Not in
             // a declare step unless it must: the kernel gives one action a round there (ninjutsu's)
+            Set<String> tapped = tappedOnlyInXMage(decision, game);
             for (ComputerPlayerPolicyOnlyLockstep.Paid paid : move.paid) {
                 List<String> alike = kernelIds(decision, move.view, paid.source); // identical lands: any untapped
-                int mana = index(decision, c -> "activate_mana_ability".equals(Views.text(c, "kind"))
+                Predicate<JsonObject> mana = c -> "activate_mana_ability".equals(Views.text(c, "kind"))
                         && alike.contains(Views.text(c.getAsJsonObject("source"), "object_id"))
                         && (paid.color == null || c.get("mana_choice") == null || c.get("mana_choice").isJsonNull()
-                            || paid.color.equals(Views.text(c, "mana_choice"))));
-                if (mana >= 0) {
+                            || paid.color.equals(Views.text(c, "mana_choice")));
+                // a mana ability that taps another creature (Saruli Caretaker's): the one XMage tapped
+                int with = index(decision, c -> mana.test(c) && c.get("cost_target") != null && c.get("cost_target").isJsonObject()
+                        && tapped.contains(Views.text(c.getAsJsonObject("cost_target").getAsJsonObject("object"), "card_name")));
+                int index = with >= 0 ? with : index(decision, mana);
+                if (index >= 0) {
                     move.paid.remove(paid);
                     floating = move;
                     moves.addFirst(move);
-                    return mana;
+                    return index;
                 }
             }
         }
@@ -588,6 +595,24 @@ final class MageZeroSeat {
             }
         }
         return inXMage > inKernel ? only : null;
+    }
+
+    /** The names of MageZero's permanents tapped in XMage and not in the kernel. */
+    private Set<String> tappedOnlyInXMage(JsonObject decision, Game game) {
+        String seat = Views.text(decision, "acting_seat");
+        Map<String, Integer> tapped = new HashMap<>();
+        game.getBattlefield().getAllActivePermanents(views.player(seat)).stream().filter(Permanent::isTapped)
+                .forEach(p -> tapped.merge(p.getName(), 1, Integer::sum));
+        for (JsonElement p : Lockstep.observation(decision).getAsJsonArray("players")) {
+            if (seat.equals(Views.text(p.getAsJsonObject(), "seat"))) {
+                for (JsonElement b : p.getAsJsonObject().getAsJsonArray("battlefield")) {
+                    if (b.getAsJsonObject().getAsJsonObject("permanent").get("tapped").getAsBoolean()) {
+                        tapped.computeIfPresent(Views.text(b.getAsJsonObject(), "card_name"), (n, k) -> k > 1 ? k - 1 : null);
+                    }
+                }
+            }
+        }
+        return tapped.keySet();
     }
 
     private static boolean offersFinish(JsonObject decision) {
