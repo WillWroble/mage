@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -71,6 +72,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
 
     private static final long serialVersionUID = 1L;
     /** XMage's color choice for each of the protocol's mana symbols. */
+    private static final Map<String, Mana> MANA = Map.of("W", Mana.WhiteMana(1), "U", Mana.BlueMana(1),
+            "B", Mana.BlackMana(1), "R", Mana.RedMana(1), "G", Mana.GreenMana(1), "C", Mana.ColorlessMana(1));
     private static final Map<String, String> MANA_COLORS = Map.of("W", "White", "U", "Blue", "B", "Black", "R", "Red",
             "G", "Green");
     /** The kernel's decisions that answer an XMage yes/no. */
@@ -124,6 +127,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     /** The Archon's order of cards it puts on its library, and the picks it answers XMage's placing dialogs with. */
     private final transient List<String> placing = new ArrayList<>();
     private final transient Deque<String> placeOrder = new ArrayDeque<>();
+    /** The cards XMage asks one at a time that the kernel selected together: the next first (see putBackOrder). */
+    private final transient Deque<String> putBack = new ArrayDeque<>();
     /** The Archon's answers to decisions of its cast that XMage asks later, on resolution. */
     private final transient List<JsonObject> later = new ArrayList<>();
     /** Picks the Archon made before XMage asks for them: a selection's first pick, which answered XMage's yes/no, or
@@ -585,6 +590,17 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                     matches.add(ability);
                 }
             }
+            // a mana ability that makes the chosen color: XMage has one per color where the kernel has one (Sea Gate)
+            JsonElement color = semantic.get("mana_choice");
+            if (kind.equals("activate_mana_ability") && color != null && !color.isJsonNull()) {
+                Mana wantedMana = MANA.get(color.getAsString());
+                for (Ability match : matches) {
+                    if (((ManaAbility) match).getNetMana(game).stream().anyMatch(mana -> colors(wantedMana, mana) > 0)) {
+                        matched.put(kernelId, view.objects.get(id));
+                        return (ActivatedAbility) match;
+                    }
+                }
+            }
             // an activated ability's index counts all of the object's abilities of its kind, playable or not (a
             // land's cycling from the hand); a spell's or mana ability's counts those XMage can play now
             List<Ability> indexed = matches;
@@ -673,6 +689,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private boolean select(Game game, Target target, Ability source) {
         while (true) {
             Pick pick = picks.poll();
+            if (pick == null && !putBack.isEmpty()) {
+                return putBack(game, target, putBack.poll());
+            }
             if (pick == null) {
                 JsonObject next = next(game, TARGETS);
                 if ((next == null || !wanted(next, TARGETS)) && !target.getTargets().isEmpty() && target.isChosen(game)) {
@@ -682,6 +701,9 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 if (decision == null) {
                     throw new LockstepDivergence("XMage asks the Archon a selection (" + target.getMessage(game) + ", "
                             + target.getClass().getSimpleName() + "); the kernel waits on MageZero");
+                }
+                if (oneByOne(target, decision)) {
+                    return putBack(game, target, putBackOrder(game, decision));
                 }
                 Views.View view = views.view(game, seat);
                 pick = new Pick(decision, archon(), view);
@@ -710,6 +732,44 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
                 return target.isChosen(game);
             }
         }
+    }
+
+    /**
+     * XMage asks one card of the hand at a time where the kernel selects several (Brainstorm: XMage puts each card on
+     * the library as it is chosen, so the last one chosen is topmost; the kernel selects them all, then orders them).
+     */
+    private static boolean oneByOne(Target target, JsonObject decision) {
+        JsonObject first = Lockstep.semantic(decision, 0);
+        JsonObject object = MageZeroSeat.object(first);
+        return target.getMaxNumberOfTargets() == 1 && "select_object".equals(Views.text(first, "kind"))
+                && first.get("minimum").getAsInt() > 1 && object != null && "hand".equals(Views.text(object, "zone"));
+    }
+
+    /**
+     * The Archon's whole selection in the kernel, and its order on the library if the kernel asks one (stepped on the
+     * way, as XMage asks none): XMage's picks, deepest first. The first is returned, the rest kept for XMage's next.
+     */
+    private String putBackOrder(Game game, JsonObject decision) {
+        List<String> chosen = new ArrayList<>();
+        for (JsonObject d = decision; d != null && wanted(d, TARGETS) && "select_object".equals(Lockstep.firstKind(d));
+             d = next(game, TARGETS)) {
+            chosen.add(Views.text(MageZeroSeat.object(archon()), "card_name"));
+        }
+        List<String> order = new ArrayList<>(chosen); // no order asked: the selection's
+        if (placing.size() == chosen.size() && new ArrayList<>(placing).containsAll(chosen)) {
+            order = new ArrayList<>(placing); // its order on the library, top first
+            Collections.reverse(order);
+            placeOrder.clear();
+        }
+        putBack.addAll(order);
+        return putBack.poll();
+    }
+
+    /** The card of that name in the Archon's hand, for XMage's pick of one. */
+    private boolean putBack(Game game, Target target, String name) {
+        getHand().getCards(game).stream().filter(card -> card.getName().equals(name)).findFirst()
+                .ifPresent(card -> target.add(card.getId(), game));
+        return target.isChosen(game);
     }
 
     /** The Archon's permanents the kernel has tapped beyond XMage's, by name. */
