@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.File;
 import java.io.IOException;
@@ -186,6 +187,21 @@ final class KernelMatch implements AutoCloseable {
      * cannot take (XMage has resolved an effect the kernel has not: Sagu Wildling's omen shuffled in, a Forest out) is
      * left for later, as the next comparison checks the libraries' cards.
      */
+    /**
+     * A seat's shuffle {@code count} in both engines (each counts a seat's shuffles): the kernel's order for it, card
+     * names top first, when it made that shuffle already; else null, and the kernel takes XMage's {@code library}.
+     */
+    List<String> shuffle(String seat, int count, List<String> library) {
+        JsonObject shuffle = new JsonObject();
+        shuffle.addProperty("game_id", gameId);
+        shuffle.addProperty("seat", seat);
+        shuffle.addProperty("count", count);
+        shuffle.add("library", new Gson().toJsonTree(library));
+        JsonElement made = engine.request(PROTOCOL, "x_lockstep_shuffle", shuffle).get("library");
+        return made == null || made.isJsonNull() ? null
+                : new Gson().fromJson(made, new TypeToken<List<String>>() {}.getType());
+    }
+
     void arrangeLibrary(String seat, List<String> library) {
         JsonObject arrange = new JsonObject();
         arrange.addProperty("game_id", gameId);

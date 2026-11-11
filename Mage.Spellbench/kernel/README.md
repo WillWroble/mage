@@ -6,10 +6,14 @@ patches, against the commits the `pauper-kernel` board pins:
 - `mtg-kernel-92ec2393.patch` (jackmaiorino/mtg-kernel `92ec2393`): the bridge's `reset` takes optional
   `library_orders` (each seat's card names, top first, instead of a shuffle of the seed; the opening deal is
   unchanged), and a new `arrange_library` request puts a seat's library in a given order after XMage shuffled it.
-  Both copies of the game (the session and the Archon's flat-v4 feature copy) take the same order.
+  Both copies of the game (the session and the Archon's flat-v4 feature copy) take the same order. A lockstep game
+  also counts each seat's library shuffles: a new `lockstep_shuffle` request meets the host's shuffle of the same
+  count, returning the kernel's order when the kernel shuffled first (the host takes it) and otherwise keeping the
+  host's order for that shuffle. Off for any other game, which serializes as before.
 - `spellbench-27c9009.patch` (jackmaiorino/spellbench `27c9009`): `kernel_engine_v2.py` passes them through as two
   private request types, `x_lockstep_reset` (a standard `reset` plus `library_orders`) and
-  `x_lockstep_arrange_library`, mapping wire seats to the bridge's seats. Standard requests are unchanged.
+  `x_lockstep_arrange_library` (and `x_lockstep_shuffle`), mapping wire seats to the bridge's seats. Standard
+  requests are unchanged.
 
 ```bash
 git -C mtg-kernel apply ../Mage.Spellbench/kernel/mtg-kernel-92ec2393.patch

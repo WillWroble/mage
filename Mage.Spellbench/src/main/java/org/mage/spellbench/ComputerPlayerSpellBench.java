@@ -91,6 +91,8 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
     private transient MageZeroSeat mageZero;
     private transient String logs;
     private transient boolean over;
+    /** Each seat's library shuffles in XMage since the kernel's game started. */
+    private final transient int[] shuffles = new int[2];
     /** How the kernel's priority for the Archon differed from XMage's at the first priority it passed since a match. */
     private transient List<String> passedAt = List.of();
     /** The current combat declaration: each of the Archon's creatures with what it attacks or blocks (null: none). */
@@ -185,7 +187,42 @@ public class ComputerPlayerSpellBench extends ComputerPlayer {
         views = new Views(flags, p0.getId(), p1.getId(), starting);
         policy.view = g -> views.view(g, other);
         policy.blockOrder = blockers;
+        policy.shuffled = g -> shuffled(g, mageZeroPlayer);
         mageZero = new MageZeroSeat(policy.moves, views, blockers);
+    }
+
+    @Override
+    public void shuffleLibrary(Ability source, Game game) {
+        super.shuffleLibrary(source, game);
+        shuffled(game, this);
+    }
+
+    /**
+     * XMage shuffled {@code player}'s library: the shuffle meets the kernel's of the same count. XMage takes the
+     * kernel's order when the kernel shuffled first (it may have drawn from it already, in the same step: Lembas
+     * shuffled in, then Fanatical Offering's draw); else the kernel takes XMage's when it shuffles.
+     */
+    void shuffled(Game game, Player player) {
+        if (kernel == null || over || game.isSimulation()) {
+            return;
+        }
+        String owner = views.seat(player.getId());
+        int count = ++shuffles[owner.equals("p0") ? 0 : 1];
+        List<String> made = kernel.shuffle(owner, count, library(game, player));
+        List<Card> cards = new ArrayList<>(player.getLibrary().getCards(game));
+        List<Card> ordered = new ArrayList<>();
+        for (String name : made == null ? List.<String>of() : made) {
+            cards.stream().filter(card -> card.getName().equals(name)).findFirst().ifPresent(card -> {
+                cards.remove(card);
+                ordered.add(card);
+            });
+        }
+        if (made != null && cards.isEmpty()) { // the same cards: XMage's library in the kernel's order
+            player.getLibrary().clear();
+            for (int i = ordered.size() - 1; i >= 0; i--) {
+                player.getLibrary().putOnTop(ordered.get(i), game);
+            }
+        }
     }
 
     /** A seat's opening hand then its library, top first: the order the kernel deals from. */

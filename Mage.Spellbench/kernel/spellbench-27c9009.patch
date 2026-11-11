@@ -14,7 +14,7 @@ index e68caf6..bb5ca50 100644
          raise ArrangementError("native arrangement exceeds the captured completed plan")
      candidate_object = None if selected == len(wanted) else binding.cards[wanted[selected]]
 diff --git a/integrations/mtg_kernel/kernel_engine_v2.py b/integrations/mtg_kernel/kernel_engine_v2.py
-index 0aed6c8..59687a4 100644
+index 0aed6c8..aa95821 100644
 --- a/integrations/mtg_kernel/kernel_engine_v2.py
 +++ b/integrations/mtg_kernel/kernel_engine_v2.py
 @@ -38,6 +38,11 @@ PROPOSAL_ENCODING = "integer-rle-table/v1"
@@ -46,7 +46,7 @@ index 0aed6c8..59687a4 100644
              if kind in types:
                  types[kind].from_json(request)
              elif not request_id or not isinstance(kind, str):
-@@ -240,7 +254,9 @@ class KernelEngine:
+@@ -240,7 +254,11 @@ class KernelEngine:
          if kind == "hello":
              result = {**deepcopy(self.hello), "request_id": request_id}
          elif kind == "reset":
@@ -54,10 +54,12 @@ index 0aed6c8..59687a4 100644
 +            result = self.reset(request, lockstep_orders)
 +        elif kind == "x_lockstep_arrange_library":
 +            result = self.arrange_library(request)
++        elif kind == "x_lockstep_shuffle":
++            result = self.lockstep_shuffle(request)
          elif kind == "step":
              result = self.step(request)
          elif kind == "validate_deck":
-@@ -256,7 +272,21 @@ class KernelEngine:
+@@ -256,7 +274,37 @@ class KernelEngine:
          self.cache = request_id, payload, answer
          return answer
  
@@ -76,11 +78,27 @@ index 0aed6c8..59687a4 100644
 +            return error(rid, "malformed_request", answer["error"]["message"])
 +        return {"protocol": "spellbench/v2", "response_type": "library_arranged", "request_id": rid}
 +
++    def lockstep_shuffle(self, request):
++        """Spellbench lockstep: a seat's shuffle `count` in both engines. The engine's order for it when it made it
++        already (card names, top first), else null and the host's `library` order is kept for it."""
++        rid = request["request_id"]
++        count = request.get("count")
++        if not self.game or request.get("game_id") != self.game or request.get("seat") not in ("p0", "p1") \
++                or not isinstance(count, int) or count < 1 or not _library_orders([request.get("library"), []]):
++            return error(rid, "malformed_request", "requires the active game, a seat, a count and a library order")
++        seat = "p0" if request["seat"] == self.rules["starting_seat"] else "p1"
++        answer = self.peer.request({"request_type": "lockstep_shuffle", "game_id": self.game, "seat": seat,
++                                    "count": count, "library": request["library"]})
++        if answer["response_type"] != "lockstep_shuffle":
++            return error(rid, "malformed_request", answer["error"]["message"])
++        return {"protocol": "spellbench/v2", "response_type": "lockstep_shuffle", "request_id": rid,
++                "library": answer["library"]}
++
 +    def reset(self, request, library_orders=None):
          rid = request["request_id"]
          if request["game_id"] in self.used:
              return error(rid, "malformed_request", "game id was already used")
-@@ -295,10 +325,14 @@ class KernelEngine:
+@@ -295,10 +343,14 @@ class KernelEngine:
          self.native_group = None
          self.history = PublicHistory()
          seats = request["seats"] if first == "p0" else list(reversed(request["seats"]))

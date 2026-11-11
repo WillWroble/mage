@@ -1,8 +1,8 @@
 diff --git a/mtg-kernel/src/agent_bridge_flat_v4.rs b/mtg-kernel/src/agent_bridge_flat_v4.rs
-index 84c73a50..b76940b7 100644
+index 84c73a50..b297c606 100644
 --- a/mtg-kernel/src/agent_bridge_flat_v4.rs
 +++ b/mtg-kernel/src/agent_bridge_flat_v4.rs
-@@ -132,18 +132,38 @@ impl FlatV4LockstepV1 {
+@@ -132,18 +132,48 @@ impl FlatV4LockstepV1 {
          max_physical_decisions: u64,
          max_policy_steps: u64,
          deck_ids: SessionDeckIdsV1,
@@ -36,6 +36,16 @@ index 84c73a50..b76940b7 100644
          Ok(Self { episode_id, fast })
      }
  
++    /// Spellbench lockstep: the same shuffle as the bridge's session.
++    pub(crate) fn lockstep_shuffle_v1(
++        &mut self,
++        player: crate::ids::PlayerId,
++        count: u32,
++        order: &[String],
++    ) -> Option<Vec<String>> {
++        self.fast.lockstep_shuffle_v1(player, count, order)
++    }
++
 +    /// Spellbench lockstep: the same library order as the bridge's session.
 +    pub(crate) fn arrange_library_v1(
 +        &mut self,
@@ -48,7 +58,7 @@ index 84c73a50..b76940b7 100644
      pub(crate) fn fast_session(&self) -> &FastActorSessionV1 {
          &self.fast
      }
-@@ -321,7 +341,7 @@ mod tests {
+@@ -321,7 +351,7 @@ mod tests {
                  )
                  .unwrap();
                  let mut lockstep =
@@ -57,7 +67,7 @@ index 84c73a50..b76940b7 100644
                  let mut rng = SplitMix64::seed(seed ^ 0x5EED);
                  let mut steps = 0_u64;
                  loop {
-@@ -346,7 +366,7 @@ mod tests {
+@@ -346,7 +376,7 @@ mod tests {
      #[test]
      fn mirror_step_refuses_a_selection_the_training_list_dropped() {
          let decks: SessionDeckIdsV1 = ["Burn".to_string(), "Burn".to_string()];
@@ -66,7 +76,7 @@ index 84c73a50..b76940b7 100644
          let before = lockstep.fast_session().policy_step_count();
          assert_eq!(
              lockstep.mirror_step(&[1, 0], 0, 2),
-@@ -364,7 +384,7 @@ mod tests {
+@@ -364,7 +394,7 @@ mod tests {
          let decks: SessionDeckIdsV1 = ["Rally".to_string(), "Rally".to_string()];
          let raw = RlEpisodeSessionV1::reset_with_decks_and_limits(9, 11, 400, 4_000, decks.clone())
              .unwrap();
@@ -76,10 +86,10 @@ index 84c73a50..b76940b7 100644
          assert!(
              matches!(error, FlatV4LockstepErrorV1::Diverged(_)),
 diff --git a/mtg-kernel/src/agent_bridge_v1.rs b/mtg-kernel/src/agent_bridge_v1.rs
-index 65aa217f..0c092302 100644
+index 65aa217f..34ffe096 100644
 --- a/mtg-kernel/src/agent_bridge_v1.rs
 +++ b/mtg-kernel/src/agent_bridge_v1.rs
-@@ -176,6 +176,20 @@ enum SpellbenchRequestV1 {
+@@ -176,6 +176,31 @@ enum SpellbenchRequestV1 {
          game_seed: u64,
          max_decisions: u64,
          max_steps: u64,
@@ -97,18 +107,30 @@ index 65aa217f..0c092302 100644
 +        game_id: String,
 +        seat: String,
 +        library: Vec<String>,
++    },
++    /// Spellbench lockstep: a seat's shuffle `count` in both engines (see
++    /// `LockstepShufflesV1`). Never an agent wire method.
++    LockstepShuffle {
++        #[serde(rename = "protocol")]
++        _protocol: String,
++        request_id: String,
++        game_id: String,
++        seat: String,
++        count: u32,
++        library: Vec<String>,
      },
      Step {
          #[serde(rename = "protocol")]
-@@ -201,6 +215,7 @@ impl SpellbenchRequestV1 {
+@@ -201,6 +226,8 @@ impl SpellbenchRequestV1 {
          match self {
              SpellbenchRequestV1::Hello { request_id, .. }
              | SpellbenchRequestV1::Reset { request_id, .. }
 +            | SpellbenchRequestV1::ArrangeLibrary { request_id, .. }
++            | SpellbenchRequestV1::LockstepShuffle { request_id, .. }
              | SpellbenchRequestV1::Step { request_id, .. }
              | SpellbenchRequestV1::PreviewSteps { request_id, .. } => request_id,
          }
-@@ -236,6 +251,7 @@ struct SpellbenchResetFieldsV1<'a> {
+@@ -236,6 +263,7 @@ struct SpellbenchResetFieldsV1<'a> {
      game_seed: u64,
      max_decisions: u64,
      max_steps: u64,
@@ -116,7 +138,7 @@ index 65aa217f..0c092302 100644
  }
  
  #[derive(Debug, Clone, PartialEq, Eq)]
-@@ -477,6 +493,7 @@ impl SpellbenchBridgeServerV1 {
+@@ -477,6 +505,7 @@ impl SpellbenchBridgeServerV1 {
                  game_seed,
                  max_decisions,
                  max_steps,
@@ -124,7 +146,7 @@ index 65aa217f..0c092302 100644
                  ..
              } => self.handle_reset(
                  request_id,
-@@ -487,8 +504,11 @@ impl SpellbenchBridgeServerV1 {
+@@ -487,8 +516,13 @@ impl SpellbenchBridgeServerV1 {
                      game_seed: *game_seed,
                      max_decisions: *max_decisions,
                      max_steps: *max_steps,
@@ -133,10 +155,12 @@ index 65aa217f..0c092302 100644
              ),
 +            SpellbenchRequestV1::ArrangeLibrary { request_id, game_id, seat, library, .. } =>
 +                self.handle_arrange_library(request_id, game_id, seat, library),
++            SpellbenchRequestV1::LockstepShuffle { request_id, game_id, seat, count, library, .. } =>
++                self.handle_lockstep_shuffle(request_id, game_id, seat, *count, library),
              SpellbenchRequestV1::Step {
                  request_id,
                  game_id,
-@@ -501,6 +521,28 @@ impl SpellbenchBridgeServerV1 {
+@@ -501,6 +535,48 @@ impl SpellbenchBridgeServerV1 {
          }
      }
  
@@ -162,10 +186,30 @@ index 65aa217f..0c092302 100644
 +        json!({"response_type": "library_arranged", "protocol": SPELLBENCH_PROTOCOL_V1, "request_id": request_id})
 +    }
 +
++    /// Spellbench lockstep: the session's order for the shuffle when it made
++    /// it, else the host's order kept for it in both copies of the game.
++    fn handle_lockstep_shuffle(&mut self, request_id: &str, game_id: &str, seat: &str, count: u32, library: &[String]) -> Value {
++        let reject = |message: &str| error_response_value_v1(Some(request_id), "malformed_request", message);
++        let player = match seat {
++            "p0" => crate::ids::PlayerId::P0,
++            "p1" => crate::ids::PlayerId::P1,
++            _ => return reject("seat must be p0 or p1"),
++        };
++        let Some(game) = self.game.as_mut().filter(|game| game.game_id == game_id && !game.terminal_sent) else {
++            return reject("a lockstep shuffle requires the active game");
++        };
++        let made = game.session.lockstep_shuffle_v1(player, count, library);
++        if let Some(copy) = game.flat_v4.as_mut() {
++            copy.lockstep_shuffle_v1(player, count, made.as_deref().unwrap_or(library));
++        }
++        json!({"response_type": "lockstep_shuffle", "protocol": SPELLBENCH_PROTOCOL_V1, "request_id": request_id,
++               "library": made})
++    }
++
      fn handle_preview_steps(&mut self, request_id: &str, game_id: &str, expected_step: u64, ids: &[u32]) -> Value {
          let reject = |message| error_response_value_v1(Some(request_id), "malformed_request", message);
          if !self.options.private_v2_support || !self.options.x_kernel_flat_v4 {
-@@ -603,6 +645,7 @@ impl SpellbenchBridgeServerV1 {
+@@ -603,6 +679,7 @@ impl SpellbenchBridgeServerV1 {
              game_seed,
              max_decisions,
              max_steps,
@@ -173,7 +217,7 @@ index 65aa217f..0c092302 100644
          } = reset;
          // Spec Section 2: at most one active game per process, and game ids
          // are unique per process; a finished game frees the process.
-@@ -672,17 +715,29 @@ impl SpellbenchBridgeServerV1 {
+@@ -672,17 +749,29 @@ impl SpellbenchBridgeServerV1 {
                  max_decisions,
                  max_steps,
                  deck_ids.clone(),
@@ -210,7 +254,7 @@ index 65aa217f..0c092302 100644
              Ok(session) => session,
              Err(error) => {
                  return error_response_value_v1(
-@@ -3105,7 +3160,7 @@ mod tests {
+@@ -3105,7 +3194,7 @@ mod tests {
              decks.clone(),
          )
          .unwrap();
@@ -220,10 +264,40 @@ index 65aa217f..0c092302 100644
              game_id: game_id.to_string(),
              episode_id,
 diff --git a/mtg-kernel/src/engine.rs b/mtg-kernel/src/engine.rs
-index 8ab4196f..d6982ae4 100644
+index 8ab4196f..bd18a3e6 100644
 --- a/mtg-kernel/src/engine.rs
 +++ b/mtg-kernel/src/engine.rs
-@@ -2701,11 +2701,13 @@ fn legal_targets_for_controller_from_source(
+@@ -283,6 +283,29 @@ pub struct EngineState {
+     /// ETB grant or a combat-damage transfer's attacking creature.
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub monarch_source: Option<AbilitySourceContractV4>,
++    /// Spellbench lockstep only (off otherwise): see [`LockstepShufflesV1`].
++    #[serde(default, skip_serializing_if = "LockstepShufflesV1::is_off")]
++    pub lockstep_shuffles: LockstepShufflesV1,
++}
++
++/// Spellbench lockstep: each library shuffle is counted per owner, and the
++/// shuffle with a given count gives the same order in this game as in the
++/// host's: the host's order for it when the host shuffled first, else this
++/// game's, which the host then takes. Card names, top first.
++#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
++pub struct LockstepShufflesV1 {
++    pub on: bool,
++    pub counts: [u32; 2],
++    /// (owner, count, order): the host's orders for coming shuffles.
++    pub host_orders: Vec<(u8, u32, Vec<String>)>,
++    /// (owner, count, order): the orders this game's shuffles gave.
++    pub results: Vec<(u8, u32, Vec<String>)>,
++}
++
++impl LockstepShufflesV1 {
++    pub fn is_off(&self) -> bool {
++        !self.on
++    }
+ }
+ 
+ fn next_stack_item_id(state: &mut GameState) -> StackItemId {
+@@ -2701,11 +2724,13 @@ fn legal_targets_for_controller_from_source(
              || !has_effective_keyword(state, object, Keywords::HEXPROOF)
      });
      if source.is_some_and(targeting_source_is_monocolored) {
@@ -239,7 +313,7 @@ index 8ab4196f..d6982ae4 100644
          });
      }
      targets
-@@ -4628,7 +4630,15 @@ fn effective_normal_cast_cost(
+@@ -4628,7 +4653,15 @@ fn effective_normal_cast_cost(
                  {
                      continue;
                  }
@@ -257,10 +331,10 @@ index 8ab4196f..d6982ae4 100644
                  } else {
                      lacks_subtype = true;
 diff --git a/mtg-kernel/src/rl.rs b/mtg-kernel/src/rl.rs
-index db6d4a21..46aeb8ec 100644
+index db6d4a21..4acb93c9 100644
 --- a/mtg-kernel/src/rl.rs
 +++ b/mtg-kernel/src/rl.rs
-@@ -1379,9 +1379,28 @@ pub fn build_deck_pair_state_with_starting_player_v1(
+@@ -1379,9 +1379,30 @@ pub fn build_deck_pair_state_with_starting_player_v1(
      let mut shuffle_rng = SplitMix64::seed(seed);
      let lib0 = shuffled(p0_deck, &mut shuffle_rng);
      let lib1 = shuffled(p1_deck, &mut shuffle_rng);
@@ -279,7 +353,9 @@ index db6d4a21..46aeb8ec 100644
 +) -> std::result::Result<GameState, DeckPreflightError> {
 +    preflight_fully_supported_deck(p0_library)?;
 +    preflight_fully_supported_deck(p1_library)?;
-+    Ok(deal_from_libraries_v1(p0_library, p1_library, seed, starting_player))
++    let mut state = deal_from_libraries_v1(p0_library, p1_library, seed, starting_player);
++    state.engine.lockstep_shuffles.on = true;
++    Ok(state)
 +}
 +
 +fn deal_from_libraries_v1(lib0: &[u16], lib1: &[u16], seed: u64, starting_player: PlayerId) -> GameState {
@@ -291,7 +367,7 @@ index db6d4a21..46aeb8ec 100644
          card_name,
          seed,
          starting_player,
-@@ -1390,7 +1409,7 @@ pub fn build_deck_pair_state_with_starting_player_v1(
+@@ -1390,7 +1411,7 @@ pub fn build_deck_pair_state_with_starting_player_v1(
          event::propose_and_commit(&mut state, ProposedEvent::draw(PlayerId::P0));
          event::propose_and_commit(&mut state, ProposedEvent::draw(PlayerId::P1));
      }
@@ -301,16 +377,21 @@ index db6d4a21..46aeb8ec 100644
  
  pub fn build_burn_mirror_state(seed: u64) -> GameState {
 diff --git a/mtg-kernel/src/rl_session.rs b/mtg-kernel/src/rl_session.rs
-index 46d63ea4..39206bda 100644
+index 46d63ea4..9fcb10cf 100644
 --- a/mtg-kernel/src/rl_session.rs
 +++ b/mtg-kernel/src/rl_session.rs
-@@ -4359,6 +4359,35 @@ impl RlEpisodeSessionV1 {
+@@ -4359,6 +4359,40 @@ impl RlEpisodeSessionV1 {
          )
      }
  
 +    /// Spellbench lockstep: see [`arrange_library_v1`].
 +    pub fn arrange_library_v1(&mut self, player: PlayerId, order: &[String]) -> Result<(), RlSessionError> {
 +        arrange_library_v1(&mut self.state, player, order)
++    }
++
++    /// Spellbench lockstep: see [`lockstep_shuffle_v1`].
++    pub fn lockstep_shuffle_v1(&mut self, player: PlayerId, count: u32, order: &[String]) -> Option<Vec<String>> {
++        lockstep_shuffle_v1(&mut self.state, player, count, order)
 +    }
 +
 +    /// Spellbench lockstep: the legacy reset with each seat's library order
@@ -340,13 +421,18 @@ index 46d63ea4..39206bda 100644
      fn reset_with_decks_and_limits_profiled_in_audit_mode(
          episode_id: u64,
          env_seed: u64,
-@@ -5109,6 +5138,35 @@ impl FastActorSessionV1 {
+@@ -5109,6 +5143,40 @@ impl FastActorSessionV1 {
      /// Constructs a session whose one eager action cache is the explicit V2
      /// contract.  V1 APIs fail closed on this session, so the hot path never
      /// constructs, copies, or hashes V1 rows.
 +    /// Spellbench lockstep: see [`arrange_library_v1`].
 +    pub fn arrange_library_v1(&mut self, player: PlayerId, order: &[String]) -> Result<(), RlSessionError> {
 +        arrange_library_v1(&mut self.state, player, order)
++    }
++
++    /// Spellbench lockstep: see [`lockstep_shuffle_v1`].
++    pub fn lockstep_shuffle_v1(&mut self, player: PlayerId, count: u32, order: &[String]) -> Option<Vec<String>> {
++        lockstep_shuffle_v1(&mut self.state, player, count, order)
 +    }
 +
 +    /// Spellbench lockstep: [`Self::reset_with_decks_and_limits_flat_action_v2`]
@@ -376,7 +462,7 @@ index 46d63ea4..39206bda 100644
      pub fn reset_with_decks_and_limits_flat_action_v2(
          episode_id: u64,
          env_seed: u64,
-@@ -7455,10 +7513,16 @@ fn canonical_burn_mirror_deck_ids() -> SessionDeckIdsV1 {
+@@ -7455,10 +7523,16 @@ fn canonical_burn_mirror_deck_ids() -> SessionDeckIdsV1 {
  /// Private randomness selector for session reset. Deliberately no serde and
  /// no Default: the caller always chooses explicitly, and `GameState` remains
  /// the sole persisted randomness and diagnostic identity.
@@ -394,7 +480,7 @@ index 46d63ea4..39206bda 100644
  }
  
  /// Shared state construction for both session types: resolves both runtime
-@@ -7479,6 +7543,24 @@ fn build_session_deck_pair_state(
+@@ -7479,6 +7553,24 @@ fn build_session_deck_pair_state(
      let resolved_decks = resolve_runtime_decks(deck_ids)?;
      let deck_hashes = resolved_decks.map(|deck| deck.runtime_deck_hash);
      let state = match (randomization, starting_player) {
@@ -419,10 +505,29 @@ index 46d63ea4..39206bda 100644
          (ResetRandomization::Legacy { env_seed }, None) => build_deck_pair_state(
              env_seed,
              resolved_decks[0].card_ids,
-@@ -7549,6 +7631,85 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
+@@ -7549,6 +7641,104 @@ fn map_deck_pair_build_error_v2(error: crate::rl::DeckPairBuildErrorV2) -> RlSes
      }
  }
  
++/// Spellbench lockstep: the owner's shuffle `count` meets the host's. When
++/// this game made it already, its order (card names, top first) is returned
++/// for the host to take; else the host's `order` is kept for it.
++fn lockstep_shuffle_v1(
++    state: &mut crate::state::GameState,
++    player: PlayerId,
++    count: u32,
++    order: &[String],
++) -> Option<Vec<String>> {
++    let seat = player.index() as u8;
++    let shuffles = &mut state.engine.lockstep_shuffles;
++    if let Some((_, _, made)) = shuffles.results.iter().find(|(o, c, _)| *o == seat && *c == count) {
++        return Some(made.clone());
++    }
++    shuffles.host_orders.retain(|(o, c, _)| !(*o == seat && *c == count));
++    shuffles.host_orders.push((seat, count, order.to_vec()));
++    None
++}
++
 +/// Spellbench lockstep: puts a seat's library in the host's order (card
 +/// names, top first) after the host's own engine shuffled it. The order must
 +/// be a permutation of the library. A card already at a position that names
@@ -537,3 +642,68 @@ index 57aa2842..8e9c0be8 100644
      pub fn reset_with_decks_and_limits_flat_action_v3(
          episode_id: u64,
          seed: u64,
+diff --git a/mtg-kernel/src/state.rs b/mtg-kernel/src/state.rs
+index 80bc61e8..35a0e5fa 100644
+--- a/mtg-kernel/src/state.rs
++++ b/mtg-kernel/src/state.rs
+@@ -2124,7 +2124,7 @@ impl GameState {
+                     let j = (next_rng.next_u64() % (i as u64 + 1)) as usize;
+                     library.swap(i, j);
+                 }
+-                self.players[owner.index()].library = library;
++                self.players[owner.index()].library = self.lockstep_shuffle_v1(owner, library);
+                 self.randomness = GameRandomnessState::Legacy(next_rng);
+                 self.clear_library_knowledge(owner);
+                 Ok(())
+@@ -2168,7 +2168,7 @@ impl GameState {
+                 // state, then perform only infallible assignments.
+                 let mut successor_randomness = v2.clone();
+                 successor_randomness.set_live_shuffle_ordinal(physical_owner, expected_successor);
+-                self.players[owner.index()].library = library;
++                self.players[owner.index()].library = self.lockstep_shuffle_v1(owner, library);
+                 self.randomness = GameRandomnessState::EnvironmentV2(successor_randomness);
+                 self.clear_library_knowledge(owner);
+                 Ok(())
+@@ -2177,6 +2177,42 @@ impl GameState {
+         }
+     }
+ 
++    /// Spellbench lockstep (only when on): counts the owner's shuffle, puts
++    /// `shuffled` in the host's order for that count when the host gave one
++    /// (a permutation of it by card name), and records the order it gives.
++    fn lockstep_shuffle_v1(&mut self, owner: PlayerId, shuffled: Vec<ObjectId>) -> Vec<ObjectId> {
++        if !self.engine.lockstep_shuffles.on {
++            return shuffled;
++        }
++        let seat = owner.index();
++        let name = |state: &Self, id: ObjectId| crate::rl::card_name(state.objects[id].card_def).to_string();
++        let shuffles = &mut self.engine.lockstep_shuffles;
++        shuffles.counts[seat] += 1;
++        let count = shuffles.counts[seat];
++        let host = shuffles
++            .host_orders
++            .iter()
++            .position(|(o, c, _)| *o as usize == seat && *c == count)
++            .map(|i| shuffles.host_orders.remove(i).2);
++        let mut library = shuffled;
++        if let Some(order) = host {
++            let mut left = library.clone();
++            let mut arranged = Vec::with_capacity(order.len());
++            for wanted in &order {
++                match left.iter().position(|&id| name(self, id) == *wanted) {
++                    Some(i) => arranged.push(left.remove(i)),
++                    None => break,
++                }
++            }
++            if left.is_empty() && arranged.len() == library.len() {
++                library = arranged;
++            }
++        }
++        let order = library.iter().map(|&id| name(self, id)).collect();
++        self.engine.lockstep_shuffles.results.push((seat as u8, count, order));
++        library
++    }
++
+     /// The checked one-shot: preflight and commit one library shuffle in the
+     /// state's randomness mode. Legacy states produce exactly the historical
+     /// shuffle and RNG succession; v2 states consume exactly one owner

@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -84,6 +85,8 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
 
     /** The decisions not yet given to the kernel, oldest first. */
     final transient Deque<Move> moves = new ArrayDeque<>();
+    /** Told when XMage shuffles this player's library (the lockstep meets the kernel's shuffle). */
+    transient Consumer<Game> shuffled;
     /** The game as this seat sees it, written as the kernel's observation; set by the relay when its game starts. */
     transient Function<Game, Views.View> view;
     /** This combat's blockers in the kernel's order, which divides combat damage; set by the relay. */
@@ -294,6 +297,14 @@ public class ComputerPlayerPolicyOnlyLockstep extends ComputerPlayerPolicyOnly {
                 messages, totalMax) : null;
         return amounts != null ? amounts : super.getMultiAmountWithIndividualConstraints(outcome, messages, totalMin,
                 totalMax, type, game);
+    }
+
+    @Override
+    public void shuffleLibrary(Ability source, Game game) {
+        super.shuffleLibrary(source, game);
+        if (shuffled != null) {
+            shuffled.accept(game);
+        }
     }
 
     @Override
