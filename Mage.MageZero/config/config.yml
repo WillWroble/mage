@@ -3,7 +3,7 @@
 goes_first: random  # player_a, player_b, random
 
 player_a:
-  deckPath: decks/Pauper-Faeries.txt
+  deckPath: decks/Pauper-Burn.txt
   type: mcts
   #output_file: data/playerA/AvsB.hdf5
 
@@ -20,10 +20,11 @@ player_a:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 300
+    search_budget: 1000
+    backprop_discount: 1.0
     timeout_ms: 60000
-    td_discount: 0.92
-    offline_mode: false
+    td_discount: 1.0
+    offline_mode: true
     prune_duplicate_states: true
     max_pending: 4
     c_puct: 1.0
@@ -38,7 +39,7 @@ player_a:
     see_opponent_hand: true
 
 player_b:
-  deckPath: decks/Pauper-Faeries.txt
+  deckPath: decks/Pauper-Burn.txt
   type: mcts
   #output_file: data/playerB/BvsA.hdf5
 
@@ -55,9 +56,10 @@ player_b:
     selection_temperature: 2 #does nothing
 
   mcts:
-    search_budget: 300
+    search_budget: 1000
+    backprop_discount: 1.0
     timeout_ms: 60000
-    td_discount: 0.92
+    td_discount: 1.0
     offline_mode: true
     prune_duplicate_states: true
     max_pending: 4
@@ -73,8 +75,8 @@ player_b:
     see_opponent_hand: true
 
 training:
-  games: 200
-  threads: 64
+  games: 2000
+  threads: 32
   max_turns: 50 #does nothing
   max_minutes: 120
 

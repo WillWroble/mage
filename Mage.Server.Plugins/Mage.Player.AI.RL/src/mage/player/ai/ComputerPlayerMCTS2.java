@@ -94,8 +94,6 @@ public class ComputerPlayerMCTS2 extends ComputerPlayerMCTS {
         Player opponent = game.getOpponent(playerId);
         //make encoder
         stateEncoder = new StateEncoder();
-        stateEncoder.setAgent(getId());
-        stateEncoder.setOpponent(opponent.getId());
         //find model endpoint
         try {
             nn = new RemoteModelEvaluator(defaultURL, 8, 32, 32000);

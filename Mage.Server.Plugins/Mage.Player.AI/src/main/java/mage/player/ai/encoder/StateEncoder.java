@@ -58,8 +58,6 @@ public class StateEncoder {
     protected static Logger logger = Logger.getLogger(StateEncoder.class);
     public boolean perfectInfo = true;
     public FeatureGraph featureGraph = new FeatureGraph();
-    private UUID opponentId;
-    private UUID myPlayerId;
 
     public List<LabeledState>  labeledStates = new ArrayList<>();
 
@@ -71,13 +69,7 @@ public class StateEncoder {
 
 
 
-    public void setAgent(UUID me) {
-        myPlayerId = me;
-    }
-    public void setOpponent(UUID op) {
-        opponentId = op;
-    }
-    public synchronized UUID getMyPlayerId() {return myPlayerId;}
+
 
 
     private void processManaCosts(ManaCosts<ManaCost> manaCost, UUID parentId) {
@@ -531,14 +523,14 @@ public class StateEncoder {
             addNumericFeature(num.toString(),  i++, parentId);
         }
     }
-    private void processPlayer(Game game, UUID playerId, UUID decisionPlayerId, UUID parentId) {
-        Player myPlayer = game.getPlayer(playerId);
+    private void processPlayer(Game game, UUID decisionPlayerId, UUID parentId) {
+        Player myPlayer = game.getPlayer(parentId);
 
         if(myPlayer.isInPayManaMode()) addFeature("InPayManaMode", parentId);
         if(((PlayerImpl)myPlayer).isActivating) addFeature("Activating", parentId);
 
         //micro decision state
-        processMicroDecisions(game, playerId, parentId);
+        processMicroDecisions(game, parentId, parentId);
 
         //pass ability (for policy net)
         addNode(FeatureGraph.Node.Type.ABILITY, "PassAbility", PASS_ABILITY_ID, parentId);
@@ -546,10 +538,10 @@ public class StateEncoder {
 
 
 
-        if(game.isActivePlayer(playerId)) addFeature("IsActivePlayer", parentId);
-        if(decisionPlayerId.equals(playerId)) addFeature("IsDecisionPlayer", parentId);
+        if(game.isActivePlayer(parentId)) addFeature("IsActivePlayer", parentId);
+        if(decisionPlayerId.equals(parentId)) addFeature("IsDecisionPlayer", parentId);
         addNumericFeature("LifeTotal", myPlayer.getLife(), parentId);
-        if(myPlayer.canPlayLand()) addFeature("CanPlayLand", parentId);
+        if(myPlayer.canPlayLand() && game.isActivePlayer(parentId)) addFeature("CanPlayLand", parentId);
 
 
         //library
@@ -585,23 +577,23 @@ public class StateEncoder {
         UUID handId = stringToUUID(HAND_ID + parentId.toString());
         addNode(FeatureGraph.Node.Type.ZONE, "Hand", handId, parentId);
         addNumericFeature("HandSize", hand.size(), parentId);
-        if(playerId.equals(decisionPlayerId) || perfectInfo) { //keep perspective
+        if(parentId.equals(decisionPlayerId) || perfectInfo) { //keep perspective
             processHand(hand, game, handId);
         }
 
         //command zone
         UUID czId = stringToUUID(COMMAND_ZONE_ID + parentId.toString());
         addNode(FeatureGraph.Node.Type.ZONE, "CommandZone", czId, parentId);
-        processCommandZone(game, playerId, czId);
+        processCommandZone(game, parentId, czId);
 
         //global watchers
-        processWatchers(game, playerId, parentId);
+        processWatchers(game, parentId, parentId);
 
         //battlefield
         Battlefield bf = game.getBattlefield();
         UUID bfId = stringToUUID(BATTLEFIELD_ID + parentId.toString());
         addNode(FeatureGraph.Node.Type.ZONE, "Battlefield", bfId, parentId);
-        processBattlefield(bf, game, playerId, bfId);
+        processBattlefield(bf, game, parentId, bfId);
 
         //TODO dungeons
     }
@@ -630,7 +622,8 @@ public class StateEncoder {
                 addFeature("NightTime", GAME_ROOT_ID);
             }
         }
-
+        //turn number
+        addNumericFeature("TurnNumber", game.getTurnNum(), GAME_ROOT_ID);
         //decision type
         addFeature(decisionType.toString(), GAME_ROOT_ID);
         //decision state
@@ -646,15 +639,16 @@ public class StateEncoder {
         //each player
 
         //PlayerA
-        addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(myPlayerId).getName(), myPlayerId, GAME_ROOT_ID);
-        processPlayer(game, myPlayerId, decisionPlayerId, myPlayerId);
+        addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(decisionPlayerId).getName(), decisionPlayerId, GAME_ROOT_ID);
+        processPlayer(game, decisionPlayerId, decisionPlayerId);
+        UUID opponentId = game.getOpponent(decisionPlayerId).getId();
         //PlayerB
         addNode(FeatureGraph.Node.Type.PLAYER, game.getPlayer(opponentId).getName(), opponentId, GAME_ROOT_ID);
-        processPlayer(game, opponentId, decisionPlayerId, opponentId);
+        processPlayer(game, decisionPlayerId, opponentId);
 
         //stack
         addNode(FeatureGraph.Node.Type.ZONE, "Stack", STACK_ID, GAME_ROOT_ID);
-        processStack(game.getStack(), game, myPlayerId, STACK_ID);
+        processStack(game.getStack(), game, decisionPlayerId, STACK_ID);
 
         //additional options
         if(options != null) {

@@ -324,11 +324,7 @@ public class ParallelDataGenerator {
 
             configurePlayer(playerA, threadEncoderA, threadEncoderB);
             configurePlayer(playerB, threadEncoderB, threadEncoderA);
-            threadEncoderA.setAgent(playerA.getId());
-            threadEncoderA.setOpponent(playerB.getId());
             threadEncoderA.perfectInfo = Config.INSTANCE.playerA.hiddenInfo.opponentHand;
-            threadEncoderB.setAgent(playerB.getId());
-            threadEncoderB.setOpponent(playerA.getId());
             threadEncoderB.perfectInfo = Config.INSTANCE.playerB.hiddenInfo.opponentHand;
 
             // Based on CardTestPlayerAPIImpl.java, this is the correct thread-safe

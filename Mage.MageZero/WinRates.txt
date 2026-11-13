@@ -636,3 +636,12 @@ WR with Pauper-Burn vs Pauper-Wildfire: 0.64 in 200 games
 WR with Pauper-Faeries vs Pauper-Burn: 0.675 in 200 games
 WR with Pauper-Faeries vs Pauper-Faeries: 0.73 in 200 games
 WR with Pauper-Faeries vs Pauper-Faeries: 0.775 in 200 games
+WR with Pauper-Faeries vs Standard-MonoB: 0.365 in 200 games
+WR with Pauper-Faeries vs Standard-MonoG: 0.235 in 200 games
+WR with Pauper-Faeries vs Standard-MonoW: 0.515 in 200 games
+WR with Pauper-Faeries vs Pauper-Burn: 0.735 in 200 games
+WR with Pauper-Burn vs Pauper-Burn: 0.555 in 200 games
+WR with Pauper-Burn vs Pauper-Burn: 0.375 in 200 games
+WR with Pauper-Burn vs Pauper-Burn: 0.435 in 200 games
+WR with Pauper-Burn vs Pauper-Burn: 0.505 in 200 games
+WR with Pauper-Burn vs Pauper-Burn: 0.5185 in 2000 games
